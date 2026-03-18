@@ -1,0 +1,23 @@
+# TradeMind — зависимости для Python 3.13
+# Установка: python -m venv .venv && .venv\Scripts\activate && pip install -r requirements.txt
+
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+sqlalchemy>=2.0.36
+alembic>=1.13.0
+passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.3.0
+httpx>=0.27.0
+google-auth>=2.27.0
+apscheduler>=3.10.0
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+
+# AI & LLM (Claude от Anthropic)
+anthropic>=0.39.0
+langchain>=0.1.0
+langchain-anthropic>=0.1.0
+langchain-core>=0.1.0
+python-dotenv>=1.0.0

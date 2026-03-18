@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST="{\"components\\\\dashboard\\\\LeftInsightPanel.tsx -> ../../lib/api\":{\"id\":\"components\\\\dashboard\\\\LeftInsightPanel.tsx -> ../../lib/api\",\"files\":[]}}"

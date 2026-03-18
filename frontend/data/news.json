@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "time": "2026-03-01T08:30:00Z",
+    "title": "US Nonfarm Payrolls",
+    "country": "US",
+    "impact": "high",
+    "actual": "150k",
+    "forecast": "180k",
+    "previous": "160k",
+    "url": "https://www.forexfactory.com/calendar.php?week=2026_03_01"
+  },
+  {
+    "id": 2,
+    "time": "2026-03-01T10:00:00Z",
+    "title": "EUR CPI YoY",
+    "country": "EZ",
+    "impact": "medium",
+    "actual": "2.1%",
+    "forecast": "2.3%",
+    "previous": "2.0%",
+    "url": "https://www.forexfactory.com/calendar.php?week=2026_03_01"
+  }
+]
