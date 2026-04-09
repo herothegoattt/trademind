@@ -10,7 +10,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -60,4 +59,9 @@ dmypy.json
 *.sqlite
 *.sqlite3
 trademind.db
+
+# Next.js
+frontend/.next/
+frontend/node_modules/
+node_modules/
 
