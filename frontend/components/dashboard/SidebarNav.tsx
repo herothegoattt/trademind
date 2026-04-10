@@ -16,6 +16,7 @@ import {
   Search,
   User,
   TrendingUp,
+  FlaskConical,
 } from "lucide-react";
 import { Tooltip } from "../ui/tooltip";
 import { Input } from "../ui/input";
@@ -31,6 +32,7 @@ const sectionIcons: Record<Section, React.ReactNode> = {
   "Daily Bias": <Compass size={20} />,
   "Trader DNA": <User size={20} />,
   Investing: <TrendingUp size={20} />,
+  "Analytics Lab": <FlaskConical size={20} />,
 };
 
 // inside component later
