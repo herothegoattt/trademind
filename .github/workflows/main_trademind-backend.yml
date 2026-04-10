@@ -1,4 +1,4 @@
-name: Build and deploy to Azure App Service - trademind-backend
+name: Deploy to Azure App Service - trademind-backend
 
 on:
   push:
@@ -6,30 +6,24 @@ on:
       - main
   workflow_dispatch:
 
-env:
-  AZURE_WEBAPP_NAME: trademind-backend
-  PYTHON_VERSION: '3.13'
-
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          allow-prereleases: true
+          python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install and verify dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Create deployment package
+      - name: Package app for deployment
         run: |
           zip -r release.zip . \
             -x "*.git*" \
@@ -42,12 +36,9 @@ jobs:
             -x "frontend/.next/*" \
             -x "*.db" \
             -x "*.sqlite3" \
-            -x "tests/*" \
-            -x "*.md" \
-            -x "*.bat" \
-            -x "*.ps1"
+            -x "tests/*"
 
-      - name: Upload artifact for deploy job
+      - name: Upload package
         uses: actions/upload-artifact@v4
         with:
           name: python-app
@@ -59,7 +50,7 @@ jobs:
     needs: build
 
     steps:
-      - name: Download artifact from build job
+      - name: Download package
         uses: actions/download-artifact@v4
         with:
           name: python-app
@@ -67,7 +58,7 @@ jobs:
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          app-name: trademind-backend
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: release.zip
           startup-command: "uvicorn app.main:app --host 0.0.0.0 --port 8000"
