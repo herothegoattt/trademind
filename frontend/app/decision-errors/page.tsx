@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ArrowLeft, ArrowRight, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -592,16 +592,51 @@ function LibraryErrorCard({ id }: { id: string }) {
 
 type View = "quiz" | "results" | "library";
 
+const STORAGE_KEY = "decision_errors_state";
+
 export default function DecisionErrorsPage() {
   const [view, setView] = useState<View>("quiz");
   const [step, setStep] = useState(0);
   const [flagged, setFlagged] = useState<string[]>([]);
   const [chosen, setChosen] = useState<number | null>(null);
   const [quizKey, setQuizKey] = useState(0);
+  const [mounted, setMounted] = useState(false);
 
-  const shuffledQuiz = useMemo(() => generateQuiz(), [quizKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const freshQuiz = useMemo(() => generateQuiz(), [quizKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [shuffledQuiz, setShuffledQuiz] = useState<Question[]>(freshQuiz);
+
+  // On mount: restore saved state from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const s = JSON.parse(saved);
+        if (s.view) setView(s.view);
+        if (typeof s.step === "number") setStep(s.step);
+        if (Array.isArray(s.flagged)) setFlagged(s.flagged);
+        if (Array.isArray(s.quiz) && s.quiz.length > 0) setShuffledQuiz(s.quiz);
+      }
+    } catch {}
+    setMounted(true);
+  }, []);
+
+  // Sync freshQuiz into shuffledQuiz only when quizKey changes (i.e. after reset)
+  useEffect(() => {
+    if (mounted) setShuffledQuiz(freshQuiz);
+  }, [quizKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist state whenever it changes
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ view, step, flagged, quiz: shuffledQuiz }));
+    } catch {}
+  }, [view, step, flagged, shuffledQuiz, mounted]);
+
+  if (!mounted) return null;
 
   function reset() {
+    localStorage.removeItem(STORAGE_KEY);
     setView("quiz");
     setStep(0);
     setFlagged([]);
