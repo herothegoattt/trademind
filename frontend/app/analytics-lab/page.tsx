@@ -417,7 +417,7 @@ export default function AnalyticsLabPage() {
   const planMeta = TIER_META[(userPlan as Tier)] ?? TIER_META.core;
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col text-white" style={{ background: "#060612" }}>
+    <div className="h-screen overflow-hidden flex flex-col text-white min-w-0" style={{ background: "#060612" }}>
       {/* ── Top bar ────────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 z-30 backdrop-blur-xl"
         style={{ background: "rgba(6,6,18,0.9)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
@@ -1068,7 +1068,7 @@ export default function AnalyticsLabPage() {
                       <div className="text-[10px] text-gray-500 mb-3">
                         Выжили: <span className="text-emerald-400 font-semibold">{monteCarlo.survivedPct}%</span> сценариев ({monteCarlo.survivedCount} из {monteCarlo.nSims}) · Руинированы: <span className="text-red-400 font-semibold">{monteCarlo.ruinPct}%</span>
                       </div>
-                      <div className="grid grid-cols-5 gap-3 mb-5">
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3 mb-5">
                         {[
                           { label: "P5 (худший)", value: monteCarlo.sp5, color: "#f87171" },
                           { label: "P25",         value: monteCarlo.sp25, color: "#f59e0b" },

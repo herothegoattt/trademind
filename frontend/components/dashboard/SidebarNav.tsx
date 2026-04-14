@@ -169,7 +169,7 @@ export function SidebarNav() {
     </nav>
 
     {/* Mobile bottom navigation */}
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-950 border-t border-slate-800 flex">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 flex" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
       {mobileNav.map(({ section, path, icon, labelKey }) => {
         const active = pathname === path;
         return (
@@ -177,17 +177,17 @@ export function SidebarNav() {
             key={section}
             href={path}
             onClick={() => selectSection(section as Section)}
-            className="flex-1 flex flex-col items-center justify-center py-2 gap-1"
+            className="flex-1 flex flex-col items-center justify-center py-3 gap-0.5 min-h-[56px]"
           >
             <span className={cn(
               "transition-colors",
-              active ? "text-teal-300" : "text-slate-500"
+              active ? "text-teal-300 drop-shadow-[0_0_8px_rgba(45,212,191,0.7)]" : "text-slate-500"
             )}>
               {icon}
             </span>
             <span className={cn(
               "text-[10px] font-medium",
-              active ? "text-teal-300" : "text-slate-500"
+              active ? "text-teal-300" : "text-slate-600"
             )}>
               {t(labelKey).split(" ")[0]}
             </span>

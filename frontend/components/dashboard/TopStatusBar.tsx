@@ -120,15 +120,15 @@ export function TopStatusBar() {
         </div>
 
         {/* ── RIGHT — controls ─────────────────────────────── */}
-        <div className="flex-1 flex items-center justify-end gap-2.5">
+        <div className="flex-1 flex items-center justify-end gap-1.5 sm:gap-2.5">
 
-          {/* Bell — real push toggle */}
+          {/* Bell — hidden on mobile to save space */}
           <Tooltip content={bellLabel}>
             <button
               onClick={() => permission !== "unsupported" && !busy && toggle(token ?? undefined)}
               disabled={permission === "unsupported" || busy}
               className={cn(
-                "p-2 rounded-lg border transition-colors relative",
+                "hidden sm:flex p-2 rounded-lg border transition-colors relative",
                 bellActive
                   ? "bg-cyan-500/10 border-cyan-500/25 hover:bg-cyan-500/15"
                   : permission === "denied"

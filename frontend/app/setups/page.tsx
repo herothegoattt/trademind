@@ -774,17 +774,17 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
         </button>
 
         {/* Header */}
-        <div className={`px-6 pt-6 pb-4 border-b ${cfg.border}`}>
+        <div className={`px-3 sm:px-6 pt-4 sm:pt-6 pb-4 border-b ${cfg.border}`}>
           <div className="flex items-center gap-3 mb-2">
             <span className={`text-xs font-bold px-2.5 py-1 rounded border ${cfg.badge}`}>{cfg.emoji} {cfg.label}</span>
             <span className="text-xs text-gray-500">{setup.type}</span>
             <span className="text-xs text-gray-500 flex items-center gap-1"><Clock className="w-3 h-3" />{setup.timeframe}</span>
           </div>
-          <h2 className={`text-2xl font-bold bg-gradient-to-r ${cfg.grad} bg-clip-text text-transparent`}>{setup.title}</h2>
+          <h2 className={`text-lg sm:text-2xl font-bold bg-gradient-to-r ${cfg.grad} bg-clip-text text-transparent`}>{setup.title}</h2>
           <p className="text-gray-400 text-sm mt-1">{setup.description}</p>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
           {/* Chart */}
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -827,15 +827,15 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
           </div>
 
           {/* Metrics */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
             {[
               { label: 'Risk : Reward', value: setup.rr, icon: <Target className="w-4 h-4 text-cyan-400" />, col: 'text-cyan-300' },
               { label: 'Est. Win Rate', value: setup.winRateRange, icon: <TrendingUp className="w-4 h-4 text-green-400" />, col: 'text-green-300' },
               { label: 'Market Type', value: setup.marketCondition, icon: <BarChart2 className="w-4 h-4 text-blue-400" />, col: 'text-blue-300' },
             ].map((m, i) => (
-              <div key={i} className="rounded-lg border border-gray-700/50 bg-gray-900/40 p-3 text-center">
-                <div className="flex items-center justify-center gap-1 mb-1">{m.icon}<span className="text-xs text-gray-400">{m.label}</span></div>
-                <div className={`text-lg font-bold ${m.col}`}>{m.value}</div>
+              <div key={i} className="rounded-lg border border-gray-700/50 bg-gray-900/40 p-3 flex sm:flex-col items-center sm:text-center gap-3 sm:gap-1">
+                <div className="flex items-center gap-1.5 sm:justify-center sm:mb-1 flex-shrink-0">{m.icon}<span className="text-xs text-gray-400">{m.label}</span></div>
+                <div className={`text-base sm:text-lg font-bold ${m.col} ml-auto sm:ml-0`}>{m.value}</div>
               </div>
             ))}
           </div>

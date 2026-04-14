@@ -168,80 +168,61 @@ export default function NewsPage() {
             />
           </div>
 
-          {/* Filters Row */}
-          <div className="flex items-center gap-3 pb-4 border-b border-gray-700 flex-wrap">
-            <Filter size={18} className="text-orange-400" />
-            
-            {/* Country Filter */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Country:</span>
-              <div className="flex gap-2 flex-wrap">
+          {/* Filters */}
+          <div className="space-y-2 pb-4 border-b border-gray-700">
+            {/* Impact + Sort row — single line on mobile */}
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+              <Filter size={14} className="text-orange-400 flex-shrink-0" />
+              {(['all', 'low', 'medium', 'high'] as const).map(level => (
                 <motion.button
-                  onClick={() => setFilterCountry("")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
-                    filterCountry === ''
-                      ? 'bg-orange-500/30 border border-orange-400 text-orange-300'
-                      : 'bg-gray-800/30 border border-gray-700 text-gray-400 hover:border-gray-600'
+                  key={level}
+                  onClick={() => setFilterImpact(level === 'all' ? '' : level)}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase transition-all ${
+                    (level === 'all' ? filterImpact === '' : filterImpact === level)
+                      ? level === 'high' ? 'bg-red-500/30 border border-red-400 text-red-300'
+                        : level === 'medium' ? 'bg-yellow-500/30 border border-yellow-400 text-yellow-300'
+                        : level === 'low' ? 'bg-green-500/30 border border-green-400 text-green-300'
+                        : 'bg-orange-500/30 border border-orange-400 text-orange-300'
+                      : 'bg-gray-800/30 border border-gray-700 text-gray-400'
                   }`}
-                  whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  All
+                  {level === 'all' ? 'All' : level === 'high' ? '🔴 High' : level === 'medium' ? '🟡 Med' : '🟢 Low'}
                 </motion.button>
-                {countries.map(country => (
-                  <motion.button
-                    key={country}
-                    onClick={() => setFilterCountry(country || "")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
-                      filterCountry === country
-                        ? 'bg-orange-500/30 border border-orange-400 text-orange-300'
-                        : 'bg-gray-800/30 border border-gray-700 text-gray-400 hover:border-gray-600'
-                    }`}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {country}
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-
-            {/* Impact Filter */}
-            <div className="flex items-center gap-2 ml-auto">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Impact:</span>
-              <div className="flex gap-2">
-                {(['all', 'low', 'medium', 'high'] as const).map(level => (
-                  <motion.button
-                    key={level}
-                    onClick={() => setFilterImpact(level === 'all' ? '' : level)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
-                      (level === 'all' ? filterImpact === '' : filterImpact === level)
-                        ? level === 'high' ? 'bg-red-500/30 border border-red-400 text-red-300'
-                          : level === 'medium' ? 'bg-yellow-500/30 border border-yellow-400 text-yellow-300'
-                          : level === 'low' ? 'bg-green-500/30 border border-green-400 text-green-300'
-                          : 'bg-orange-500/30 border border-orange-400 text-orange-300'
-                        : 'bg-gray-800/30 border border-gray-700 text-gray-400 hover:border-gray-600'
-                    }`}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {level === 'all' ? '📊 All' : level === 'high' ? '🔴 High' : level === 'medium' ? '🟡 Medium' : '🟢 Low'}
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-
-            {/* Sort */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sort:</span>
+              ))}
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-1.5 bg-gray-800/50 border border-gray-700 rounded-lg text-xs font-semibold text-gray-300 focus:border-orange-500 focus:outline-none transition-colors"
+                className="ml-auto flex-shrink-0 px-2 py-1.5 bg-gray-800/50 border border-gray-700 rounded-lg text-xs font-semibold text-gray-300 focus:border-orange-500 focus:outline-none"
               >
-                <option value="newest">Newest First</option>
-                <option value="impact">By Impact</option>
+                <option value="newest">Newest</option>
+                <option value="impact">Impact</option>
               </select>
+            </div>
+
+            {/* Country scroll */}
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none">
+              <motion.button
+                onClick={() => setFilterCountry("")}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  filterCountry === '' ? 'bg-orange-500/30 border border-orange-400 text-orange-300' : 'bg-gray-800/30 border border-gray-700 text-gray-400'
+                }`}
+                whileTap={{ scale: 0.95 }}
+              >
+                All
+              </motion.button>
+              {countries.map(country => (
+                <motion.button
+                  key={country}
+                  onClick={() => setFilterCountry(country || "")}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    filterCountry === country ? 'bg-orange-500/30 border border-orange-400 text-orange-300' : 'bg-gray-800/30 border border-gray-700 text-gray-400'
+                  }`}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {country}
+                </motion.button>
+              ))}
             </div>
           </div>
         </motion.div>

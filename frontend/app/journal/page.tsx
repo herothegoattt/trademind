@@ -144,7 +144,7 @@ export default function JournalPage() {
       <div className="max-w-7xl mx-auto p-3 sm:p-6">
         {/* Stats Grid */}
         <motion.div
-          className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8"
+          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
         >

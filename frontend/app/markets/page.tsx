@@ -121,10 +121,10 @@ export default function MarketsPage() {
   const symbols = SYMBOLS[category];
 
   return (
-    <div className="flex h-full bg-[#080810] text-white">
+    <div className="flex flex-col md:flex-row h-full bg-[#080810] text-white">
 
-      {/* ── Sidebar ── */}
-      <aside className="w-52 flex-shrink-0 flex flex-col border-r border-white/[0.05] bg-[#0b0b16]">
+      {/* ── Desktop Sidebar (hidden on mobile) ── */}
+      <aside className="hidden md:flex w-52 flex-shrink-0 flex-col border-r border-white/[0.05] bg-[#0b0b16]">
 
         {/* Back + title */}
         <div className="flex items-center gap-2 px-4 py-4 border-b border-white/[0.04]">
@@ -159,7 +159,6 @@ export default function MarketsPage() {
           ))}
         </div>
 
-        {/* Divider */}
         <div className="mx-3 border-t border-white/[0.05]" />
 
         {/* Symbol list — scrollable */}
@@ -184,7 +183,7 @@ export default function MarketsPage() {
           ))}
         </div>
 
-        {/* Timeframe — bottom, fixed */}
+        {/* Timeframe */}
         <div className="px-3 py-3 border-t border-white/[0.05]">
           <div className="flex items-center gap-1 mb-2">
             <Clock className="w-3 h-3 text-gray-500" />
@@ -211,8 +210,8 @@ export default function MarketsPage() {
       {/* ── Chart Area ── */}
       <main className="flex-1 flex flex-col min-w-0">
 
-        {/* Chart header bar */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.04] flex-shrink-0">
+        {/* Desktop chart header */}
+        <div className="hidden md:flex items-center justify-between px-5 py-3 border-b border-white/[0.04] flex-shrink-0">
           <div className="flex items-center gap-3">
             <span className="text-base font-bold text-white">{symbolLabel}</span>
             <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${CATEGORY_COLORS[category]}`}>
@@ -222,6 +221,76 @@ export default function MarketsPage() {
           <div className="flex items-center gap-2 text-xs text-gray-500">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
             Live · {INTERVALS.find(i => i.value === interval)?.label}
+          </div>
+        </div>
+
+        {/* ── Mobile Controls ── */}
+        <div className="md:hidden flex-shrink-0 bg-[#0b0b16] border-b border-white/[0.05]">
+          {/* Back + title row */}
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.04]">
+            <Link href="/app" className="p-1.5 rounded hover:bg-white/[0.05] transition-colors">
+              <ArrowLeft className="w-4 h-4 text-gray-400" />
+            </Link>
+            <BarChart3 className="w-4 h-4 text-purple-400" />
+            <span className="text-sm font-semibold text-white flex-1">Markets</span>
+            <span className="text-xs font-bold text-white">{symbolLabel}</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+          </div>
+
+          {/* Category scroll */}
+          <div className="flex gap-2 px-3 py-2 overflow-x-auto scrollbar-none">
+            {(Object.keys(SYMBOLS) as Category[]).map(cat => (
+              <button
+                key={cat}
+                onClick={() => {
+                  setCategory(cat);
+                  setSymbol(SYMBOLS[cat][0].value);
+                  setSymbolLabel(SYMBOLS[cat][0].label);
+                }}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  category === cat ? CATEGORY_ACTIVE[cat] : "border-transparent text-gray-500 bg-white/[0.03]"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Symbol + Timeframe row */}
+          <div className="flex gap-2 px-3 pb-2">
+            {/* Symbol scroll */}
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none flex-1">
+              {symbols.map(sym => (
+                <button
+                  key={sym.value}
+                  onClick={() => { setSymbol(sym.value); setSymbolLabel(sym.label); }}
+                  className={`flex-shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    symbol === sym.value
+                      ? `${CATEGORY_COLORS[category]} border-current bg-white/[0.06]`
+                      : "text-gray-500 border-transparent bg-white/[0.02]"
+                  }`}
+                >
+                  {sym.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Timeframe pills */}
+            <div className="flex gap-1 flex-shrink-0">
+              {INTERVALS.map(tf => (
+                <button
+                  key={tf.value}
+                  onClick={() => setInterval(tf.value)}
+                  className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    interval === tf.value
+                      ? "bg-purple-500/30 text-purple-300 border border-purple-500/40"
+                      : "text-gray-500 bg-white/[0.02] border border-transparent"
+                  }`}
+                >
+                  {tf.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

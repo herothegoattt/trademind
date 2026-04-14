@@ -374,7 +374,7 @@ function PairCard({ p }: { p: PairAnalysis }) {
         </div>
 
         {/* TF strip */}
-        <div className="mt-3 grid grid-cols-5 gap-1">
+        <div className="mt-3 grid grid-cols-5 gap-0.5 sm:gap-1">
           {p.timeframes.map(tf => {
             const tbs = BIAS_STYLE[tf.bias];
             return (
@@ -642,19 +642,19 @@ export default function DailyBiasPage() {
 
         {/* Summary Stats */}
         <motion.div key={activeCategory} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          className="grid grid-cols-3 gap-3">
+          className="grid grid-cols-3 gap-2 sm:gap-3">
           {[
             { label: 'Bullish', count: bullCount, color: 'text-emerald-400', bg: 'bg-emerald-500/8 border-emerald-500/25', Icon: TrendingUp },
             { label: 'Neutral', count: neutCount, color: 'text-gray-400',    bg: 'bg-gray-800/30 border-gray-700/30',      Icon: Minus       },
             { label: 'Bearish', count: bearCount, color: 'text-rose-400',    bg: 'bg-rose-500/8 border-rose-500/25',        Icon: TrendingDown },
           ].map(({ label, count, color, bg, Icon }) => (
-            <div key={label} className={`rounded-xl border p-4 ${bg}`}>
-              <div className="flex items-center gap-2 mb-1">
-                <Icon size={13} className={color} />
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</span>
+            <div key={label} className={`rounded-xl border p-3 sm:p-4 ${bg}`}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <Icon size={12} className={color} />
+                <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</span>
               </div>
-              <div className={`text-3xl font-black ${color}`}>{count}</div>
-              <div className="text-[10px] text-gray-600 mt-1">{CAT_LABELS[activeCategory]}</div>
+              <div className={`text-2xl sm:text-3xl font-black ${color}`}>{count}</div>
+              <div className="text-[9px] sm:text-[10px] text-gray-600 mt-1 truncate">{CAT_LABELS[activeCategory]}</div>
             </div>
           ))}
         </motion.div>
