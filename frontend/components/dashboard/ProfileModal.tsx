@@ -5,8 +5,38 @@ import Image from "next/image";
 import {
   X, LogOut, Edit2, Check, ChevronLeft, Camera, Zap, Shield, Crown,
   Link2, Unlink, RefreshCw, TrendingUp, BarChart3, Target, Trophy,
-  Clock, Flame, ChevronRight, ExternalLink, Activity,
+  Clock, Flame, ChevronRight, ExternalLink, Activity, Upload,
 } from "lucide-react";
+
+// ─── Local profile prefs (avatar + personalization, stored client-side) ───────
+const PROFILE_PREFS_KEY = "tm_profile_prefs";
+
+interface ProfilePrefs {
+  avatar: string | null;    // base64 or URL of uploaded image
+  presetColor: string | null; // hex color of selected preset (no image)
+  tradingStyle: string;
+  bio: string;
+}
+
+const DEFAULT_PREFS: ProfilePrefs = { avatar: null, presetColor: null, tradingStyle: "", bio: "" };
+
+const PRESET_COLORS = [
+  "#22d3ee", "#a78bfa", "#34d399", "#f59e0b",
+  "#f87171", "#60a5fa", "#f472b6", "#94a3b8",
+];
+
+const TRADING_STYLES = ["Scalper", "Day Trader", "Swing Trader", "Position Trader"];
+
+function loadPrefs(): ProfilePrefs {
+  try {
+    const raw = localStorage.getItem(PROFILE_PREFS_KEY);
+    return raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : DEFAULT_PREFS;
+  } catch { return DEFAULT_PREFS; }
+}
+
+function savePrefs(p: ProfilePrefs) {
+  try { localStorage.setItem(PROFILE_PREFS_KEY, JSON.stringify(p)); } catch {}
+}
 import { cn } from "../../lib/utils";
 import { useAuthStore, type Plan } from "../../lib/auth-store";
 import { SubscriptionModal } from "./SubscriptionModal";
@@ -177,6 +207,8 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const [saving, setSaving] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [prefs, setPrefs] = useState<ProfilePrefs>(DEFAULT_PREFS);
+  const [editPrefs, setEditPrefs] = useState<ProfilePrefs>(DEFAULT_PREFS);
 
   const [plan, setPlan] = useState<Plan>((authUser?.plan as Plan) || "core");
   const [subOpen, setSubOpen] = useState(false);
@@ -199,6 +231,9 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     setTab("overview");
     setIsEditing(false);
     setTvError(null);
+    const loaded = loadPrefs();
+    setPrefs(loaded);
+    setEditPrefs(loaded);
   }, [isOpen, authUser]);
 
   // ─── Handlers ────────────────────────────────────────────────────────────
@@ -211,7 +246,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     reader.onloadend = () => {
       const result = reader.result as string;
       setAvatarPreview(result);
-      setEditData((d) => ({ ...d, avatar_url: result }));
+      setEditPrefs((p) => ({ ...p, avatar: result, presetColor: null }));
     };
     reader.readAsDataURL(file);
   };
@@ -219,28 +254,22 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const handleSaveEdits = async () => {
     if (!authUser || !editData.name.trim()) return;
     setSaving(true);
+    // Save personalization to localStorage immediately (no backend needed)
+    savePrefs(editPrefs);
+    setPrefs(editPrefs);
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch("/api/auth/profile", {
+      await fetch("/api/auth/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          name: editData.name.trim(),
-          avatar_url: editData.avatar_url || undefined,
-        }),
-      });
-      if (!res.ok) throw new Error("Save failed");
-      // Refresh user data
-      const { fetchCurrentUser } = useAuthStore.getState();
-      await fetchCurrentUser();
+        body: JSON.stringify({ name: editData.name.trim() }),
+      }).then((r) => r.ok && useAuthStore.getState().fetchCurrentUser()).catch(() => {});
+    } finally {
       setAvatarPreview(null);
       setIsEditing(false);
-    } catch {
-      // silent
-    } finally {
       setSaving(false);
     }
   };
@@ -285,10 +314,44 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     }
   };
 
-  const getAvatarUrl = () => {
-    if (avatarPreview) return avatarPreview;
-    if (editData.avatar_url) return editData.avatar_url;
-    return `https://api.dicebear.com/7.x/avataaars/png?seed=${authUser?.email || "default"}`;
+  const getAvatarUrl = (forEdit = false) => {
+    const p = forEdit ? editPrefs : prefs;
+    if (forEdit && avatarPreview) return avatarPreview;
+    if (p.avatar) return p.avatar;
+    return null; // null = render preset or initials fallback
+  };
+
+  const getInitials = () => {
+    const name = authUser?.name || authUser?.email || "?";
+    return name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+  };
+
+  // Renders the avatar: image if available, else colored circle with initials
+  const AvatarCircle = ({ size = 72, forEdit = false, color }: { size?: number; forEdit?: boolean; color?: string }) => {
+    const url = getAvatarUrl(forEdit);
+    const p = forEdit ? editPrefs : prefs;
+    const bg = color ?? p.presetColor ?? "#22d3ee";
+    if (url) {
+      return (
+        <Image src={url} alt="Avatar" width={size} height={size}
+          className="rounded-full object-cover"
+          style={{ width: size, height: size }} />
+      );
+    }
+    return (
+      <div
+        className="rounded-full flex items-center justify-center font-bold"
+        style={{
+          width: size, height: size,
+          background: `linear-gradient(135deg, ${bg}22, ${bg}44)`,
+          border: `2px solid ${bg}55`,
+          color: bg,
+          fontSize: size * 0.3,
+        }}
+      >
+        {getInitials()}
+      </div>
+    );
   };
 
   // ─── Guard ───────────────────────────────────────────────────────────────
@@ -394,23 +457,68 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
           {isEditing ? (
             /* ════ EDIT MODE ════ */
-            <div className="space-y-4">
-              <div className="text-center mb-6">
-                <div className="inline-flex relative mb-3 group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/30 to-cyan-500/30 rounded-full blur-lg opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative rounded-full overflow-hidden border-2 border-white/10">
-                    <Image src={getAvatarUrl()} alt="Avatar" width={88} height={88}
-                      className="w-[88px] h-[88px] object-cover" />
-                    <button onClick={() => fileInputRef.current?.click()}
-                      className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Camera size={22} className="text-white" />
+            <div className="space-y-5">
+              {/* Avatar section */}
+              <div>
+                <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Avatar</div>
+
+                {/* Current avatar + upload button */}
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="relative group flex-shrink-0">
+                    <div className="absolute inset-0 rounded-full blur-lg opacity-0 group-hover:opacity-60 transition-opacity"
+                      style={{ background: `${editPrefs.presetColor ?? "#22d3ee"}40` }} />
+                    <div className="relative">
+                      <AvatarCircle size={72} forEdit />
+                    </div>
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-gray-300 bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.08] transition-all w-full"
+                    >
+                      <Upload size={13} />
+                      Upload photo
                     </button>
+                    {editPrefs.avatar && (
+                      <button
+                        onClick={() => setEditPrefs((p) => ({ ...p, avatar: null }))}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] text-red-400/70 hover:text-red-400 bg-red-500/[0.04] hover:bg-red-500/8 border border-red-500/10 transition-all w-full"
+                      >
+                        Remove photo
+                      </button>
+                    )}
                   </div>
                 </div>
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
-                <p className="text-[11px] text-gray-500">{t('click_change_avatar')}</p>
+
+                {/* Preset color picker (shown when no photo) */}
+                {!editPrefs.avatar && (
+                  <div>
+                    <div className="text-[10px] text-gray-500 mb-2">Or pick a color</div>
+                    <div className="flex gap-2 flex-wrap">
+                      {PRESET_COLORS.map((color) => {
+                        const active = editPrefs.presetColor === color;
+                        return (
+                          <button
+                            key={color}
+                            onClick={() => setEditPrefs((p) => ({ ...p, presetColor: color }))}
+                            className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                            style={{
+                              background: `linear-gradient(135deg, ${color}33, ${color}66)`,
+                              border: active ? `2px solid ${color}` : `2px solid ${color}44`,
+                              boxShadow: active ? `0 0 12px ${color}66` : "none",
+                            }}
+                          >
+                            {active && <Check size={12} style={{ color }} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* Name */}
               <div className="space-y-1.5">
                 <label className="text-xs text-gray-400 font-medium">{t('name_label')}</label>
                 <input
@@ -422,6 +530,44 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                 />
               </div>
 
+              {/* Trading Style */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-gray-400 font-medium">Trading Style</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {TRADING_STYLES.map((style) => {
+                    const active = editPrefs.tradingStyle === style;
+                    return (
+                      <button
+                        key={style}
+                        onClick={() => setEditPrefs((p) => ({ ...p, tradingStyle: active ? "" : style }))}
+                        className="px-3 py-2 rounded-lg text-xs font-medium transition-all text-left"
+                        style={{
+                          background: active ? "rgba(34,211,238,0.1)" : "rgba(255,255,255,0.03)",
+                          border: active ? "1px solid rgba(34,211,238,0.35)" : "1px solid rgba(255,255,255,0.07)",
+                          color: active ? "#22d3ee" : "#6b7280",
+                        }}
+                      >
+                        {style}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bio */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-gray-400 font-medium">Bio <span className="text-gray-600 font-normal">(optional)</span></label>
+                <textarea
+                  value={editPrefs.bio}
+                  onChange={(e) => setEditPrefs((p) => ({ ...p, bio: e.target.value.slice(0, 120) }))}
+                  placeholder="e.g. Forex swing trader, 3 years experience..."
+                  rows={2}
+                  className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500/40 transition-colors resize-none placeholder:text-gray-600"
+                />
+                <div className="text-[10px] text-gray-600 text-right">{editPrefs.bio.length}/120</div>
+              </div>
+
+              {/* Email readonly */}
               <div className="space-y-1.5">
                 <label className="text-xs text-gray-400 font-medium">Email</label>
                 <div className="px-3 py-2 bg-white/[0.02] border border-white/[0.05] rounded-xl text-gray-500 text-sm">
@@ -448,18 +594,27 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
             <>
               {/* Avatar & Info */}
               <div className="text-center">
-                <div className="inline-flex relative mb-3">
-                  <div className="absolute inset-0 rounded-full blur-lg"
-                    style={{ background: `${planMeta.color}20` }} />
-                  <Image src={getAvatarUrl()} alt="Avatar" width={72} height={72}
-                    className="relative rounded-full border-2 w-[72px] h-[72px] object-cover"
-                    style={{ borderColor: `${planMeta.color}40` }} />
-                </div>
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="inline-flex relative mb-3 group"
+                >
+                  <div className="absolute inset-0 rounded-full blur-lg opacity-0 group-hover:opacity-60 transition-opacity"
+                    style={{ background: `${prefs.presetColor ?? planMeta.color}30` }} />
+                  <div className="relative">
+                    <AvatarCircle size={80} />
+                    <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Camera size={18} className="text-white" />
+                    </div>
+                  </div>
+                </button>
                 <h3 className="text-base font-semibold text-white">{authUser.name}</h3>
                 <p className="text-xs text-gray-500 mt-0.5">{authUser.email}</p>
+                {prefs.bio && (
+                  <p className="text-xs text-gray-400 mt-2 max-w-[260px] mx-auto leading-relaxed">{prefs.bio}</p>
+                )}
 
-                {/* Plan & verified badges */}
-                <div className="flex items-center justify-center gap-2 mt-2.5">
+                {/* Plan & badges */}
+                <div className="flex items-center justify-center gap-2 mt-2.5 flex-wrap">
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
                     style={{
                       background: `${planMeta.color}10`,
@@ -469,6 +624,11 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                     <planMeta.Icon className="w-3 h-3" />
                     {planMeta.label}
                   </span>
+                  {prefs.tradingStyle && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 bg-white/[0.05] border border-white/[0.1] rounded-full text-[11px] text-gray-300 font-medium">
+                      {prefs.tradingStyle}
+                    </span>
+                  )}
                   {authUser.verified && (
                     <span className="inline-flex items-center px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/25 rounded-full text-[11px] text-emerald-400 font-medium">
                       Verified
