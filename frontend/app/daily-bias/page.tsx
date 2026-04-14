@@ -69,22 +69,22 @@ export default function DailyBiasPage() {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col xl:pr-80">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-gradient-to-r from-black/90 via-slate-900/80 to-black/90 backdrop-blur-lg border-b border-cyan-500/20 px-6 py-4 shadow-lg">
+      <div className="sticky top-0 z-20 bg-gradient-to-r from-black/90 via-slate-900/80 to-black/90 backdrop-blur-lg border-b border-cyan-500/20 px-3 sm:px-6 py-3 sm:py-4 shadow-lg">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Daily Market Bias</h1>
-            <p className="text-gray-400 text-sm mt-1">Forex Factory events & pair recommendations for today</p>
+            <h1 className="text-xl sm:text-3xl font-bold">Daily Market Bias</h1>
+            <p className="text-gray-400 text-xs sm:text-sm mt-0.5 sm:mt-1 hidden sm:block">Forex Factory events & pair recommendations for today</p>
           </div>
-          <Link href="/app" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 transition-colors">
-            <ArrowLeft size={18} />
-            Back to Dashboard
+          <Link href="/app" className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs sm:text-sm transition-colors">
+            <ArrowLeft size={16} />
+            <span className="hidden sm:inline">Back to Dashboard</span>
           </Link>
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5 sm:space-y-8">
           {/* Quick Summary */}
           <div className="grid grid-cols-3 gap-4 md:grid-cols-3">
             <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">

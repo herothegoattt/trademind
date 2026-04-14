@@ -230,21 +230,21 @@ export default function JournalPage() {
     <div className="min-h-screen bg-gradient-to-b from-black to-black/95 text-white">
       {/* Header */}
       <div className="sticky top-0 z-20 border-b border-blue-500/20 bg-black/50 backdrop-blur-lg">
-        <div className="flex items-center justify-between p-6 max-w-7xl mx-auto">
-          <motion.div 
-            className="flex items-center gap-4"
+        <div className="flex items-center justify-between px-3 py-3 sm:p-6 max-w-7xl mx-auto">
+          <motion.div
+            className="flex items-center gap-2 sm:gap-4"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
           >
             <Link href="/app" className="p-2 hover:bg-blue-500/10 rounded transition-colors">
-              <ArrowLeft className="w-5 h-5 text-blue-400" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
             </Link>
-            <div className="flex items-center gap-3">
-              <div className="relative">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="relative hidden sm:block">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg blur-md opacity-40" />
                 <Calendar className="w-7 h-7 text-blue-400 relative" />
               </div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-teal-400 bg-clip-text text-transparent">
+              <h1 className="text-lg sm:text-3xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-teal-400 bg-clip-text text-transparent">
                 Trading Journal
               </h1>
             </div>
@@ -257,16 +257,17 @@ export default function JournalPage() {
             }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg font-semibold text-white hover:shadow-lg hover:shadow-blue-500/30 transition-all"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg font-semibold text-white text-sm hover:shadow-lg hover:shadow-blue-500/30 transition-all"
           >
-            <Plus size={18} />
-            New Trade
+            <Plus size={16} />
+            <span className="hidden sm:inline">New Trade</span>
+            <span className="sm:hidden">Add</span>
           </motion.button>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="max-w-7xl mx-auto p-3 sm:p-6">
         {/* Stats Grid */}
         <motion.div 
           className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8"
@@ -578,7 +579,7 @@ function TradeFormModal({ isOpen, onClose, formData, setFormData, onSubmit, isEd
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">
                 Symbol *
@@ -607,7 +608,7 @@ function TradeFormModal({ isOpen, onClose, formData, setFormData, onSubmit, isEd
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">
                 Entry Price *
@@ -637,7 +638,7 @@ function TradeFormModal({ isOpen, onClose, formData, setFormData, onSubmit, isEd
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">
                 Account Size ($)

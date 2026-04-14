@@ -37,20 +37,20 @@ export default function InvestingPage() {
     <div className="w-full min-h-screen bg-black">
       {/* Header - Fixed */}
       <div className="fixed top-0 left-0 right-0 z-40 bg-gradient-to-b from-black via-slate-950 to-transparent border-b border-slate-800 will-change-auto">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-3 py-3 sm:px-6 sm:py-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-6">
+            <div className="flex items-center gap-2 sm:gap-4">
               <Link
                 href="/app"
                 className="p-2 hover:bg-slate-900 rounded-lg transition-colors duration-200 text-slate-400 hover:text-slate-200"
               >
-                <ArrowLeft size={20} />
+                <ArrowLeft size={18} />
               </Link>
               <div>
-                <h1 className="text-3xl font-bold text-slate-100">
+                <h1 className="text-lg sm:text-3xl font-bold text-slate-100">
                   Investment Portfolio
                 </h1>
-                <p className="text-slate-400 text-sm mt-1">
+                <p className="text-slate-400 text-xs sm:text-sm mt-0.5 sm:mt-1 hidden sm:block">
                   Long-term wealth building & capital growth
                 </p>
               </div>
@@ -58,28 +58,29 @@ export default function InvestingPage() {
             <button
               onClick={handleRefresh}
               disabled={isLoading}
-              className="p-2.5 hover:bg-slate-900 rounded-lg transition-colors duration-200 text-slate-400 hover:text-slate-200 disabled:opacity-50"
+              className="p-2 sm:p-2.5 hover:bg-slate-900 rounded-lg transition-colors duration-200 text-slate-400 hover:text-slate-200 disabled:opacity-50"
             >
-              <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
+              <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
             </button>
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-2 contains-layout">
+          <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-2 contains-layout">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm whitespace-nowrap transition-all duration-200 ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium text-xs sm:text-sm whitespace-nowrap transition-all duration-200 ${
                     activeTab === tab.id
                       ? 'bg-slate-800 text-slate-100 border border-slate-700'
                       : 'bg-slate-900/50 text-slate-400 border border-slate-800 hover:bg-slate-800/50'
                   }`}
                 >
-                  <Icon size={16} />
-                  {tab.label}
+                  <Icon size={14} />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
                 </button>
               );
             })}
@@ -88,7 +89,7 @@ export default function InvestingPage() {
       </div>
 
       {/* Content Area - With layout containment */}
-      <div className="pt-52 pb-20 px-6 contains-layout">
+      <div className="pt-36 sm:pt-52 pb-20 px-3 sm:px-6 contains-layout">
         <div className="max-w-7xl mx-auto">
           <motion.div
             key={activeTab}

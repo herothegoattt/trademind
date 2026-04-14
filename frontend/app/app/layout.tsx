@@ -24,9 +24,9 @@ export default function AppLayout({
         {/* no scrolling - page is fixed height/width */}
         <div className="h-screen w-screen overflow-hidden bg-[var(--bg)]">
           <SidebarNav />
-          <div className="flex flex-col h-full ml-56">
+          <div className="flex flex-col h-full ml-0 md:ml-56">
             <TopStatusBar />
-            <div className="flex-1 relative overflow-hidden pt-16">
+            <div className="flex-1 relative overflow-hidden pt-16 pb-14 md:pb-0">
               {children}
             </div>
           </div>
