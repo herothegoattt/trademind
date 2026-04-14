@@ -1,250 +1,507 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useDashboardStore } from "../../lib/store";
 import { cn } from "../../lib/utils";
-import { MessageCircle, Sparkles, Send, Brain, Image, Paperclip } from "lucide-react";
+import { Send, Brain, Sparkles, MessageCircle, ChevronDown, Zap, Paperclip, Image } from "lucide-react";
 
 interface AIChatWindowProps {
   isCompact?: boolean;
 }
 
 export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false }) => {
-  const messages = useDashboardStore((s) => s.chatMessages) || [];
-  const isSending = useDashboardStore((s) => s.isSending) || false;
-  const draft = useDashboardStore((s) => s.chatDraft) || "";
-  const setDraft = useDashboardStore((s) => s.setChatDraft) || (() => {});
-  const sendChat = useDashboardStore((s) => s.sendChat) || (() => {});
+  const messages   = useDashboardStore((s) => s.chatMessages) ?? [];
+  const isSending  = useDashboardStore((s) => s.isSending)    ?? false;
+  const draft      = useDashboardStore((s) => s.chatDraft)    ?? "";
+  const setDraft   = useDashboardStore((s) => s.setChatDraft);
+  const sendChat   = useDashboardStore((s) => s.sendChat);
 
-  const [showScrollButton, setShowScrollButton] = useState(false);
-  const [isAtBottom, setIsAtBottom] = useState(true);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const messagesEndRef       = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = () =>
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
 
-  useEffect(() => {
-    // Всегда прокручиваем к последнему сообщению, чтобы история была видна
-    scrollToBottom();
-  }, [messages, isSending]);
+  useEffect(() => { scrollToBottom(); }, [messages, isSending]);
 
   const handleScroll = () => {
-    if (messagesContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-      const atBottom = scrollHeight - scrollTop - clientHeight <= 120;
-      setIsAtBottom(atBottom);
-      setShowScrollButton(!atBottom);
-    }
+    if (!messagesContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 110);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendChat();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
   };
 
   return (
-    <div className="w-full h-full flex items-stretch justify-stretch">
-      {/* Галактическое ядро по центру */}
-      <div className="relative w-full h-full min-h-0 flex items-center justify-center">
-        {/* Фон ядра с внешним пунктирным кольцом */}
-        <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_top,rgba(236,72,153,0.35),rgba(99,102,241,0.2)_32%,rgba(14,165,233,0.22)_60%,rgba(15,23,42,0.98))] shadow-[0_0_90px_rgba(236,72,153,0.35)] animate-glow-pulse border-2 border-cyan-400/35 border-dashed" />
-        <div className="absolute inset-0 overflow-hidden rounded-full pointer-events-none">
-          <div className="absolute -top-16 left-1/3 w-48 h-48 rounded-full bg-pink-500/25 blur-3xl" />
-          <div className="absolute -bottom-16 right-1/3 w-56 h-56 rounded-full bg-cyan-400/20 blur-3xl" />
-          <div className="absolute top-1/4 left-1/2 w-40 h-40 -translate-x-1/2 rounded-full bg-violet-500/20 blur-2xl" />
-        </div>
+    <div className="absolute inset-0 flex flex-col overflow-hidden">
 
-        {/* Пульсирующее ядро в центре */}
-        <div className="absolute w-28 h-28 rounded-full bg-white/10 border border-pink-400/40 shadow-[0_0_40px_rgba(236,72,153,0.7)] flex items-center justify-center animate-pulseSubtle pointer-events-none">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 shadow-[0_0_24px_rgba(236,72,153,0.8)]" />
-        </div>
+      {/* ── GLASS BACKGROUND ────────────────────────────────────── */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "rgba(2, 4, 20, 0.72)",
+          backdropFilter: "blur(28px)",
+          WebkitBackdropFilter: "blur(28px)",
+        }}
+      />
+      {/* Subtle gradient border overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(135deg, rgba(6,182,212,0.08) 0%, rgba(139,92,246,0.06) 50%, rgba(236,72,153,0.04) 100%)",
+        }}
+      />
 
-        {/* Небольшое окно чата по центру ядра */}
-        <div className="relative z-10 w-full h-full min-h-0 bg-slate-950/96 border border-cyan-400/50 rounded-3xl backdrop-blur-xl shadow-[0_0_35px_rgba(14,165,233,0.35)] overflow-hidden flex flex-col">
-          <div className="flex flex-col w-full h-full min-h-0 bg-transparent">
-            <div className={cn("flex-shrink-0 bg-slate-900/80 border-b border-slate-700/60", isCompact ? "px-3 py-1" : "px-3 py-1")}> 
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <div className={cn("relative overflow-hidden", isCompact ? "w-28" : "w-32")}> 
-                    <div className="absolute inset-0 bg-black/60" />
-                    <div className="relative flex items-center h-8">
-                      <div className="inline-flex whitespace-nowrap text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 drop-shadow-[0_0_10px_rgba(236,72,153,0.4)]">
-                        {"TRADEMIND AI".split("").map((letter, index) => (
-                          <span
-                            key={index}
-                            className="inline-block px-1 animate-marquee"
-                            style={{ animationDelay: `${index * 0.15}s` }}
-                          >
-                            {letter}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  {!isCompact && (
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                      <span className="text-xs font-semibold text-emerald-300">Online</span>
-                    </div>
-                  )}
-                </div>
-                {!isCompact && (
-                  <p className="text-slate-200/80 text-xs">Профессиональный торговый ассистент</p>
-                )}
-              </div>
-            </div>
-
+      {/* ── HEADER ──────────────────────────────────────────────── */}
+      <div
+        className="relative z-10 flex-shrink-0 flex items-center justify-between px-5 py-2.5"
+        style={{
+          borderBottom: "1px solid rgba(6,182,212,0.18)",
+          background: "rgba(2,4,20,0.55)",
+        }}
+      >
+        <div className="flex items-center gap-3">
+          {/* Nucleus icon */}
+          <div className="relative w-8 h-8 flex-shrink-0">
+            <motion.div
+              animate={{ scale: [1, 1.45, 1], opacity: [0.45, 0.85, 0.45] }}
+              transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute inset-0 rounded-full"
+              style={{ background: "rgba(6,182,212,0.35)", filter: "blur(5px)" }}
+            />
             <div
-              ref={messagesContainerRef}
-              onScroll={handleScroll}
-              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+              className="relative w-8 h-8 rounded-full flex items-center justify-center"
+              style={{
+                background: "linear-gradient(135deg, rgba(6,182,212,0.55), rgba(139,92,246,0.55))",
+                border: "1px solid rgba(6,182,212,0.4)",
+                boxShadow: "0 0 12px rgba(6,182,212,0.3)",
+              }}
             >
-              <div className={cn("scroll-smooth pb-3", isCompact ? "px-3 py-2 space-y-2" : "px-4 py-3 space-y-3")}> 
-                {messages.length === 0 && !isSending && (
-                  <div
-                    className={cn(
-                      "flex flex-col items-center justify-center h-full text-center",
-                      isCompact ? "space-y-3 py-2" : "space-y-10 py-12"
-                    )}
-                  >
-                    <div className={cn("relative", isCompact && "hidden")}> 
-                    <div className="absolute inset-0 w-36 h-36 bg-gradient-to-r from-pink-500/30 via-purple-500/12 to-cyan-500/18 rounded-full blur-3xl" />
-                      <div className="relative w-32 h-32 rounded-full bg-gradient-to-br from-pink-500/20 via-purple-500/12 to-blue-500/20 border border-pink-400/40 flex items-center justify-center shadow-xl" style={{ boxShadow: '0 0 35px rgba(236, 72, 153, 0.4), inset 0 0 24px rgba(236, 72, 153, 0.12)' }}>
-                        <Brain size={72} className="text-pink-200" />
-                      </div>
-                    </div>
-
-                    {!isCompact && (
-                      <div className="max-w-sm">
-                        <p className="text-lg font-semibold bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
-                          {"Добро пожаловать в TradeMind AI!".split("").map((letter, index) => (
-                            <span
-                              key={index}
-                              className="inline-block animate-slide-in-from-top"
-                              style={{
-                                animationDelay: `${index * 0.05}s`,
-                                animationFillMode: "forwards",
-                              }}
-                            >
-                              {letter === " " ? "\u00A0" : letter}
-                            </span>
-                          ))}
-                        </p>
-                        <p className="text-xs text-gray-300 leading-relaxed mt-1.5">
-                          Я ваш личный торговый коуч. Готов помочь вам с анализом рынков, стратегиями и управлением рисками.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {messages.map((message: any) => (
-                  <div
-                    key={message.id}
-                    className={cn(
-                      "flex gap-3",
-                      message.role === "user" ? "justify-end" : "justify-start"
-                    )}
-                  >
-                    {message.role === "assistant" && (
-                      <div className="flex-shrink-0 h-9 w-9 rounded-full bg-purple-600/90 flex items-center justify-center shadow-md">
-                        <Sparkles size={18} className="text-white" />
-                      </div>
-                    )}
-
-                    <div className="max-w-xl">
-                      <div
-                        className={cn(
-                          "px-5 py-4 rounded-2xl text-sm leading-relaxed break-words border-2",
-                          message.role === "user"
-                            ? "bg-pink-600/90 text-white border-pink-400 rounded-br-none"
-                            : "bg-slate-800/90 text-white border-cyan-400 rounded-bl-none"
-                        )}
-                      >
-                        <p className="whitespace-pre-wrap font-medium">{message.text}</p>
-                      </div>
-                    </div>
-
-                    {message.role === "user" && (
-                      <div className="flex-shrink-0 h-9 w-9 rounded-full bg-blue-600/90 flex items-center justify-center shadow-md">
-                        <MessageCircle size={18} className="text-white" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {isSending && (
-                  <div className="flex gap-5">
-                    <div className="flex-shrink-0 h-11 w-11 rounded-full bg-purple-600 flex items-center justify-center">
-                      <Sparkles size={20} className="text-white animate-spin" />
-                    </div>
-                    <div className="px-7 py-5 rounded-2xl bg-slate-800/70 border border-purple-400 text-gray-200">
-                      AI анализирует ваш запрос...
-                    </div>
-                  </div>
-                )}
-
-                <div ref={messagesEndRef} />
-              </div>
-            </div>
-
-            {showScrollButton && (
-              <button
-                onClick={scrollToBottom}
-                className="absolute right-4 bottom-20 z-30 p-2 rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 text-white shadow-lg hover:opacity-90 transition text-xs"
-              >
-                ↓
-              </button>
-            )}
-
-            {/* Компактный блок ввода внизу — одна строка: вложения + поле + кнопка */}
-            <div className={cn("mt-auto flex-shrink-0 bg-slate-900/80 border-t border-slate-700/60", isCompact ? "px-3 py-2" : "px-3 py-2")}>
-              <div className="flex items-end gap-2">
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <button className="h-7 w-7 rounded-lg bg-slate-800/70 hover:bg-slate-700/80 flex items-center justify-center text-slate-300 transition" title="Прикрепить файл">
-                    <Paperclip className="h-3 w-3" />
-                  </button>
-                  <button className="h-7 w-7 rounded-lg bg-slate-800/70 hover:bg-slate-700/80 flex items-center justify-center text-slate-300 transition" title="Изображение">
-                    <Image className="h-3 w-3" />
-                  </button>
-                </div>
-                <div className="flex-1 min-w-0 flex items-end gap-2 bg-slate-800/70 border border-slate-600/50 rounded-xl pl-3 pr-2 py-1.5">
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    rows={1}
-                    placeholder={isCompact ? "Вопрос..." : "Напишите ваш вопрос..."}
-                    className={cn(
-                      "flex-1 min-h-[32px] max-h-24 bg-transparent text-slate-100 placeholder-slate-400 border-0 resize-none focus:outline-none leading-relaxed font-medium selection:bg-slate-600 selection:text-slate-100 py-1.5",
-                      isCompact ? "text-xs" : "text-sm"
-                    )}
-                  />
-                  <button
-                    onClick={sendChat}
-                    disabled={!draft.trim() || isSending}
-                    className={cn(
-                      "flex-shrink-0 h-8 w-8 rounded-lg font-bold flex items-center justify-center",
-                      !draft.trim() || isSending
-                        ? "bg-slate-700/30 text-slate-600 cursor-not-allowed"
-                        : "bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 hover:opacity-90 text-white"
-                    )}
-                  >
-                    {isSending ? <Sparkles size={14} /> : <Send size={14} />}
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-3 px-1 mt-1 text-[10px] text-slate-500">
-                {draft.length > 0 && <span>{draft.length} симв.</span>}
-                <span>Enter — отправить · Shift+Enter — новая строка</span>
-              </div>
+              <Brain size={14} className="text-white" />
             </div>
           </div>
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span
+                className="text-sm font-bold tracking-widest"
+                style={{
+                  background: "linear-gradient(90deg, #67e8f9, #a78bfa, #f472b6)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                NEURAL CORE
+              </span>
+              <motion.div
+                animate={{ opacity: [1, 0.25, 1], scale: [1, 0.75, 1] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                style={{ background: "#10b981", boxShadow: "0 0 6px #10b981" }}
+              />
+              <span className="text-[10px] text-emerald-400 font-semibold tracking-widest">
+                ONLINE
+              </span>
+            </div>
+            {!isCompact && (
+              <div className="mt-0.5 space-y-0.5">
+                <p className="text-[9px] text-slate-500 tracking-widest">
+                  TRADING INTELLIGENCE SYSTEM v2.0
+                </p>
+                <p className="text-[10px] text-slate-400/70 font-medium">
+                  TradeMind Coach
+                </p>
+              </div>
+            )}
+          </div>
         </div>
+
+        {!isCompact && (
+          <div className="flex items-center gap-3">
+            {/* EKG waveform accent */}
+            <motion.svg
+              width="48" height="14" viewBox="0 0 48 14" fill="none"
+              animate={{ opacity: [0.25, 0.55, 0.25] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <path
+                d="M0 7 L7 7 L11 1 L15 13 L19 1 L23 13 L27 7 L34 7 L38 4 L42 10 L48 7"
+                stroke="#06b6d4" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"
+              />
+            </motion.svg>
+            <div
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md"
+              style={{ background: "rgba(6,182,212,0.07)", border: "1px solid rgba(6,182,212,0.15)" }}
+            >
+              <Zap size={11} className="text-cyan-400" />
+              <span className="text-[9px] text-cyan-400/80 tracking-widest font-medium">
+                TRADEMIND AI
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── MESSAGES ────────────────────────────────────────────── */}
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(6,182,212,0.15) transparent" }}
+      >
+        {/* ── Empty state — fills full height, no scroll ── */}
+        {messages.length === 0 && !isSending && !isCompact ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+
+              {/* Radar / sonar visualization */}
+              <div className="relative flex items-center justify-center mb-8" style={{ width: 160, height: 160 }}>
+
+                {/* Outward ripple rings */}
+                {[0, 1, 2].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute rounded-full"
+                    style={{
+                      width: 56, height: 56,
+                      top: "50%", left: "50%",
+                      marginTop: -28, marginLeft: -28,
+                      border: "1px solid rgba(6,182,212,0.45)",
+                    }}
+                    animate={{ scale: [1, 2.7], opacity: [0.4, 0] }}
+                    transition={{ duration: 2.6, repeat: Infinity, ease: "easeOut", delay: i * 0.87 }}
+                  />
+                ))}
+
+                {/* Slow-rotating dashed orbit */}
+                <motion.div
+                  className="absolute rounded-full"
+                  style={{
+                    width: 128, height: 128,
+                    top: "50%", left: "50%",
+                    marginTop: -64, marginLeft: -64,
+                    border: "1px dashed rgba(6,182,212,0.1)",
+                  }}
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                />
+
+                {/* Purple counter-orbit */}
+                <motion.div
+                  className="absolute rounded-full"
+                  style={{
+                    width: 100, height: 100,
+                    top: "50%", left: "50%",
+                    marginTop: -50, marginLeft: -50,
+                    border: "1px dashed rgba(139,92,246,0.08)",
+                  }}
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
+                />
+
+                {/* Brain icon — center */}
+                <motion.div
+                  className="relative z-10 rounded-full flex items-center justify-center"
+                  style={{
+                    width: 56, height: 56,
+                    background: "linear-gradient(135deg, rgba(6,182,212,0.18), rgba(139,92,246,0.18))",
+                    border: "1px solid rgba(6,182,212,0.35)",
+                  }}
+                  animate={{
+                    boxShadow: [
+                      "0 0 18px rgba(6,182,212,0.18)",
+                      "0 0 38px rgba(6,182,212,0.42)",
+                      "0 0 18px rgba(6,182,212,0.18)",
+                    ],
+                  }}
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <Brain size={24} className="text-cyan-300" />
+                </motion.div>
+              </div>
+
+              {/* Terminal status card */}
+              <div
+                className="px-5 py-3.5 rounded-lg mb-5"
+                style={{
+                  background: "rgba(6,182,212,0.03)",
+                  border: "1px solid rgba(6,182,212,0.1)",
+                  fontFamily: "monospace",
+                  minWidth: "240px",
+                }}
+              >
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[10px] text-cyan-400/80 tracking-widest">NEURAL CORE</span>
+                  <div className="flex items-center gap-1.5">
+                    <motion.div
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ background: "#10b981", boxShadow: "0 0 5px #10b981" }}
+                      animate={{ opacity: [1, 0.3, 1] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                    <span className="text-[9px] text-emerald-400 tracking-widest">OPERATIONAL</span>
+                  </div>
+                </div>
+                <div className="space-y-1.5 border-t border-white/[0.04] pt-2.5">
+                  <div className="flex justify-between gap-6">
+                    <span className="text-[9px] text-slate-600">MODEL</span>
+                    <span className="text-[9px] text-slate-500">TradeMind</span>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <span className="text-[9px] text-slate-600">MODE</span>
+                    <span className="text-[9px] text-slate-500">TRADING ANALYSIS</span>
+                  </div>
+                  <div className="flex justify-between gap-6">
+                    <span className="text-[9px] text-slate-600">STREAM</span>
+                    <span className="text-[9px] text-emerald-600">ENABLED</span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[9px] text-slate-600 tracking-widest uppercase">
+                Задайте вопрос о стратегии или анализе рынка
+              </p>
+            </div>
+        ) : (
+          <div className={cn("pb-4", isCompact ? "px-3 py-2 space-y-2" : "px-5 py-4 space-y-4")}>
+
+          {/* ── Message bubbles ── */}
+          <AnimatePresence initial={false}>
+            {messages.map((message: any) => (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0, y: 14, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+                className={cn("flex gap-2.5", message.role === "user" ? "justify-end" : "justify-start")}
+              >
+                {/* AI avatar */}
+                {message.role === "assistant" && (
+                  <motion.div
+                    animate={{
+                      boxShadow: [
+                        "0 0 8px rgba(6,182,212,0.35)",
+                        "0 0 20px rgba(6,182,212,0.7)",
+                        "0 0 8px rgba(6,182,212,0.35)",
+                      ],
+                    }}
+                    transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+                    className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center self-end mb-1"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(6,182,212,0.45), rgba(139,92,246,0.45))",
+                      border: "1px solid rgba(6,182,212,0.45)",
+                    }}
+                  >
+                    <Sparkles size={13} className="text-cyan-200" />
+                  </motion.div>
+                )}
+
+                <div className={cn("max-w-[78%]", isCompact && "max-w-[88%]")}>
+                  <div
+                    className={cn(
+                      "px-4 py-3 text-sm leading-relaxed break-words",
+                      isCompact && "text-xs px-3 py-2",
+                      message.role === "user" ? "rounded-2xl rounded-br-sm" : "rounded-2xl rounded-bl-sm"
+                    )}
+                    style={
+                      message.role === "user"
+                        ? {
+                            background:
+                              "linear-gradient(135deg, rgba(139,92,246,0.65), rgba(236,72,153,0.55))",
+                            border: "1px solid rgba(236,72,153,0.35)",
+                            boxShadow: "0 0 22px rgba(139,92,246,0.18)",
+                            color: "white",
+                          }
+                        : {
+                            background: "rgba(3,8,32,0.75)",
+                            border: "1px solid rgba(6,182,212,0.28)",
+                            boxShadow: "0 0 18px rgba(6,182,212,0.08)",
+                            color: "#e2e8f0",
+                          }
+                    }
+                  >
+                    <p className="whitespace-pre-wrap font-medium">{message.text}</p>
+                  </div>
+                  <p className="text-[9px] text-slate-700 mt-1 px-1">
+                    {new Date(message.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+
+                {/* User avatar */}
+                {message.role === "user" && (
+                  <div
+                    className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center self-end mb-1"
+                    style={{
+                      background: "rgba(139,92,246,0.28)",
+                      border: "1px solid rgba(139,92,246,0.38)",
+                    }}
+                  >
+                    <MessageCircle size={13} className="text-purple-300" />
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          {/* ── Sending / pulsar indicator ── */}
+          <AnimatePresence>
+            {isSending && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="flex gap-2.5 items-end"
+              >
+                <motion.div
+                  animate={{
+                    boxShadow: [
+                      "0 0 8px rgba(6,182,212,0.35)",
+                      "0 0 22px rgba(6,182,212,0.8)",
+                      "0 0 8px rgba(6,182,212,0.35)",
+                    ],
+                  }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
+                  className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(6,182,212,0.5), rgba(139,92,246,0.5))",
+                    border: "1px solid rgba(6,182,212,0.5)",
+                  }}
+                >
+                  <Sparkles size={13} className="text-cyan-200" />
+                </motion.div>
+
+                <div
+                  className="px-5 py-3.5 rounded-2xl rounded-bl-sm flex items-center gap-3"
+                  style={{
+                    background: "rgba(3,8,32,0.75)",
+                    border: "1px solid rgba(6,182,212,0.28)",
+                  }}
+                >
+                  <span className="text-xs text-slate-400 tracking-wide">
+                    Ядро обрабатывает запрос
+                  </span>
+                  <div className="flex gap-1.5 items-center">
+                    {[0, 1, 2].map((i) => (
+                      <motion.div
+                        key={i}
+                        animate={{ scale: [0.5, 1.3, 0.5], opacity: [0.3, 1, 0.3] }}
+                        transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.22, ease: "easeInOut" }}
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{
+                          background: "rgba(6,182,212,0.85)",
+                          boxShadow: "0 0 5px rgba(6,182,212,0.6)",
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div ref={messagesEndRef} />
+          </div>
+        )}
+      </div>
+
+      {/* ── Scroll-to-bottom button ── */}
+      <AnimatePresence>
+        {showScrollBtn && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.75 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.75 }}
+            onClick={scrollToBottom}
+            className="absolute right-5 bottom-24 z-20 w-8 h-8 rounded-full flex items-center justify-center"
+            style={{
+              background: "rgba(6,182,212,0.2)",
+              border: "1px solid rgba(6,182,212,0.45)",
+              boxShadow: "0 0 14px rgba(6,182,212,0.28)",
+            }}
+          >
+            <ChevronDown size={14} className="text-cyan-300" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* ── INPUT AREA ──────────────────────────────────────────── */}
+      <div
+        className="relative z-10 flex-shrink-0 px-4 py-3"
+        style={{
+          borderTop: "1px solid rgba(6,182,212,0.18)",
+          background: "rgba(2,4,20,0.78)",
+        }}
+      >
+        <div
+          className="flex items-end gap-2 px-3 py-2 rounded-xl transition-all"
+          style={{
+            background: "rgba(6,182,212,0.04)",
+            border: "1px solid rgba(6,182,212,0.22)",
+          }}
+        >
+          {/* Attachments */}
+          <div className="flex items-center gap-1 flex-shrink-0 pb-1">
+            <button
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+              style={{ background: "rgba(6,182,212,0.08)", border: "1px solid rgba(6,182,212,0.15)" }}
+              title="Прикрепить файл"
+            >
+              <Paperclip size={12} className="text-slate-400" />
+            </button>
+            <button
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+              style={{ background: "rgba(6,182,212,0.08)", border: "1px solid rgba(6,182,212,0.15)" }}
+              title="Изображение"
+            >
+              <Image size={12} className="text-slate-400" />
+            </button>
+          </div>
+
+          {/* Textarea */}
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={1}
+            placeholder="Передайте запрос ядру..."
+            className="flex-1 min-h-[34px] max-h-28 bg-transparent border-0 resize-none focus:outline-none leading-relaxed py-1.5 placeholder-slate-600 text-slate-100"
+            style={{ fontSize: isCompact ? "12px" : "13px" }}
+          />
+
+          {/* Send button */}
+          <button
+            onClick={() => sendChat()}
+            disabled={!draft.trim() || isSending}
+            className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all"
+            style={
+              !draft.trim() || isSending
+                ? { background: "rgba(20,22,40,0.6)", cursor: "not-allowed" }
+                : {
+                    background:
+                      "linear-gradient(135deg, rgba(6,182,212,0.65), rgba(139,92,246,0.65))",
+                    boxShadow: "0 0 18px rgba(6,182,212,0.38)",
+                    cursor: "pointer",
+                  }
+            }
+          >
+            {isSending ? (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              >
+                <Sparkles size={14} className="text-cyan-300" />
+              </motion.div>
+            ) : (
+              <Send size={14} className={draft.trim() ? "text-white" : "text-slate-700"} />
+            )}
+          </button>
+        </div>
+
       </div>
     </div>
   );

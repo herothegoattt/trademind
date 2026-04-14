@@ -43,7 +43,7 @@ export function AuthRequiredModal({
       }
       try {
         await login(email, password);
-        router.push("/profile");
+        onClose();
       } catch (err) {
         setLocalError(err instanceof Error ? err.message : "Login failed");
       }

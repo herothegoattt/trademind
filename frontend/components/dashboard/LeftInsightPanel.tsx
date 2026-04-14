@@ -190,53 +190,88 @@ export function LeftInsightPanel() {
   let content: React.ReactNode;
 
   if (isErrorOpen && errorInfo) {
-    // existing error details layout
+    const zoneConfig = [
+      { dot: "bg-red-500", label: "HIGH RISK", textColor: "text-red-400/80" },
+      { dot: "bg-amber-500", label: "MODERATE", textColor: "text-amber-400/80" },
+      { dot: "bg-emerald-500", label: "SAFE ZONE", textColor: "text-emerald-400/80" },
+    ];
+
+    const stripZonePrefix = (zone: string) =>
+      zone.replace(/^(🔴|🟡|🟢)\s*(HOT ZONE:|MEDIUM:|COOL:)?\s*/i, "").trim();
+
     content = (
-      <div className="space-y-6 px-6 py-8 overflow-y-auto h-full">
-        {/* Error Type Title */}
-        <div className="space-y-3 text-center sticky top-0 bg-black/80 backdrop-blur py-4 -mx-6 px-6 border-b border-purple-500/20">
-          <h2 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+      <div className="flex flex-col h-full overflow-y-auto overflow-x-hidden">
+        {/* Header */}
+        <div className="px-8 pt-8 pb-6 border-b border-white/[0.06]">
+          <div className="text-[10px] font-semibold tracking-[0.15em] text-amber-500/60 mb-2">
+            DECISION ERROR
+          </div>
+          <h2 className="text-2xl font-semibold text-white/90 leading-tight">
             {selectedErrorType}
           </h2>
-          <div className="h-1.5 w-32 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mx-auto" />
-          <p className="text-sm text-gray-300">Understanding this recurring pattern</p>
+          <p className="text-sm text-zinc-600 mt-1.5">Understanding this recurring pattern</p>
         </div>
 
-        {/* Recognition Signals */}
-        <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-purple-300 uppercase tracking-wider text-center py-2 border-b-2 border-purple-500/30">Recognition Signals</h3>
-          <div className="space-y-2 max-w-3xl mx-auto">
-            {errorInfo.signals.map((signal, i) => (
-              <div key={i} className="flex gap-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/30 hover:bg-purple-500/20 transition-all hover:scale-105 transform duration-200">
-                <span className="text-purple-400 font-bold flex-shrink-0 text-lg">•</span>
-                <span className="text-sm text-white leading-relaxed">{signal}</span>
-              </div>
-            ))}
+        <div className="px-8 py-7 space-y-8 flex-1 min-w-0">
+          {/* Recognition Signals */}
+          <div>
+            <div className="text-[10px] font-semibold tracking-[0.12em] text-zinc-600 mb-4">
+              RECOGNITION SIGNALS
+            </div>
+            <div className="space-y-2.5">
+              {errorInfo.signals.map((signal: string, i: number) => (
+                <div key={i} className="flex items-start gap-3 group">
+                  <div className="w-1 h-1 rounded-full bg-amber-500/60 mt-[7px] shrink-0" />
+                  <span className="text-sm text-zinc-400 leading-relaxed group-hover:text-zinc-300 transition-colors">
+                    {signal}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Rules */}
-        <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-emerald-300 uppercase tracking-wider text-center py-2 border-b-2 border-emerald-500/30">Corrective Rules</h3>
-          <div className="space-y-2 max-w-3xl mx-auto">
-            {errorInfo.rules.map((rule, i) => (
-              <div key={i} className="flex gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all hover:scale-105 transform duration-200">
-                <span className="text-emerald-400 font-bold flex-shrink-0 text-lg">✓</span>
-                <span className="text-sm text-white leading-relaxed">{rule}</span>
-              </div>
-            ))}
+          {/* Corrective Rules */}
+          <div>
+            <div className="text-[10px] font-semibold tracking-[0.12em] text-zinc-600 mb-4">
+              CORRECTIVE RULES
+            </div>
+            <div className="space-y-2.5">
+              {errorInfo.rules.map((rule: string, i: number) => (
+                <div key={i} className="flex items-start gap-3 group">
+                  <span className="text-[10px] font-mono text-emerald-600/60 mt-0.5 shrink-0 w-4">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="text-sm text-zinc-400 leading-relaxed group-hover:text-zinc-300 transition-colors">
+                    {rule}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Risk Zones */}
-        <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-yellow-300 uppercase tracking-wider text-center py-2 border-b-2 border-yellow-500/30">Risk Zones</h3>
-          <div className="space-y-2 max-w-3xl mx-auto">
-            {errorInfo.zones.map((zone, i) => (
-              <div key={i} className="flex gap-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 hover:bg-yellow-500/20 transition-all hover:scale-105 transform duration-200">
-                <span className="text-sm text-white leading-relaxed">{zone}</span>
-              </div>
-            ))}
+          {/* Risk Zones */}
+          <div>
+            <div className="text-[10px] font-semibold tracking-[0.12em] text-zinc-600 mb-4">
+              RISK ZONES
+            </div>
+            <div className="space-y-3">
+              {errorInfo.zones.map((zone: string, i: number) => {
+                const cfg = zoneConfig[i] ?? zoneConfig[2];
+                return (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className={`w-2 h-2 rounded-full ${cfg.dot} mt-[5px] shrink-0 opacity-80`} />
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-[10px] font-semibold tracking-wider ${cfg.textColor} mb-0.5`}>
+                        {cfg.label}
+                      </div>
+                      <p className="text-xs text-zinc-500 leading-relaxed">
+                        {stripZonePrefix(zone)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -470,26 +505,26 @@ export function LeftInsightPanel() {
     ];
 
     content = (
-      <div className="space-y-6 px-6 py-4 h-full overflow-y-auto">
+      <div className="space-y-6 px-6 py-4 h-full overflow-y-auto overflow-x-hidden">
         <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent text-center">Setups & Frameworks</h2>
         <p className="text-sm text-gray-400 text-center mb-4">Your decision frameworks and compliance checklists</p>
         <div className="space-y-4">
           {setups.map((s) => (
             <div key={s.id} className="p-4 rounded-lg border border-gray-700/30 bg-gray-900/10">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-semibold text-white">{s.title}</h3>
+                <h3 className="text-lg font-semibold text-white break-words">{s.title}</h3>
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div>
+                <div className="min-w-0">
                   <h4 className="text-sm font-semibold text-gray-300 mb-2">Steps</h4>
                   <ol className="list-decimal list-inside space-y-1 text-sm text-gray-300">
-                    {s.steps.map((st: string, i: number) => <li key={i}>{st}</li>)}
+                    {s.steps.map((st: string, i: number) => <li key={i} className="break-words">{st}</li>)}
                   </ol>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h4 className="text-sm font-semibold text-gray-300 mb-2">Compliance</h4>
                   <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
-                    {s.compliance.map((c: string, i: number) => <li key={i}>{c}</li>)}
+                    {s.compliance.map((c: string, i: number) => <li key={i} className="break-words">{c}</li>)}
                   </ul>
                 </div>
               </div>
@@ -530,14 +565,14 @@ export function LeftInsightPanel() {
         />
         
         {/* Drawer */}
-        <div className="absolute top-0 left-0 right-0 bottom-0 bg-black/95 backdrop-blur-sm overflow-y-auto pt-14 pb-6">
+        <div className="absolute top-0 left-0 right-0 bottom-0 bg-[#09090f]/98 backdrop-blur-md overflow-y-auto pt-14 pb-6">
           <div className="px-6">
             {content}
           </div>
           <div className="px-6 py-4 border-t border-gray-700 flex justify-end mt-6">
             <button
               onClick={closeHandler}
-              className="px-4 py-2 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 transition-colors"
+              className="px-4 py-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-400 hover:text-zinc-300 text-sm transition-all"
             >
               Close
             </button>
@@ -553,9 +588,9 @@ export function LeftInsightPanel() {
   }
 
   return (
-    <div className="hidden lg:flex flex-col h-full flex-1 bg-gradient-to-br from-purple-950/40 via-black/50 to-purple-950/40 backdrop-blur-xl border-r border-purple-500/30 overflow-y-auto shadow-2xl shadow-purple-500/10">
-      <div className="flex-1 flex flex-col items-center justify-start w-full py-8">
-        <div className="w-full max-w-3xl">
+    <div className="hidden lg:flex flex-col h-full flex-1 bg-[#09090f] overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 flex flex-col w-full">
+        <div className="w-full max-w-2xl mx-auto">
           {content}
         </div>
       </div>

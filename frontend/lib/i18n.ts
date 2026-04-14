@@ -1016,25 +1016,34 @@ const translations: Record<Lang, Record<string, string>> = {
   },
 };
 
+import { useCallback, useSyncExternalStore } from 'react';
+
 let current: Lang = 'en';
 
-export function setLang(l: Lang) {
-  current = l;
+let listeners: Array<() => void> = [];
+function subscribe(cb: () => void) {
+  listeners.push(cb);
+  return () => { listeners = listeners.filter(l => l !== cb); };
 }
+function notifyListeners() {
+  listeners.forEach(l => l());
+}
+
 export function getLang(): Lang {
   return current;
 }
 
-export function t(key: string): string {
-  const lang = current;
-  return translations[lang]?.[key] || translations['en'][key] || key;
+export function setLang(l: Lang) {
+  current = l;
+  notifyListeners();
 }
 
-import { useDashboardStore } from './store';
-import { useCallback } from 'react';
+export function t(key: string): string {
+  return translations[current]?.[key] || translations['en'][key] || key;
+}
 
 export function useT() {
-  const lang = useDashboardStore((s: any) => s.language);
+  const lang = useSyncExternalStore(subscribe, getLang, getLang);
   return useCallback(
     (key: string) => translations[lang]?.[key] || translations['en'][key] || key,
     [lang]

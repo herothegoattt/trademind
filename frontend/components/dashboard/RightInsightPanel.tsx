@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDashboardStore } from "../../lib/store";
+import { useT } from "../../lib/i18n";
 import { Card } from "../ui/card";
 import TraderDNA from "./TraderDNA";
 import { Badge } from "../ui/badge";
@@ -42,6 +43,8 @@ export function RightInsightPanel({ inline }: { inline?: boolean } = {}) {
     }
   }, [selectedSection]);
 
+  const t = useT();
+
   if (!mounted) return null;
 
   const panel = (
@@ -54,7 +57,7 @@ export function RightInsightPanel({ inline }: { inline?: boolean } = {}) {
     >
       {selectedSection === "News" ? (
         <Card>
-          <h3 className="font-semibold">Latest News</h3>
+          <h3 className="font-semibold">{t("latest_news")}</h3>
           <ul className="text-sm space-y-2">
             {newsItems.map((n, i) => (
               <li key={i} className="border-b border-gray-700 pb-1">
@@ -67,19 +70,19 @@ export function RightInsightPanel({ inline }: { inline?: boolean } = {}) {
       ) : (
         selectedSection === "Trader DNA" ? (
           <Card>
-            <h3 className="font-semibold">Trader DNA</h3>
+            <h3 className="font-semibold">{t("section_trader_dna")}</h3>
             <TraderDNA />
           </Card>
         ) : (
           <Card>
-            <h3 className="font-semibold">Tone</h3>
+            <h3 className="font-semibold">{t("tone")}</h3>
             <p>{useDashboardStore.getState().dailyBias?.tone}</p>
           </Card>
         )
       )}
 
       <Card>
-        <h3 className="font-semibold">Suggested Questions</h3>
+        <h3 className="font-semibold">{t("suggested_questions")}</h3>
         <ul className="list-disc list-inside text-sm">
           {suggestedQuestions.map((q: string, i: number) => (
             <li key={i}>{q}</li>
@@ -88,7 +91,7 @@ export function RightInsightPanel({ inline }: { inline?: boolean } = {}) {
       </Card>
 
       <Card>
-        <h3 className="font-semibold">Today&apos;s Warning Zones</h3>
+        <h3 className="font-semibold">{t("todays_warning_zones")}</h3>
         <ul className="list-disc list-inside text-sm">
           {warningZones.map((w: string, i: number) => (
             <li key={i}>{w}</li>
@@ -98,16 +101,16 @@ export function RightInsightPanel({ inline }: { inline?: boolean } = {}) {
 
       {selectedErrorType && details && (
         <Card>
-          <h3 className="font-semibold">Detected Pattern</h3>
+          <h3 className="font-semibold">{t("detected_pattern")}</h3>
           <p className="text-sm font-bold">{selectedErrorType}</p>
-          <h4 className="mt-2 font-semibold">How to recognize</h4>
+          <h4 className="mt-2 font-semibold">{t("how_to_recognize")}</h4>
           <ul className="list-disc list-inside text-sm">
             {details.recognitionSignals.map((s: string, i: number) => (
               <li key={i}>{s}</li>
             ))}
           </ul>
           <div className="mt-2 p-2 bg-gray-800 rounded">
-            <strong>Corrective Rule:</strong> {details.correctiveRule}
+            <strong>{t("corrective_rule")}:</strong> {details.correctiveRule}
           </div>
         </Card>
       )}

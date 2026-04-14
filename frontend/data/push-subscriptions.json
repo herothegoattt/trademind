@@ -1,0 +1,42 @@
+[
+  {
+    "id": "1ddf05cc-deb9-43d6-ab6c-9ea4dff34bde",
+    "user_id": 1,
+    "endpoint": "https://wns2-par02p.notify.windows.com/w/?token=BQYAAADVkch5TXrfCqWIz6miM2k87MxYPynIT%2bxsj1Wn4lqW9CeQYtd%2b%2bZat3WI1dv%2fpfGeAPUzfeRSN3pFd5ao%2bOLFvhHTSHOOe%2b%2bw1k7WjUO7PhLk5HcTKXZGtooErb%2bw0fzZa3BzdSao7IjcVMGQJ%2by%2ftfGSJVR%2bvZSpQKh0tgDPPngIgUSA11%2bGl6%2by982xdwbTr5cOKoSXjiA%2fIszzoGWzCb7pJGVj7mKd1Ula6iYZ%2f1Nsp6Grxye1WsTbccjgbozEmyVxvZXkWPhLte0nvt3mzNsD8yl%2f9hnXReOFa9GHving38p%2fmHEuGOGxIqaozD8ruenTS3L7yiZxcj%2bnQhLDN",
+    "subscription": {
+      "endpoint": "https://wns2-par02p.notify.windows.com/w/?token=BQYAAADVkch5TXrfCqWIz6miM2k87MxYPynIT%2bxsj1Wn4lqW9CeQYtd%2b%2bZat3WI1dv%2fpfGeAPUzfeRSN3pFd5ao%2bOLFvhHTSHOOe%2b%2bw1k7WjUO7PhLk5HcTKXZGtooErb%2bw0fzZa3BzdSao7IjcVMGQJ%2by%2ftfGSJVR%2bvZSpQKh0tgDPPngIgUSA11%2bGl6%2by982xdwbTr5cOKoSXjiA%2fIszzoGWzCb7pJGVj7mKd1Ula6iYZ%2f1Nsp6Grxye1WsTbccjgbozEmyVxvZXkWPhLte0nvt3mzNsD8yl%2f9hnXReOFa9GHving38p%2fmHEuGOGxIqaozD8ruenTS3L7yiZxcj%2bnQhLDN",
+      "expirationTime": null,
+      "keys": {
+        "p256dh": "BBcik0x4YItyj86PuMWUOov2YRAsY07iD_6Gp0PDJYOTbZKPYSwZM30lpUV7UdW0C2zj5npzc9MeD6xZGlqBt9c",
+        "auth": "0DRM-gmXIOhPx4ZywRlYwQ"
+      }
+    },
+    "preferences": {
+      "daily_bias": true,
+      "trading_signals": true,
+      "price_alerts": true,
+      "news": false
+    },
+    "created_at": "2026-04-08T18:58:48.452Z"
+  },
+  {
+    "id": "76131093-8e94-487a-8748-7524d50cae8f",
+    "user_id": 1,
+    "endpoint": "https://fcm.googleapis.com/fcm/send/cXN2Ze2fBWY:APA91bFlliMCEM7tPMrOMaH7KGlVzBXLcNMfKBZGI3wkt2UqCuHbEdGs1db-xgfHihEFFtRexujg7hajaqwwienuat4typHZp-iES5oLt0eb8-vcpE32HII_SVUZQlRnN9RsLpFEHAQz",
+    "subscription": {
+      "endpoint": "https://fcm.googleapis.com/fcm/send/cXN2Ze2fBWY:APA91bFlliMCEM7tPMrOMaH7KGlVzBXLcNMfKBZGI3wkt2UqCuHbEdGs1db-xgfHihEFFtRexujg7hajaqwwienuat4typHZp-iES5oLt0eb8-vcpE32HII_SVUZQlRnN9RsLpFEHAQz",
+      "expirationTime": null,
+      "keys": {
+        "p256dh": "BCDKXa5sXSv72pCYvDfJnY1T00X8Gjz3uWUlrqlEh_FEm5WqU1k7gV4O8GjI3qB4owGdWUD4aVab34tyzDXZaJ0",
+        "auth": "ewoahFI9XSgiWom_vU-V4w"
+      }
+    },
+    "preferences": {
+      "daily_bias": true,
+      "trading_signals": true,
+      "price_alerts": true,
+      "news": false
+    },
+    "created_at": "2026-04-12T14:15:23.625Z"
+  }
+]

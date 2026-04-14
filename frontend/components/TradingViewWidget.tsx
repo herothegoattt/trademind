@@ -62,7 +62,7 @@ export function TradingViewWidget({ symbol, interval = "60", theme = "dark" }: P
   }, [symbol, interval, theme]);
 
   return (
-    <div className="w-full h-[500px] relative">
+    <div className="w-full h-full min-h-[400px] relative">
       {!loaded && !error && (
         <div className="absolute inset-0 flex items-center justify-center text-gray-400">
           Loading chart...

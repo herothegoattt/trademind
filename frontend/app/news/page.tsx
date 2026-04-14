@@ -1,10 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Newspaper, TrendingUp, Filter, Search, Clock, AlertCircle, CheckCircle, Info, X } from "lucide-react";
+import { ArrowLeft, Newspaper, Filter, Search, Clock, AlertCircle, X, RefreshCw } from "lucide-react";
 import { NewsItem } from "../../lib/newsProvider";
 import { useDashboardStore } from "../../lib/store";
 import { motion, AnimatePresence } from "framer-motion";
+
+const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
 export default function NewsPage() {
   const selectSection = useDashboardStore((s: any) => s.selectSection);
@@ -14,30 +16,53 @@ export default function NewsPage() {
 
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [nextRefreshIn, setNextRefreshIn] = useState(REFRESH_INTERVAL_MS / 1000);
+
   const [filterCountry, setFilterCountry] = useState("");
   const [filterImpact, setFilterImpact] = useState<"" | "low" | "medium" | "high">("");
   const [sortBy, setSortBy] = useState<"newest" | "impact">('newest');
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
+  const fetchData = useCallback(async (isManual = false) => {
+    if (isManual) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+    try {
+      const resp = await fetch(`/api/news?limit=50&t=${Date.now()}`);
+      if (!resp.ok) throw new Error(`status ${resp.status}`);
+      const data = await resp.json();
+      setItems(data.items || []);
+      setLastUpdated(new Date());
+      setNextRefreshIn(REFRESH_INTERVAL_MS / 1000);
+    } catch (e: any) {
+      setError(e.message || 'failed');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Initial fetch
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const resp = await fetch('/api/news?limit=50');
-        if (!resp.ok) throw new Error(`status ${resp.status}`);
-        const data = await resp.json();
-        setItems(data.items || []);
-        if (data.warning) setWarning(data.warning);
-      } catch (e: any) {
-        setError(e.message || 'failed');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
+  }, [fetchData]);
+
+  // Auto-refresh every 15 minutes
+  useEffect(() => {
+    const interval = setInterval(() => fetchData(), REFRESH_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  // Countdown to next refresh
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNextRefreshIn(prev => (prev <= 1 ? REFRESH_INTERVAL_MS / 1000 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
   }, []);
 
   let filtered = items.filter(i => {
@@ -61,8 +86,8 @@ export default function NewsPage() {
     <div className="min-h-screen bg-gradient-to-b from-black to-black/95 text-white">
       {/* Header */}
       <div className="sticky top-0 z-20 border-b border-orange-500/20 bg-black/50 backdrop-blur-lg">
-        <div className="flex items-center justify-between p-6 max-w-7xl mx-auto">
-          <motion.div 
+        <div className="flex items-center justify-between px-3 py-3 sm:p-6 max-w-7xl mx-auto">
+          <motion.div
             className="flex items-center gap-4"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -75,27 +100,44 @@ export default function NewsPage() {
                 <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-red-500 rounded-lg blur-md opacity-40" />
                 <Newspaper className="w-7 h-7 text-orange-400 relative" />
               </div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 via-yellow-400 to-red-400 bg-clip-text text-transparent">
+              <h1 className="text-xl sm:text-3xl font-bold bg-gradient-to-r from-orange-400 via-yellow-400 to-red-400 bg-clip-text text-transparent">
                 Economic Calendar
               </h1>
+              {/* LIVE badge */}
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/30">
+                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-xs font-bold text-green-400 uppercase tracking-wider">Live</span>
+              </span>
             </div>
           </motion.div>
+
+          {/* Right: last updated + refresh button */}
+          <div className="flex items-center gap-3">
+            {lastUpdated && (
+              <div className="text-right hidden sm:block">
+                <p className="text-xs text-gray-500">Updated {lastUpdated.toLocaleTimeString()}</p>
+                <p className="text-xs text-gray-600">
+                  Next in {Math.floor(nextRefreshIn / 60)}:{String(nextRefreshIn % 60).padStart(2, '0')}
+                </p>
+              </div>
+            )}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => fetchData(true)}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-3 py-2 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 rounded-lg text-orange-400 text-xs font-semibold transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Updating...' : 'Refresh'}
+            </motion.button>
+          </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="max-w-7xl mx-auto p-3 sm:p-6">
         {/* Alerts */}
-        {warning && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-4 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 flex items-center gap-2"
-          >
-            <AlertCircle size={18} />
-            {warning}
-          </motion.div>
-        )}
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -205,7 +247,7 @@ export default function NewsPage() {
         </motion.div>
 
         {/* Loading State */}
-        {loading ? (
+        {loading && items.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

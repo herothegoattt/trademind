@@ -1,195 +1,92 @@
 'use client';
 
-import { useState } from 'react';
-import { BarChart3, TrendingUp, AlertCircle, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { BarChart3, TrendingUp, AlertCircle, Zap, RefreshCw } from 'lucide-react';
+import { usePortfolio } from '../../lib/portfolioContext';
 
-interface MarketIndicator {
-  name: string;
-  value: string;
-  change: number;
-  status: 'positive' | 'negative' | 'neutral';
-  description: string;
-}
+const MACRO_INDICATORS = [
+  { name: 'Federal Funds Rate', value: '5.33%', change: 0, status: 'neutral', description: 'Holding steady. Rate cuts expected in 2025 — positive for risk assets.' },
+  { name: 'US Inflation (CPI YoY)', value: '3.2%', change: -0.4, status: 'positive', description: 'Declining trend supports long-term equity and crypto valuations.' },
+  { name: 'Unemployment Rate', value: '3.8%', change: 0.1, status: 'neutral', description: 'Near historic lows — strong consumer spending supports stocks.' },
+  { name: 'GDP Growth (YoY)', value: '2.4%', change: 0.3, status: 'positive', description: 'Moderate growth. Goldilocks scenario for long-term investors.' },
+];
 
-interface NewsItem {
-  title: string;
-  impact: 'high' | 'medium' | 'low';
-  category: string;
-  date: string;
-  aiInsight: string;
-}
+const CATEGORY_INSIGHTS: Record<string, { headline: string; detail: string; impact: 'high'|'medium'|'low' }[]> = {
+  crypto: [
+    { headline: 'Bitcoin Spot ETF Inflows Accelerating', impact: 'high', detail: 'Institutional flows into BTC ETFs breaking records. Long-term bullish for the asset class.' },
+    { headline: 'Ethereum Layer-2 Ecosystem Expanding', impact: 'medium', detail: 'L2 activity reaching all-time highs — bullish signal for ETH demand and fee revenue.' },
+  ],
+  stocks: [
+    { headline: 'S&P 500 Earnings Growth Beating Estimates', impact: 'high', detail: 'Corporate earnings expanding 8–12% YoY. Strong fundamentals support continued equity appreciation.' },
+    { headline: 'AI Capital Expenditure Cycle Intensifying', impact: 'high', detail: 'Tech majors spending aggressively on AI infrastructure — tailwind for semiconductors and cloud.' },
+  ],
+  etf: [
+    { headline: 'Passive Fund Inflows at Record Levels', impact: 'medium', detail: 'ETF flows signal continued retail and institutional allocation to diversified products.' },
+  ],
+  commodities: [
+    { headline: 'Gold Near All-Time Highs on Rate Pivot Expectations', impact: 'high', detail: 'Central bank gold buying accelerating. Rate cuts would boost non-yielding assets further.' },
+    { headline: 'Copper Demand Rising on AI Infrastructure Build-Out', impact: 'medium', detail: 'Data centers and EV transition driving structural copper demand. Supply constrained.' },
+  ],
+  forex: [
+    { headline: 'Dollar Index (DXY) Weakening on Fed Pivot Expectations', impact: 'high', detail: 'USD weakness benefits EM forex positions and dollar-denominated commodity prices.' },
+  ],
+};
 
 export default function MarketIntelligence() {
-  const [indicators] = useState<MarketIndicator[]>([
-    {
-      name: 'Federal Funds Rate',
-      value: '5.33%',
-      change: 0,
-      status: 'neutral',
-      description: 'Holding steady after recent pause in rate hikes',
-    },
-    {
-      name: 'Inflation (YoY)',
-      value: '3.2%',
-      change: -0.4,
-      status: 'positive',
-      description: 'Declining inflation supports long-term portfolio growth',
-    },
-    {
-      name: 'Unemployment Rate',
-      value: '3.8%',
-      change: 0.1,
-      status: 'neutral',
-      description: 'Remains near historic lows with resilient labor market',
-    },
-    {
-      name: 'GDP Growth (YoY)',
-      value: '2.4%',
-      change: 0.3,
-      status: 'positive',
-      description: 'Moderate growth supports equity valuations',
-    },
-  ]);
+  const { positions, allocation, isEmpty } = usePortfolio();
+  const [fearIndex, setFearIndex] = useState<number | null>(null);
+  const [loadingFear, setLoadingFear] = useState(true);
 
-  const [newsItems] = useState<NewsItem[]>([
-    {
-      title: 'Tech Sector Leads Market Higher on AI Optimism',
-      impact: 'high',
-      category: 'Technology',
-      date: '2 hours ago',
-      aiInsight:
-        'AI-driven productivity gains could support tech valuations long-term. Consider increasing exposure in your portfolio if aligned with risk tolerance.',
-    },
-    {
-      title: 'Fed Signals Pause on Rate Cuts Through Mid-2024',
-      impact: 'high',
-      category: 'Monetary Policy',
-      date: '5 hours ago',
-      aiInsight:
-        'Stable rates benefit bonds and dividend-paying stocks. Your bond allocation provides good diversification benefit in this environment.',
-    },
-    {
-      title: 'Corporate Earnings Beat Expectations Across Sectors',
-      impact: 'medium',
-      category: 'Earnings',
-      date: '1 day ago',
-      aiInsight:
-        'Strong earnings support equity market fundamentals. Your diversified portfolio captures upside across multiple sectors.',
-    },
-    {
-      title: 'Oil Prices Fall on Demand Concerns',
-      impact: 'medium',
-      category: 'Commodities',
-      date: '1 day ago',
-      aiInsight:
-        'Lower energy prices are generally positive for economy and consumer spending patterns over long-term investment horizon.',
-    },
-  ]);
+  useEffect(() => {
+    fetch('https://api.alternative.me/fng/?limit=1')
+      .then(r => r.json())
+      .then(d => { if (d.data?.[0]?.value) setFearIndex(parseInt(d.data[0].value)); })
+      .catch(() => {})
+      .finally(() => setLoadingFear(false));
+  }, []);
+
+  const fearLabel = fearIndex !== null
+    ? fearIndex >= 75 ? { text: 'Extreme Greed', color: 'text-rose-400', bar: 'bg-rose-400' }
+    : fearIndex >= 55 ? { text: 'Greed',         color: 'text-orange-400', bar: 'bg-orange-400' }
+    : fearIndex >= 45 ? { text: 'Neutral',        color: 'text-gray-300',  bar: 'bg-gray-400'   }
+    : fearIndex >= 25 ? { text: 'Fear',           color: 'text-blue-400',  bar: 'bg-blue-400'   }
+    : { text: 'Extreme Fear', color: 'text-emerald-400', bar: 'bg-emerald-400' }
+    : null;
+
+  // Gather relevant news for held categories
+  const heldCategories = [...new Set(positions.map(p => p.category))];
+  const relevantInsights = heldCategories.flatMap(cat => (CATEGORY_INSIGHTS[cat] || []).map(i => ({ ...i, category: cat })));
+  const genericInsights = isEmpty ? Object.values(CATEGORY_INSIGHTS).flat().slice(0, 4) : [];
+  const insights = isEmpty ? genericInsights : relevantInsights;
 
   return (
-    <div className="space-y-6 contains-layout">
-      {/* Market Overview */}
-      <div className="will-change-auto">
-        <div className="flex items-center gap-2 mb-6">
-          <BarChart3 className="text-cyan-400" size={24} />
-          <h2 className="text-2xl font-bold text-slate-100">Macroeconomic Context</h2>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <BarChart3 className="text-cyan-400" size={24} />
+        <h2 className="text-2xl font-bold text-slate-100">Market Intelligence</h2>
+        {!isEmpty && <span className="text-xs text-slate-500">filtered to your holdings</span>}
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 will-change-auto max-h-96 overflow-y-auto">
-          {indicators.map((indicator, index) => (
-            <div
-              key={index}
-              className={`bg-slate-900 border rounded-xl p-6 ${
-                indicator.status === 'positive'
-                  ? 'border-emerald-700/50'
-                  : indicator.status === 'negative'
-                    ? 'border-red-700/50'
-                    : 'border-slate-800'
-              }`}
-            >
-              <p className="text-slate-400 text-sm font-medium">{indicator.name}</p>
-              <div className="flex items-baseline gap-2 mt-3">
-                <p className="text-2xl font-bold text-slate-100">{indicator.value}</p>
-                {indicator.change !== 0 && (
-                  <span
-                    className={`text-sm font-semibold ${
-                      indicator.change > 0 ? 'text-emerald-400' : 'text-red-400'
-                    }`}
-                  >
-                    {indicator.change > 0 ? '+' : ''}
-                    {indicator.change}%
-                  </span>
-                )}
-              </div>
-              <p className="text-slate-400 text-xs mt-3">{indicator.description}</p>
+      {/* Macro Indicators */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {MACRO_INDICATORS.map((ind, i) => (
+          <div key={i} className={`bg-slate-900 border rounded-xl p-6 ${
+            ind.status === 'positive' ? 'border-emerald-700/50' : ind.status === 'negative' ? 'border-red-700/50' : 'border-slate-800'}`}>
+            <p className="text-slate-400 text-sm font-medium">{ind.name}</p>
+            <div className="flex items-baseline gap-2 mt-3">
+              <p className="text-2xl font-bold text-slate-100">{ind.value}</p>
+              {ind.change !== 0 && (
+                <span className={`text-sm font-semibold ${ind.change > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {ind.change > 0 ? '+' : ''}{ind.change}%
+                </span>
+              )}
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Economic Outlook */}
-      <div className="bg-gradient-to-r from-blue-900/30 to-cyan-900/30 border border-cyan-700/30 rounded-xl p-6">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-cyan-900/50 rounded-lg mt-1">
-            <Zap className="text-cyan-400" size={20} />
+            <p className="text-slate-400 text-xs mt-3">{ind.description}</p>
           </div>
-          <div>
-            <h3 className="text-lg font-semibold text-slate-100 mb-2">Economic Outlook</h3>
-            <p className="text-slate-300 text-sm leading-relaxed">
-              The current economic environment presents a mixed picture with moderating inflation and stable rates creating supportive conditions
-              for long-term investing. Tech sector strength, supported by AI productivity gains, is offsetting concerns in traditional sectors.
-              Your diversified portfolio is well-positioned to benefit from multiple growth drivers while managing downside risks. Consider the
-              timing of any rebalancing decisions given current valuation levels.
-            </p>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Market News & AI Insights */}
-      <div className="will-change-auto">
-        <h3 className="text-xl font-bold text-slate-100 mb-6">Market News & AI Analysis</h3>
-        <div className="space-y-4 will-change-auto max-h-96 overflow-y-auto">
-          {newsItems.map((news, index) => (
-            <div key={index} className="bg-slate-900 border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-colors">
-              <div className="flex items-start gap-4">
-                <div
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    news.impact === 'high'
-                      ? 'bg-red-900/30 text-red-200'
-                      : news.impact === 'medium'
-                        ? 'bg-yellow-900/30 text-yellow-200'
-                        : 'bg-slate-800 text-slate-300'
-                  }`}
-                >
-                  {news.impact.toUpperCase()} IMPACT
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h4 className="font-semibold text-slate-100 mb-1">{news.title}</h4>
-                      <p className="text-slate-400 text-xs mb-3">
-                        {news.category} • {news.date}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* AI Insight */}
-                  <div className="mt-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
-                    <div className="flex items-start gap-2">
-                      <AlertCircle size={16} className="text-cyan-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-slate-300 text-sm">
-                        <span className="font-semibold text-cyan-400">AI Insight:</span> {news.aiInsight}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Market Sentiment */}
+      {/* Sentiment row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <p className="text-slate-400 text-sm font-medium mb-2">Investor Sentiment</p>
@@ -203,27 +100,85 @@ export default function MarketIntelligence() {
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <p className="text-slate-400 text-sm font-medium mb-2">Fear & Greed Index</p>
-          <div className="flex items-baseline gap-2">
-            <p className="text-2xl font-bold text-yellow-400">62</p>
-            <p className="text-slate-400 text-sm">Greedy</p>
-          </div>
-          <div className="w-full bg-slate-800 rounded-full h-2 mt-3">
-            <div className="bg-yellow-400 h-2 rounded-full" style={{ width: '62%' }} />
-          </div>
+          <p className="text-slate-400 text-sm font-medium mb-2">Crypto Fear & Greed</p>
+          {loadingFear ? (
+            <div className="flex items-center gap-2 mt-2"><RefreshCw size={16} className="animate-spin text-slate-500" /><span className="text-slate-500 text-sm">Loading…</span></div>
+          ) : fearLabel ? (
+            <>
+              <div className="flex items-baseline gap-2">
+                <p className={`text-2xl font-bold ${fearLabel.color}`}>{fearIndex}</p>
+                <p className="text-slate-400 text-sm">{fearLabel.text}</p>
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-2 mt-3">
+                <div className={`${fearLabel.bar} h-2 rounded-full`} style={{ width: `${fearIndex}%` }} />
+              </div>
+            </>
+          ) : (
+            <p className="text-slate-500 text-sm mt-2">Unavailable</p>
+          )}
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <p className="text-slate-400 text-sm font-medium mb-2">Market Volatility (VIX)</p>
           <div className="flex items-baseline gap-2">
             <p className="text-2xl font-bold text-slate-100">14.2</p>
-            <p className="text-green-400 text-sm">Low</p>
+            <p className="text-emerald-400 text-sm">Low</p>
           </div>
           <div className="w-full bg-slate-800 rounded-full h-2 mt-3">
             <div className="bg-emerald-400 h-2 rounded-full" style={{ width: '35%' }} />
           </div>
         </div>
       </div>
+
+      {/* Economic Outlook */}
+      <div className="bg-gradient-to-r from-blue-900/30 to-cyan-900/30 border border-cyan-700/30 rounded-xl p-6">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-cyan-900/50 rounded-lg mt-1"><Zap className="text-cyan-400" size={20} /></div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-100 mb-2">2025 Economic Outlook</h3>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              Rate cut cycle beginning, inflation normalizing, and AI productivity wave accelerating — a broadly constructive environment
+              for long-term investors. Tech, crypto, and infrastructure remain primary growth drivers. Monitor geopolitical risks
+              and position sizing in high-leverage futures trades.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Portfolio-specific insights */}
+      {insights.length > 0 && (
+        <div>
+          <h3 className="text-xl font-bold text-slate-100 mb-4">
+            {isEmpty ? 'Market News & Analysis' : `News Relevant to Your Portfolio`}
+          </h3>
+          <div className="space-y-4">
+            {insights.map((news, i) => (
+              <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-colors">
+                <div className="flex items-start gap-4">
+                  <div className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
+                    news.impact === 'high' ? 'bg-red-900/30 text-red-200' : news.impact === 'medium' ? 'bg-yellow-900/30 text-yellow-200' : 'bg-slate-800 text-slate-300'}`}>
+                    {news.impact.toUpperCase()} IMPACT
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-slate-100 mb-1">{news.headline}</h4>
+                    {'category' in news && (
+                      <p className="text-slate-500 text-xs mb-3 capitalize">{(news as any).category}</p>
+                    )}
+                    <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle size={14} className="text-cyan-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-slate-300 text-sm">
+                          <span className="font-semibold text-cyan-400">Portfolio Impact: </span>{news.detail}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

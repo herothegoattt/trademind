@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, TrendingUp, BarChart3, Lightbulb, Shield, MessageSquare, RefreshCw } from 'lucide-react';
+import { ArrowLeft, TrendingUp, BarChart3, Lightbulb, Shield, MessageSquare, RefreshCw, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useT } from '../../lib/i18n';
 import PortfolioOverview from '../../components/investing/PortfolioOverview';
@@ -12,18 +12,21 @@ import MarketIntelligence from '../../components/investing/MarketIntelligence';
 import LongTermOpportunities from '../../components/investing/LongTermOpportunities';
 import RiskAnalysis from '../../components/investing/RiskAnalysis';
 import InvestmentCoach from '../../components/investing/InvestmentCoach';
+import InvestingPortfolio from '../../components/investing/InvestingPortfolio';
+import { PortfolioProvider } from '../../lib/portfolioContext';
 
-export default function InvestingPage() {
+function InvestingPageInner() {
   const t = useT();
-  const [activeTab, setActiveTab] = useState<'overview' | 'market' | 'opportunities' | 'risk' | 'coach'>('overview');
+  const [activeTab, setActiveTab] = useState<'portfolio' | 'overview' | 'market' | 'opportunities' | 'risk' | 'coach'>('portfolio');
   const [isLoading, setIsLoading] = useState(false);
 
   const tabs = [
-    { id: 'overview', label: 'Portfolio Overview', icon: TrendingUp },
-    { id: 'market', label: 'Market Intelligence', icon: BarChart3 },
-    { id: 'opportunities', label: 'Long-Term Opportunities', icon: Lightbulb },
-    { id: 'risk', label: 'Risk & Diversification', icon: Shield },
-    { id: 'coach', label: 'AI Investment Coach', icon: MessageSquare },
+    { id: 'portfolio',     label: 'My Portfolio',            icon: Wallet      },
+    { id: 'overview',      label: 'Portfolio Overview',      icon: TrendingUp  },
+    { id: 'market',        label: 'Market Intelligence',     icon: BarChart3   },
+    { id: 'opportunities', label: 'Long-Term Opportunities', icon: Lightbulb   },
+    { id: 'risk',          label: 'Risk & Diversification',  icon: Shield      },
+    { id: 'coach',         label: 'AI Investment Coach',     icon: MessageSquare },
   ];
 
   const handleRefresh = async () => {
@@ -37,8 +40,8 @@ export default function InvestingPage() {
     <div className="w-full min-h-screen bg-black">
       {/* Header - Fixed */}
       <div className="fixed top-0 left-0 right-0 z-40 bg-gradient-to-b from-black via-slate-950 to-transparent border-b border-slate-800 will-change-auto">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="max-w-7xl mx-auto px-3 py-3 sm:px-6 sm:py-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-6">
             <div className="flex items-center gap-4">
               <Link
                 href="/app"
@@ -47,7 +50,7 @@ export default function InvestingPage() {
                 <ArrowLeft size={20} />
               </Link>
               <div>
-                <h1 className="text-3xl font-bold text-slate-100">
+                <h1 className="text-xl sm:text-3xl font-bold text-slate-100">
                   Investment Portfolio
                 </h1>
                 <p className="text-slate-400 text-sm mt-1">
@@ -72,7 +75,7 @@ export default function InvestingPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm whitespace-nowrap transition-all duration-200 ${
+                  className={`flex items-center gap-1.5 px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-lg font-medium text-xs sm:text-sm whitespace-nowrap transition-all duration-200 ${
                     activeTab === tab.id
                       ? 'bg-slate-800 text-slate-100 border border-slate-700'
                       : 'bg-slate-900/50 text-slate-400 border border-slate-800 hover:bg-slate-800/50'
@@ -88,7 +91,7 @@ export default function InvestingPage() {
       </div>
 
       {/* Content Area - With layout containment */}
-      <div className="pt-52 pb-20 px-6 contains-layout">
+      <div className="pt-36 sm:pt-52 pb-20 px-3 sm:px-6 contains-layout">
         <div className="max-w-7xl mx-auto">
           <motion.div
             key={activeTab}
@@ -102,15 +105,24 @@ export default function InvestingPage() {
             className="will-change-auto"
           >
             <div className="min-h-screen">
-              {activeTab === 'overview' && <PortfolioOverview />}
-              {activeTab === 'market' && <MarketIntelligence />}
+              {activeTab === 'portfolio'     && <InvestingPortfolio />}
+              {activeTab === 'overview'      && <PortfolioOverview />}
+              {activeTab === 'market'        && <MarketIntelligence />}
               {activeTab === 'opportunities' && <LongTermOpportunities />}
-              {activeTab === 'risk' && <RiskAnalysis />}
-              {activeTab === 'coach' && <InvestmentCoach />}
+              {activeTab === 'risk'          && <RiskAnalysis />}
+              {activeTab === 'coach'         && <InvestmentCoach />}
             </div>
           </motion.div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function InvestingPage() {
+  return (
+    <PortfolioProvider>
+      <InvestingPageInner />
+    </PortfolioProvider>
   );
 }

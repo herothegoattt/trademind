@@ -1,74 +1,62 @@
 "use client";
-
 import { motion } from "framer-motion";
-
-const STAR_POSITIONS = [
-  { left: "10%", top: "12%", size: 2 },
-  { left: "22%", top: "35%", size: 1 },
-  { left: "70%", top: "18%", size: 1.5 },
-  { left: "85%", top: "60%", size: 1 },
-  { left: "45%", top: "80%", size: 1.75 },
-  { left: "30%", top: "60%", size: 1 },
-  { left: "60%", top: "40%", size: 1.25 },
-  { left: "15%", top: "75%", size: 1 },
-  { left: "80%", top: "30%", size: 1.2 },
-  { left: "50%", top: "50%", size: 1.5 },
-];
 
 export function AICoreBg() {
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden bg-black/70">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.25),transparent_55%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(168,85,247,0.22),transparent_60%)]" />
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {/* Base gradient */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `
+            radial-gradient(ellipse 70% 55% at 50% 50%, rgba(59,7,100,0.55) 0%, transparent 65%),
+            radial-gradient(ellipse 100% 75% at 50% 50%, rgba(12,18,68,0.4) 0%, transparent 80%),
+            #020308
+          `,
+        }}
+      />
 
-      {STAR_POSITIONS.map((star, idx) => (
-        <div
-          key={idx}
-          className="absolute rounded-full bg-white/60"
+      {/* Dot grid */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: "radial-gradient(circle, rgba(6,182,212,0.1) 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+        }}
+      />
+
+      {/* Corner targeting brackets */}
+      <svg className="absolute top-5 left-5 opacity-20" width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M0 13 L0 0 L13 0" stroke="#06b6d4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <svg className="absolute top-5 right-5 opacity-20" width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M20 13 L20 0 L7 0" stroke="#06b6d4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <svg className="absolute bottom-5 left-5 opacity-20" width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M0 7 L0 20 L13 20" stroke="#06b6d4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <svg className="absolute bottom-5 right-5 opacity-20" width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M20 7 L20 20 L7 20" stroke="#06b6d4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+
+      {/* Slow ambient rings */}
+      {[350, 560].map((size, i) => (
+        <motion.div
+          key={i}
+          className="absolute rounded-full"
           style={{
-            left: star.left,
-            top: star.top,
-            width: `${star.size}px`,
-            height: `${star.size}px`,
+            width: size,
+            height: size,
+            top: "50%",
+            left: "50%",
+            marginTop: -size / 2,
+            marginLeft: -size / 2,
+            border: `1px solid rgba(6,182,212,${0.05 - i * 0.01})`,
           }}
+          animate={{ scale: [1, 1.07, 1], opacity: [0.5, 0.1, 0.5] }}
+          transition={{ duration: 7 + i * 2, repeat: Infinity, ease: "easeInOut", delay: i * 1.5 }}
         />
       ))}
-
-      <motion.svg
-        className="absolute inset-0 w-full h-full"
-        viewBox="0 0 800 800"
-        preserveAspectRatio="xMidYMid meet"
-        animate={{ rotate: [0, 360] }}
-        transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
-      >
-        <defs>
-          <radialGradient id="galaxyRing" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="rgba(139, 92, 246, 0.6)" />
-            <stop offset="40%" stopColor="rgba(6, 182, 212, 0.35)" />
-            <stop offset="80%" stopColor="rgba(139, 92, 246, 0)" />
-          </radialGradient>
-        </defs>
-
-        <circle
-          cx="400"
-          cy="400"
-          r="260"
-          fill="none"
-          stroke="url(#galaxyRing)"
-          strokeWidth="10"
-          opacity="0.85"
-        />
-
-        <circle
-          cx="400"
-          cy="400"
-          r="320"
-          fill="none"
-          stroke="rgba(59,130,246,0.25)"
-          strokeWidth="2"
-          strokeDasharray="12 10"
-        />
-      </motion.svg>
     </div>
   );
 }

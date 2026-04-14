@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "email": "rem.vafin.08@gmail.com",
+    "name": "Rem",
+    "password_hash": "aeb6da0aa672135c82642940cfcf38d9:cba6e6096f6f62ad4952e06948de8dff8cdb2e73342344ea7c0b4b17abfbea74a76dfa9b232de1dd22ab240157722cb2ade21ebfb9c5c6dfa003bcd8d09cf578",
+    "created_at": "2026-03-23T14:25:11.288Z",
+    "is_active": true,
+    "tradingview": {
+      "username": "biggestherointhecity",
+      "connected_at": "2026-04-03T16:25:50.762Z",
+      "last_sync": "2026-04-03T16:25:50.762Z",
+      "status": "connected"
+    },
+    "is_onboarded": true,
+    "preferred_market": "Forex"
+  }
+]

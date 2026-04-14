@@ -1,12 +1,16 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 
 interface Props {
   children: ReactNode;
 }
 
 export function AppProviders({ children }: Props) {
-  // future providers (theme, auth, etc) could go here
+  useEffect(() => {
+    const saved = localStorage.getItem('trademind-theme');
+    if (saved === 'light') document.documentElement.classList.add('light');
+  }, []);
+
   return <>{children}</>;
 }

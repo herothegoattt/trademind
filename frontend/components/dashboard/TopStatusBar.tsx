@@ -1,132 +1,169 @@
 "use client";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import Link from "next/link";
+import Image from "next/image";
 import { useDashboardStore } from "../../lib/store";
-import { t, setLang, useT } from "../../lib/i18n";
+import { useT } from "../../lib/i18n";
 import { Tooltip } from "../ui/tooltip";
 import { ProfileModal } from "./ProfileModal";
 import { BottomSheetSettings } from "./BottomSheetSettings";
-import { Bell, Settings, User, Menu } from "lucide-react";
+import { Bell, BellOff, Settings, User } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { usePush } from "../../lib/use-push";
+import { useAuthStore } from "@/lib/auth-store";
 
+// ─── NEON CONFIG ─────────────────────────────────────────────────────────────
+const TITLE = "TradeMind";
+
+// Each letter → gradient from deep blue → indigo → violet
+const NEON: { color: string; glow: string }[] = [
+  { color: "#3b82f6", glow: "rgba(59,130,246,0.9)"  },  // T  blue-500
+  { color: "#5b70f5", glow: "rgba(91,112,245,0.9)"  },  // r  blue-indigo
+  { color: "#6366f1", glow: "rgba(99,102,241,0.9)"  },  // a  indigo-500
+  { color: "#7c5cf8", glow: "rgba(124,92,248,0.9)"  },  // d  indigo-violet
+  { color: "#8b5cf6", glow: "rgba(139,92,246,0.9)"  },  // e  violet-500
+  { color: "#9333ea", glow: "rgba(147,51,234,0.9)"  },  // M  purple-600
+  { color: "#a855f7", glow: "rgba(168,85,247,0.9)"  },  // i  purple-500
+  { color: "#a78bfa", glow: "rgba(167,139,250,0.9)" },  // n  violet-400
+  { color: "#c084fc", glow: "rgba(192,132,252,0.9)" },  // d  purple-400
+];
+
+// ─── COMPONENT ────────────────────────────────────────────────────────────────
 export function TopStatusBar() {
-  const openRightPanel = useDashboardStore((s: any) => s.openRightPanelDrawer);
-  const language = useDashboardStore((s: any) => s.language);
-  const setLanguage = useDashboardStore((s: any) => s.setLanguage);
-  const [mounted, setMounted] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [langMenuOpen, setLangMenuOpen] = useState(false);
   const t = useT();
+
+  const [mounted,      setMounted]      = useState(false);
+  const [profileOpen,  setProfileOpen]  = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const { permission, subscribed, busy, toggle } = usePush();
+  const token = useAuthStore((s) => s.token);
 
   useEffect(() => {
     useDashboardStore.getState().initDashboard();
     setMounted(true);
   }, []);
 
-  if (!mounted) return null;
+  const bellLabel =
+    permission === "unsupported" ? "Push not supported in this browser" :
+    permission === "denied"      ? "Push blocked — enable in browser settings" :
+    subscribed                   ? "Push notifications on — click to disable" :
+                                   "Enable push notifications";
 
-  const title = "TradeMind";
-  const letters = title.split("");
+  const bellActive = subscribed && permission === "granted";
+
+  if (!mounted) return null;
 
   return (
     <>
-      <div className="fixed top-0 left-56 right-0 z-50 flex items-center justify-between h-16 px-8 bg-slate-950 border-b border-slate-800 shadow-sm">
-        {/* Left - Empty Space for Future */}
+      <div
+        className="fixed top-0 left-0 md:left-56 right-0 z-50 flex items-center justify-between h-16 px-4 md:px-8"
+        style={{
+          background: "rgba(2,4,20,0.94)",
+          borderBottom: "1px solid rgba(6,182,212,0.12)",
+          backdropFilter: "blur(22px)",
+          WebkitBackdropFilter: "blur(22px)",
+        }}
+      >
+        {/* ── LEFT (reserved) ──────────────────────────────── */}
         <div className="flex-1" />
 
-        {/* Center - Animated title */}
+        {/* ── CENTER — neon title ───────────────────────────── */}
         <div className="flex-1 flex items-center justify-center">
-          <span className="text-lg font-semibold tracking-wide text-white flex gap-1">
-            {letters.map((letter, idx) => (
-              <motion.span
-                key={`${letter}-${idx}`}
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: idx * 0.04, duration: 0.35, ease: "easeOut" }}
-                className="inline-block"
-              >
-                {letter}
-              </motion.span>
-            ))}
-          </span>
+          <Link href="/app" className="relative flex items-center gap-3 select-none cursor-pointer group">
+
+            {/* background aura */}
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                inset: "-10px -30px",
+                background:
+                  "radial-gradient(ellipse at center, rgba(99,102,241,0.22), transparent 68%)",
+                filter: "blur(14px)",
+              }}
+            />
+
+            {/* Logo */}
+            <Image
+              src="/logo.jpg"
+              alt="TradeMind Logo"
+              width={34}
+              height={34}
+              className="rounded-full object-cover shrink-0 relative z-10 ring-1 ring-violet-500/40"
+            />
+
+            {/* Static neon letters */}
+            <div className="flex items-baseline relative z-10" style={{ gap: "2px" }}>
+              {TITLE.split("").map((char, idx) => {
+                const { color, glow } = NEON[idx];
+                return (
+                  <span
+                    key={idx}
+                    style={{
+                      display:      "inline-block",
+                      width:        "1.05rem",
+                      textAlign:    "center",
+                      fontWeight:   800,
+                      fontSize:     "1.45rem",
+                      lineHeight:   1,
+                      color:        "#ffffff",
+                      textShadow:   `0 0 7px ${glow}, 0 0 18px ${color}bb, 0 0 38px ${color}55`,
+                    }}
+                  >
+                    {char}
+                  </span>
+                );
+              })}
+            </div>
+
+          </Link>
         </div>
 
-        {/* Right - Controls */}
-        <div className="flex-1 flex items-center justify-end gap-3">
-          {/* Language Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setLangMenuOpen((o) => !o)}
-              className="p-2 rounded-lg border border-slate-700 bg-slate-900 text-white hover:bg-slate-800"
-              title={t("language")}
-            >
-              <span className="text-xl block">
-                {language === "ru"
-                  ? "🇷🇺"
-                  : language === "uz"
-                    ? "🇺🇿"
-                    : "🇺🇸"}
-              </span>
-            </button>
+        {/* ── RIGHT — controls ─────────────────────────────── */}
+        <div className="flex-1 flex items-center justify-end gap-2.5">
 
-            {langMenuOpen && (
-              <div className="absolute right-0 mt-2 w-40 bg-slate-900 border border-slate-800 rounded-lg shadow-lg">
-                {[
-                  { code: "en", flag: "🇺🇸", label: "English" },
-                  { code: "ru", flag: "🇷🇺", label: "Русский" },
-                  { code: "uz", flag: "🇺🇿", label: "Ўзбек" },
-                ].map((lang) => (
-                  <button
-                    key={lang.code}
-                    onClick={() => {
-                      setLanguage(lang.code);
-                      setLang(lang.code as any);
-                      setLangMenuOpen(false);
-                    }}
-                    className="w-full text-left px-4 py-2 flex items-center gap-2 text-sm text-gray-200 hover:bg-slate-800"
-                  >
-                    <span className="text-lg">{lang.flag}</span>
-                    <span className="font-medium">{lang.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Notification Bell */}
-          <Tooltip content={t("notifications")}>
+          {/* Bell — real push toggle */}
+          <Tooltip content={bellLabel}>
             <button
-              onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+              onClick={() => permission !== "unsupported" && !busy && toggle(token ?? undefined)}
+              disabled={permission === "unsupported" || busy}
               className={cn(
-                "p-2 rounded-lg border",
-                notificationsEnabled
-                  ? "bg-cyan-500/15 border-cyan-500/40"
-                  : "bg-slate-700/20 border-slate-600/20"
+                "p-2 rounded-lg border transition-colors relative",
+                bellActive
+                  ? "bg-cyan-500/10 border-cyan-500/25 hover:bg-cyan-500/15"
+                  : permission === "denied"
+                  ? "border-orange-500/25 bg-orange-500/5 hover:bg-orange-500/10"
+                  : "border-slate-700/25 bg-slate-800/20 hover:bg-slate-800/40",
+                (permission === "unsupported") && "opacity-40 cursor-not-allowed",
               )}
             >
-              <Bell
-                size={18}
-                className={
-                  notificationsEnabled
-                    ? "text-teal-300 drop-shadow-[0_0_8px_rgba(45,212,191,0.6)]"
-                    : "text-slate-500"
-                }
-              />
+              {busy ? (
+                <span style={{
+                  display: "inline-block",
+                  width: 17, height: 17,
+                  borderRadius: "50%",
+                  border: "1.5px solid rgba(45,212,191,0.2)",
+                  borderTopColor: "#2dd4bf",
+                  animation: "tmSpin 0.7s linear infinite",
+                }} />
+              ) : bellActive ? (
+                <Bell size={17} style={{ color: "#2dd4bf", filter: "drop-shadow(0 0 7px rgba(45,212,191,0.65))" }} />
+              ) : permission === "denied" ? (
+                <BellOff size={17} style={{ color: "#f97316" }} />
+              ) : (
+                <Bell size={17} style={{ color: "#64748b" }} />
+              )}
             </button>
           </Tooltip>
+          <style>{`@keyframes tmSpin { to { transform: rotate(360deg); } }`}</style>
 
           {/* Settings */}
           <Tooltip content={t("settings")}>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="p-2 rounded-lg border border-slate-700 bg-slate-900 text-white hover:bg-slate-800"
+              className="p-2 rounded-lg border border-slate-700/25 bg-slate-800/20 hover:bg-slate-800/40 transition-colors"
             >
-              <Settings
-                size={18}
-                className="text-teal-300 drop-shadow-[0_0_8px_rgba(45,212,191,0.6)]"
-              />
+              <Settings size={17} style={{ color: "#2dd4bf", filter: "drop-shadow(0 0 7px rgba(45,212,191,0.65))" }} />
             </button>
           </Tooltip>
 
@@ -134,36 +171,16 @@ export function TopStatusBar() {
           <Tooltip content={t("profile")}>
             <button
               onClick={() => setProfileOpen(true)}
-              className="p-2 rounded-lg border border-slate-700 bg-slate-900 text-white hover:bg-slate-800"
+              className="p-2 rounded-lg border border-slate-700/25 bg-slate-800/20 hover:bg-slate-800/40 transition-colors"
             >
-              <User
-                size={18}
-                className="text-teal-300 drop-shadow-[0_0_8px_rgba(45,212,191,0.6)]"
-              />
+              <User size={17} style={{ color: "#2dd4bf", filter: "drop-shadow(0 0 7px rgba(45,212,191,0.65))" }} />
             </button>
           </Tooltip>
-
-          {/* Mobile Menu */}
-          <div className="xl:hidden">
-            <Tooltip content={t("insights")}>
-              <button
-                onClick={openRightPanel}
-                className="p-2 rounded-lg border border-slate-700 bg-slate-900 text-white hover:bg-slate-800"
-              >
-                <Menu
-                  size={18}
-                  className="text-teal-300 drop-shadow-[0_0_8px_rgba(45,212,191,0.6)]"
-                />
-              </button>
-            </Tooltip>
-          </div>
-        </div>      </div>
+        </div>
+      </div>
 
       <ProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
-      <BottomSheetSettings
-        isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
+      <BottomSheetSettings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );
 }

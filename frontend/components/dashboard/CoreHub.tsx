@@ -4,9 +4,12 @@ import { AIChatWindow } from "./AIChatWindow";
 
 export function CoreHub() {
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+    <div
+      className="absolute inset-0 overflow-hidden"
+      style={{ background: "#020308" }}
+    >
       <AICoreBg />
-      <div className="relative z-10 w-full h-full flex items-center justify-center">
+      <div className="absolute inset-0 z-10">
         <AIChatWindow isCompact={false} />
       </div>
     </div>
