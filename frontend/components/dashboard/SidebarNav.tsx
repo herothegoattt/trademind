@@ -79,18 +79,8 @@ export function SidebarNav() {
 
   if (!mounted) return null;
 
-  // Section → path mapping for mobile nav
-  const sectionPaths: Partial<Record<Section, string>> = {
-    Journal: '/journal',
-    'Daily Bias': '/daily-bias',
-    Setups: '/setups',
-    News: '/news',
-    'Trader DNA': '/trader-dna',
-  };
-
   return (
-    <>
-    <nav className="hidden md:fixed md:inset-y-0 md:left-0 md:z-20 md:w-56 md:flex md:flex-col bg-slate-950 border-r border-slate-800">
+    <nav className="fixed inset-y-0 left-0 z-20 w-56 flex flex-col bg-slate-950 border-r border-slate-800">
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
         <span className="text-sm font-bold uppercase tracking-wider text-gray-200">TradeMind</span>
       </div>
@@ -209,35 +199,7 @@ export function SidebarNav() {
         errorType={selectedErrorForDetails}
       />
 
-    </nav>
 
-    {/* ── Mobile bottom navigation bar ───────────────── */}
-    <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around px-2 border-t border-slate-800"
-      style={{ background: "rgba(2,4,20,0.97)", backdropFilter: "blur(16px)", height: "56px" }}
-    >
-      {(Object.entries(sectionPaths) as [Section, string][]).map(([section, path]) => {
-        const active = pathname === path;
-        return (
-          <Link
-            key={section}
-            href={path}
-            onClick={() => selectSection(section)}
-            className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-all"
-          >
-            <span className={cn(
-              "transition-all [&>svg]:w-[19px] [&>svg]:h-[19px]",
-              active ? "text-teal-300 drop-shadow-[0_0_8px_rgba(45,212,191,0.8)]" : "text-slate-600"
-            )}>
-              {sectionIcons[section]}
-            </span>
-            <span className={cn("text-[9px] font-medium leading-none", active ? "text-teal-300" : "text-slate-600")}>
-              {section.split(" ")[0]}
-            </span>
-          </Link>
-        );
-      })}
     </nav>
-    </>
   );
 }

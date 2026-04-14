@@ -12,7 +12,7 @@ export default function CommunityEdgePage() {
     <div className="min-h-screen bg-gradient-to-b from-black to-black/95 text-white">
       {/* Header */}
       <div className="sticky top-0 z-20 border-b border-emerald-500/20 bg-black/50 backdrop-blur-lg">
-        <div className="flex items-center justify-between px-3 py-3 sm:p-6 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between p-6 max-w-7xl mx-auto">
           <motion.div 
             className="flex items-center gap-4"
             initial={{ opacity: 0, x: -20 }}

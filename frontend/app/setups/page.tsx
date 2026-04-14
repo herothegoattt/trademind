@@ -263,24 +263,24 @@ export default function SetupsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-black to-black/95 text-white flex flex-col xl:pr-80">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-gradient-to-r from-black/90 via-slate-900/80 to-black/90 backdrop-blur-lg border-b border-cyan-500/20 px-3 sm:px-6 py-3 sm:py-4 shadow-lg">
+      <div className="sticky top-0 z-20 bg-gradient-to-r from-black/90 via-slate-900/80 to-black/90 backdrop-blur-lg border-b border-cyan-500/20 px-6 py-4 shadow-lg">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
           >
-            <h1 className="text-xl sm:text-3xl font-bold">{t('setups_library')}</h1>
-            <p className="text-gray-400 text-xs sm:text-sm mt-0.5 sm:mt-1 hidden sm:block">Ready-made setups organized by skill level & market type</p>
+            <h1 className="text-3xl font-bold">{t('setups_library')}</h1>
+            <p className="text-gray-400 text-sm mt-1">Ready-made setups organized by skill level & market type</p>
           </motion.div>
-          <Link href="/app" className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs sm:text-sm transition-colors">
-            <ArrowLeft size={16} />
-            <span className="hidden sm:inline">{t('back_to_dashboard')}</span>
+          <Link href="/app" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 transition-colors">
+            <ArrowLeft size={18} />
+            {t('back_to_dashboard')}
           </Link>
         </div>
       </div>
 
       {/* Filter Tabs */}
-      <div className="sticky top-14 sm:top-16 z-10 bg-black/70 backdrop-blur-lg border-b border-cyan-500/10 px-3 sm:px-6 py-3 sm:py-4">
+      <div className="sticky top-16 z-10 bg-black/70 backdrop-blur-lg border-b border-cyan-500/10 px-6 py-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Filter:</span>
