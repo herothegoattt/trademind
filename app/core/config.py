@@ -49,6 +49,15 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
+    # Stripe payments
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+    # Stripe Price IDs — set these in .env after creating products in Stripe Dashboard
+    stripe_price_edge_monthly: str | None = None
+    stripe_price_edge_annual: str | None = None
+    stripe_price_apex_monthly: str | None = None
+    stripe_price_apex_annual: str | None = None
+
     # Market Data APIs
     oanda_api_key: str | None = None  # OANDA v20 API key (https://developer.oanda.com)
     oanda_account_id: str | None = None  # OANDA account ID (e.g., 101-001-123456-001)

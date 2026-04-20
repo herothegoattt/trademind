@@ -2,7 +2,7 @@
 Database models for TradeMind AI.
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Text, JSON, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Text, JSON, ForeignKey, BigInteger
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base  # noqa: I001
@@ -20,6 +20,20 @@ class User(Base):
     name = Column(String(255), nullable=True)
     avatar_url = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True)
+    # Subscription / plan
+    plan = Column(String(20), default="core", nullable=False, server_default="core")
+    stripe_customer_id = Column(String(255), nullable=True, unique=True, index=True)
+    stripe_subscription_id = Column(String(255), nullable=True)
+    plan_expires_at = Column(DateTime(timezone=True), nullable=True)
+    # AI usage quota tracking (resets monthly)
+    ai_queries_this_month = Column(Integer, default=0, nullable=False, server_default="0")
+    ai_quota_reset_at = Column(DateTime(timezone=True), nullable=True)
+    # Referral & credits
+    referred_by_code = Column(String(20), nullable=True)         # code used at signup
+    referral_credits_cents = Column(Integer, default=0, nullable=False, server_default="0")
+    # Onboarding
+    is_onboarded = Column(Boolean, default=False, nullable=False, server_default="false")
+    preferred_market = Column(String(50), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -168,3 +182,63 @@ class UserAction(Base):
     
     user = relationship("User", back_populates="actions")
 
+
+class PromoCode(Base):
+    """Admin-created promo/discount codes."""
+
+    __tablename__ = "promo_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(30), unique=True, index=True, nullable=False)  # e.g. LAUNCH50
+    description = Column(String(255), nullable=True)
+    # Discount: "percent" (0–100) or "fixed" (USD cents)
+    discount_type = Column(String(10), nullable=False, default="percent")
+    discount_value = Column(Float, nullable=False)          # e.g. 25 for 25%  |  2900 for $29
+    # Applicability
+    applies_to = Column(String(20), nullable=True)          # null=any, "edge", "apex"
+    billing_cycle = Column(String(10), nullable=True)       # null=any, "monthly", "annual"
+    # Limits
+    max_uses = Column(Integer, nullable=True)               # null = unlimited
+    uses_count = Column(Integer, default=0, nullable=False, server_default="0")
+    # Validity
+    is_active = Column(Boolean, default=True, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    # Stripe coupon (created on first use)
+    stripe_coupon_id = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ReferralCode(Base):
+    """Each user's personal referral code."""
+
+    __tablename__ = "referral_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    code = Column(String(20), unique=True, index=True, nullable=False)  # e.g. TM-ALEX4K2M
+    total_clicks = Column(Integer, default=0, nullable=False, server_default="0")
+    total_signups = Column(Integer, default=0, nullable=False, server_default="0")
+    total_conversions = Column(Integer, default=0, nullable=False, server_default="0")  # paid upgrades
+    total_earned_cents = Column(Integer, default=0, nullable=False, server_default="0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", foreign_keys=[user_id])
+    uses = relationship("ReferralUse", back_populates="referral_code")
+
+
+class ReferralUse(Base):
+    """Tracks each time a referral code led to a signup or conversion."""
+
+    __tablename__ = "referral_uses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    referral_code_id = Column(Integer, ForeignKey("referral_codes.id"), nullable=False, index=True)
+    referred_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    # "signed_up" → became user; "converted" → paid; "rewarded" → referrer got credit
+    status = Column(String(20), default="signed_up", nullable=False)
+    reward_cents = Column(Integer, default=0, nullable=False, server_default="0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    converted_at = Column(DateTime(timezone=True), nullable=True)
+
+    referral_code = relationship("ReferralCode", back_populates="uses")
+    referred_user = relationship("User", foreign_keys=[referred_user_id])

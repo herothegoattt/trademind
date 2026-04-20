@@ -17,6 +17,8 @@ import {
 import { useTradeStore } from "../../lib/trade-store";
 import { useAuthStore, type Plan } from "../../lib/auth-store";
 import { cn } from "../../lib/utils";
+import { usePlanLimits } from "../../lib/plan-limits";
+import { UpgradeGate } from "../../components/ui/UpgradeGate";
 
 // ─── Tier config ──────────────────────────────────────────────────────────────
 type Tier = "core" | "edge" | "apex" | "pro";
@@ -54,14 +56,31 @@ const DAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 function MetricCard({ label, value, sub, color = "#22d3ee", icon: Icon }: {
   label: string; value: string; sub?: string; color?: string; icon?: any;
 }) {
+  const alphaColor = color + "22";
+  const borderColor = color + "33";
+  const glowColor = color + "18";
   return (
-    <div className="bg-white/[0.025] border border-white/[0.05] rounded-2xl p-5">
-      <div className="flex items-center gap-2 mb-2">
-        {Icon && <Icon className="w-3.5 h-3.5" style={{ color }} />}
-        <span className="text-xs text-gray-500 uppercase tracking-wider">{label}</span>
+    <div
+      className="rounded-2xl p-5 relative overflow-hidden"
+      style={{
+        background: `linear-gradient(145deg, ${alphaColor}, rgba(255,255,255,0.015))`,
+        border: `1px solid ${borderColor}`,
+        boxShadow: `0 4px 24px ${glowColor}, inset 0 1px 0 rgba(255,255,255,0.05)`,
+      }}
+    >
+      <div className="absolute top-0 left-6 right-6 h-px" style={{
+        background: `linear-gradient(90deg, transparent, ${borderColor}, transparent)`,
+      }} />
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: "rgba(90,104,128,0.85)" }}>{label}</span>
+        {Icon && (
+          <span className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: alphaColor }}>
+            <Icon className="w-3.5 h-3.5" style={{ color }} />
+          </span>
+        )}
       </div>
-      <div className="text-2xl font-bold" style={{ color }}>{value}</div>
-      {sub && <div className="text-xs text-gray-500 mt-1">{sub}</div>}
+      <div className="text-[22px] font-bold font-mono tabular-nums" style={{ color }}>{value}</div>
+      {sub && <div className="text-[11px] mt-1.5" style={{ color: "rgba(90,104,128,0.75)" }}>{sub}</div>}
     </div>
   );
 }
@@ -115,6 +134,11 @@ export default function AnalyticsLabPage() {
   const [riskThreshold, setRiskThreshold] = useState(50); // % loss for ruin check
 
   const userPlan = (user?.plan as Plan) || "core";
+  const limits = usePlanLimits();
+  // Advanced tabs require Edge+
+  const LOCKED_TABS = limits.analytics_montecarlo
+    ? []
+    : ["montecarlo", "sortino", "kelly", "es"];
 
   // ── Completed trades only ────────────────────────────────────────────────
   const completed = useMemo(
@@ -417,10 +441,10 @@ export default function AnalyticsLabPage() {
   const planMeta = TIER_META[(userPlan as Tier)] ?? TIER_META.core;
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col text-white min-w-0" style={{ background: "#060612" }}>
+    <div className="h-full overflow-hidden flex flex-col text-white min-w-0 page-bg">
       {/* ── Top bar ────────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 z-30 backdrop-blur-xl"
-        style={{ background: "rgba(6,6,18,0.9)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+        style={{ background: "rgba(7,10,18,0.94)", borderBottom: "1px solid rgba(251,146,60,0.14)" }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between px-3 sm:px-6 py-3">
           <div className="flex items-center gap-3">
             <Link href="/app"
@@ -430,7 +454,7 @@ export default function AnalyticsLabPage() {
             </Link>
             <div className="flex items-center gap-2">
               <FlaskConical className="w-4 h-4 text-amber-400" />
-              <h1 className="text-sm font-bold text-white">Analytics Lab</h1>
+              <h1 className="text-sm font-bold neon-amber">Analytics Lab</h1>
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25">
                 ИНСТИТУЦИОНАЛЬНЫЕ ИНСТРУМЕНТЫ
               </span>
@@ -451,17 +475,26 @@ export default function AnalyticsLabPage() {
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
+            const locked = LOCKED_TABS.includes(tab.id);
             return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              <button key={tab.id} onClick={() => {
+                if (locked) {
+                  // Switch to tab so UpgradeGate shows
+                  setActiveTab(tab.id as any);
+                } else {
+                  setActiveTab(tab.id);
+                }
+              }}
                 className={cn(
                   "flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-all",
                   active
                     ? "border-current text-white"
                     : "border-transparent text-gray-500 hover:text-gray-300"
                 )}
-                style={active ? { color: tab.color, borderColor: tab.color } : {}}>
+                style={active ? { color: locked ? "#f59e0b" : tab.color, borderColor: locked ? "#f59e0b" : tab.color } : {}}>
                 <Icon className="w-3.5 h-3.5" />
                 {tab.label}
+                {locked && <span className="text-[9px] ml-0.5 text-amber-500">🔒</span>}
               </button>
             );
           })}
@@ -959,7 +992,12 @@ export default function AnalyticsLabPage() {
         {/* ══════════════════════════════════════════════════════════════════════
             BLOCK 4 — MONTE CARLO
         ══════════════════════════════════════════════════════════════════════ */}
-        {activeTab === "montecarlo" && (
+        {activeTab === "montecarlo" && !limits.analytics_montecarlo && (
+          <div className="py-8">
+            <UpgradeGate requiredPlan="edge" feature="Monte Carlo Simulator" blurContent={false} />
+          </div>
+        )}
+        {activeTab === "montecarlo" && limits.analytics_montecarlo && (
           <div className="space-y-8">
             <BlockHeader
               icon={Dice6} color="#f59e0b"
@@ -1129,7 +1167,10 @@ export default function AnalyticsLabPage() {
         {/* ══════════════════════════════════════════════════════════════════════
             BLOCK 5 — SORTINO RATIO
         ══════════════════════════════════════════════════════════════════════ */}
-        {activeTab === "sortino" && (
+        {activeTab === "sortino" && !limits.analytics_montecarlo && (
+          <div className="py-8"><UpgradeGate requiredPlan="edge" feature="Sortino Ratio" blurContent={false} /></div>
+        )}
+        {activeTab === "sortino" && limits.analytics_montecarlo && (
           <div className="space-y-8">
             <BlockHeader
               icon={TrendingDown} color="#818cf8"
@@ -1284,7 +1325,10 @@ export default function AnalyticsLabPage() {
         {/* ══════════════════════════════════════════════════════════════════════
             BLOCK 6 — KELLY CRITERION
         ══════════════════════════════════════════════════════════════════════ */}
-        {activeTab === "kelly" && (
+        {activeTab === "kelly" && !limits.analytics_montecarlo && (
+          <div className="py-8"><UpgradeGate requiredPlan="edge" feature="Kelly Criterion" blurContent={false} /></div>
+        )}
+        {activeTab === "kelly" && limits.analytics_montecarlo && (
           <div className="space-y-8">
             <BlockHeader
               icon={Target} color="#34d399"
@@ -1413,7 +1457,10 @@ export default function AnalyticsLabPage() {
         {/* ══════════════════════════════════════════════════════════════════════
             BLOCK 7 — EXPECTED SHORTFALL (CVaR)
         ══════════════════════════════════════════════════════════════════════ */}
-        {activeTab === "es" && (
+        {activeTab === "es" && !limits.analytics_montecarlo && (
+          <div className="py-8"><UpgradeGate requiredPlan="edge" feature="Expected Shortfall (CVaR)" blurContent={false} /></div>
+        )}
+        {activeTab === "es" && limits.analytics_montecarlo && (
           <div className="space-y-8">
             <BlockHeader
               icon={Shield} color="#fb923c"

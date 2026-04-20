@@ -83,9 +83,9 @@ export default function NewsPage() {
   const countries = getCountries();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black to-black/95 text-white">
+    <div className="h-full overflow-y-auto pb-14 md:pb-0 page-bg text-white">
       {/* Header */}
-      <div className="sticky top-0 z-20 border-b border-orange-500/20 bg-black/50 backdrop-blur-lg">
+      <div className="sticky top-0 z-20" style={{ background: "rgba(7,10,18,0.94)", borderBottom: "1px solid rgba(167,139,250,0.14)", backdropFilter: "blur(20px)" }}>
         <div className="flex items-center justify-between px-3 py-3 sm:p-6 max-w-7xl mx-auto">
           <motion.div
             className="flex items-center gap-4"
@@ -100,7 +100,7 @@ export default function NewsPage() {
                 <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-red-500 rounded-lg blur-md opacity-40" />
                 <Newspaper className="w-7 h-7 text-orange-400 relative" />
               </div>
-              <h1 className="text-xl sm:text-3xl font-bold bg-gradient-to-r from-orange-400 via-yellow-400 to-red-400 bg-clip-text text-transparent">
+              <h1 className="text-xl sm:text-3xl font-bold neon-indigo">
                 Economic Calendar
               </h1>
               {/* LIVE badge */}

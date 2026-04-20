@@ -3,36 +3,128 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import { useDashboardStore } from "../../lib/store";
 import { useT } from "../../lib/i18n";
 import { Section } from "../../lib/types";
 import { cn } from "../../lib/utils";
 import {
-  BookOpen,
-  Settings,
-  Activity,
-  Globe,
-  FileText,
-  Compass,
-  User,
-  TrendingUp,
-  AlertTriangle,
-  FlaskConical,
+  BookOpen, Settings, Activity, Globe, FileText,
+  Compass, User, TrendingUp, AlertTriangle, FlaskConical,
 } from "lucide-react";
-import { Tooltip } from "../ui/tooltip";
 
-const navItems: { section: Section | "Decision Errors"; path: string; icon: React.ReactNode; labelKey: string }[] = [
-  { section: "Journal",          path: "/journal",          icon: <BookOpen size={20} />,      labelKey: "section_journal"         },
-  { section: "Setups",           path: "/setups",           icon: <Settings size={20} />,      labelKey: "section_setups"          },
-  { section: "Community Edge",   path: "/community-edge",   icon: <Activity size={20} />,      labelKey: "section_community_edge"  },
-  { section: "Markets",          path: "/markets",          icon: <Globe size={20} />,         labelKey: "section_markets"         },
-  { section: "News",             path: "/news",             icon: <FileText size={20} />,      labelKey: "section_news"            },
-  { section: "Daily Bias",       path: "/daily-bias",       icon: <Compass size={20} />,       labelKey: "section_daily_bias"      },
-  { section: "Trader DNA",       path: "/trader-dna",       icon: <User size={20} />,          labelKey: "section_trader_dna"      },
-  { section: "Investing",        path: "/investing",        icon: <TrendingUp size={20} />,    labelKey: "section_investing"       },
-  { section: "Analytics Lab",    path: "/analytics-lab",    icon: <FlaskConical size={20} />,  labelKey: "section_analytics_lab"   },
-  { section: "Decision Errors",  path: "/decision-errors",  icon: <AlertTriangle size={20} />, labelKey: "decision_errors"         },
+/* ── Per-item color config ────────────────────────────────────── */
+const COLOR: Record<string, { icon: string; active: string; bar: string; glow: string }> = {
+  "/journal":         { icon: "#22d3ee", active: "rgba(34,211,238,0.09)",  bar: "#22d3ee", glow: "34,211,238"  },
+  "/setups":          { icon: "#818cf8", active: "rgba(129,140,248,0.09)", bar: "#818cf8", glow: "129,140,248" },
+  "/daily-bias":      { icon: "#fbbf24", active: "rgba(251,191,36,0.09)",  bar: "#fbbf24", glow: "251,191,36"  },
+  "/markets":         { icon: "#60a5fa", active: "rgba(96,165,250,0.09)",  bar: "#60a5fa", glow: "96,165,250"  },
+  "/news":            { icon: "#a78bfa", active: "rgba(167,139,250,0.09)", bar: "#a78bfa", glow: "167,139,250" },
+  "/community-edge":  { icon: "#34d399", active: "rgba(52,211,153,0.09)",  bar: "#34d399", glow: "52,211,153"  },
+  "/trader-dna":      { icon: "#c084fc", active: "rgba(192,132,252,0.09)", bar: "#c084fc", glow: "192,132,252" },
+  "/investing":       { icon: "#4ade80", active: "rgba(74,222,128,0.09)",  bar: "#4ade80", glow: "74,222,128"  },
+  "/analytics-lab":   { icon: "#fb923c", active: "rgba(251,146,60,0.09)",  bar: "#fb923c", glow: "251,146,60"  },
+  "/decision-errors": { icon: "#f59e0b", active: "rgba(245,158,11,0.09)",  bar: "#f59e0b", glow: "245,158,11"  },
+};
+
+const navGroups = [
+  {
+    label: "Workspace",
+    items: [
+      { section: "Journal",        path: "/journal",        Icon: BookOpen,      labelKey: "section_journal"        },
+      { section: "Setups",         path: "/setups",         Icon: Settings,      labelKey: "section_setups"         },
+      { section: "Daily Bias",     path: "/daily-bias",     Icon: Compass,       labelKey: "section_daily_bias"     },
+    ],
+  },
+  {
+    label: "Markets",
+    items: [
+      { section: "Markets",        path: "/markets",        Icon: Globe,         labelKey: "section_markets"        },
+      { section: "News",           path: "/news",           Icon: FileText,      labelKey: "section_news"           },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [
+      { section: "Community Edge", path: "/community-edge", Icon: Activity,      labelKey: "section_community_edge" },
+      { section: "Trader DNA",     path: "/trader-dna",     Icon: User,          labelKey: "section_trader_dna"     },
+      { section: "Investing",      path: "/investing",      Icon: TrendingUp,    labelKey: "section_investing"      },
+      { section: "Analytics Lab",  path: "/analytics-lab",  Icon: FlaskConical,  labelKey: "section_analytics_lab"  },
+      { section: "Decision Errors",path: "/decision-errors",Icon: AlertTriangle, labelKey: "decision_errors"        },
+    ],
+  },
 ];
+
+const mobileItems = [
+  { section: "Journal",    path: "/journal",    Icon: BookOpen, labelKey: "section_journal"    },
+  { section: "Setups",     path: "/setups",     Icon: Settings, labelKey: "section_setups"     },
+  { section: "Markets",    path: "/markets",    Icon: Globe,    labelKey: "section_markets"    },
+  { section: "News",       path: "/news",       Icon: FileText, labelKey: "section_news"       },
+  { section: "Daily Bias", path: "/daily-bias", Icon: Compass,  labelKey: "section_daily_bias" },
+];
+
+/* Icon with animated neon glow when active */
+function NeonIcon({ Icon, active, color, glow }: { Icon: any; active: boolean; color: string; glow: string }) {
+  return (
+    <motion.span
+      className="mr-2.5 flex-shrink-0"
+      animate={active ? {
+        filter: [
+          `drop-shadow(0 0 2px rgba(${glow},0.7)) drop-shadow(0 0 6px rgba(${glow},0.35))`,
+          `drop-shadow(0 0 5px rgba(${glow},1))   drop-shadow(0 0 14px rgba(${glow},0.6)) drop-shadow(0 0 28px rgba(${glow},0.2))`,
+          `drop-shadow(0 0 2px rgba(${glow},0.7)) drop-shadow(0 0 6px rgba(${glow},0.35))`,
+        ],
+        color,
+      } : {
+        filter: "none",
+        color: "rgba(71,85,105,0.8)",
+      }}
+      transition={active ? {
+        filter: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+        color:  { duration: 0.2 },
+      } : { duration: 0.2 }}
+    >
+      <Icon size={15} strokeWidth={active ? 2 : 1.7} />
+    </motion.span>
+  );
+}
+
+/* Pulsing neon dot */
+function NeonDot({ color, glow }: { color: string; glow: string }) {
+  return (
+    <motion.span
+      className="ml-auto w-1.5 h-1.5 rounded-full flex-shrink-0"
+      style={{ background: color }}
+      animate={{
+        boxShadow: [
+          `0 0 4px rgba(${glow},0.8), 0 0 10px rgba(${glow},0.4)`,
+          `0 0 8px rgba(${glow},1),   0 0 20px rgba(${glow},0.7), 0 0 36px rgba(${glow},0.25)`,
+          `0 0 4px rgba(${glow},0.8), 0 0 10px rgba(${glow},0.4)`,
+        ],
+        opacity: [0.8, 1, 0.8],
+      }}
+      transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+    />
+  );
+}
+
+/* Active bar with neon glow */
+function NeonBar({ color, glow }: { color: string; glow: string }) {
+  return (
+    <motion.span
+      className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full"
+      style={{ background: color }}
+      animate={{
+        boxShadow: [
+          `0 0 4px rgba(${glow},0.7), 2px 0 8px rgba(${glow},0.3)`,
+          `0 0 8px rgba(${glow},1),   4px 0 16px rgba(${glow},0.5), 6px 0 30px rgba(${glow},0.15)`,
+          `0 0 4px rgba(${glow},0.7), 2px 0 8px rgba(${glow},0.3)`,
+        ],
+      }}
+      transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+    />
+  );
+}
 
 export function SidebarNav() {
   const t = useT();
@@ -47,154 +139,193 @@ export function SidebarNav() {
 
   if (!mounted) return null;
 
-  const mobileNav = [
-    navItems[0], // Journal
-    navItems[1], // Setups
-    navItems[3], // Markets
-    navItems[4], // News
-    navItems[5], // Daily Bias
-  ];
-
   return (
     <>
-    <nav className="hidden md:flex fixed inset-y-0 left-0 z-20 w-56 flex-col bg-slate-950 border-r border-slate-800">
-      {/* Logo */}
-      <div className="flex items-center px-4 py-3 border-b border-slate-800">
-        <Link href="/app" className="flex items-center gap-2 select-none">
-          <Image
-            src="/logo.jpg"
-            alt="TradeMind Logo"
-            width={28}
-            height={28}
-            className="rounded-full object-cover shrink-0"
-          />
-          <span
-            className="text-sm font-bold uppercase tracking-wider"
-            style={{
-              color: "#ffffff",
-              textShadow:
-                "0 0 6px rgba(139,92,246,0.9), 0 0 16px rgba(99,102,241,0.7), 0 0 30px rgba(139,92,246,0.4)",
-            }}
-          >
-            TradeMind
-          </span>
-        </Link>
-      </div>
+      {/* ── Desktop ─────────────────────────────────────────── */}
+      <nav
+        className="hidden md:flex fixed inset-y-0 left-0 z-20 w-56 flex-col"
+        style={{
+          background: "linear-gradient(180deg, #06091180 0%, #07091480 100%), #060810",
+          borderRight: "1px solid rgba(255,255,255,0.055)",
+        }}
+      >
+        {/* Logo */}
+        <div
+          className="flex items-center px-4 h-16 flex-shrink-0"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.048)" }}
+        >
+          <Link href="/app" className="flex items-center gap-2.5 select-none">
+            <motion.div
+              className="relative flex-shrink-0 rounded-xl overflow-hidden"
+              animate={{
+                boxShadow: [
+                  "0 0 0 1px rgba(255,255,255,0.1), 0 0 0 rgba(34,211,238,0), 0 2px 10px rgba(0,0,0,0.5)",
+                  "0 0 0 1px rgba(34,211,238,0.3), 0 0 14px rgba(34,211,238,0.18), 0 2px 10px rgba(0,0,0,0.5)",
+                  "0 0 0 1px rgba(255,255,255,0.1), 0 0 0 rgba(34,211,238,0), 0 2px 10px rgba(0,0,0,0.5)",
+                ],
+              }}
+              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <Image src="/logo.jpg" alt="TradeMind" width={30} height={30} className="object-cover block" />
+            </motion.div>
+            <div className="flex flex-col leading-none">
+              <span className="text-[13px] font-semibold tracking-tight neon-white" style={{ color: "#edf0f5" }}>
+                TradeMind
+              </span>
+              <span className="text-[10px] mt-0.5 font-medium neon-cyan">AI Coach</span>
+            </div>
+          </Link>
+        </div>
 
-      {/* Nav items */}
-      <div className="flex flex-col gap-3 px-2 pt-4 pb-14 overflow-hidden">
-        {navItems.map(({ section, path, icon, labelKey }) => {
+        {/* Nav */}
+        <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden pb-14 pt-4 px-2 gap-5">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              {/* Shimmering category label */}
+              <p className="px-3 pb-2 text-[11px] font-bold uppercase tracking-[0.13em] nav-label-shimmer">
+                {group.label}
+              </p>
+
+              <div className="flex flex-col gap-0.5">
+                {group.items.map(({ section, path, Icon, labelKey }) => {
+                  const active = pathname === path;
+                  const clr = COLOR[path] ?? { icon: "#94a3b8", active: "rgba(255,255,255,0.06)", bar: "#94a3b8", glow: "148,163,184" };
+                  return (
+                    <Link
+                      key={section}
+                      href={path}
+                      onClick={() => { if (section !== "Decision Errors") selectSection(section as Section); }}
+                      className="block w-full"
+                    >
+                      <div
+                        className="nav-item"
+                        style={{ background: active ? clr.active : undefined }}
+                      >
+                        {/* Active neon bar */}
+                        {active && <NeonBar color={clr.bar} glow={clr.glow} />}
+
+                        {/* Neon icon */}
+                        <NeonIcon Icon={Icon} active={active} color={clr.icon} glow={clr.glow} />
+
+                        {/* Label */}
+                        <motion.span
+                          className={cn("text-[13px] font-medium truncate", !active && "nav-item-label-shimmer")}
+                          animate={active ? {
+                            textShadow: [
+                              `0 0 3px rgba(${clr.glow},0.3), 0 0 8px rgba(${clr.glow},0.12)`,
+                              `0 0 6px rgba(${clr.glow},0.6), 0 0 16px rgba(${clr.glow},0.25)`,
+                              `0 0 3px rgba(${clr.glow},0.3), 0 0 8px rgba(${clr.glow},0.12)`,
+                            ],
+                            color: "#edf0f5",
+                          } : { textShadow: "none", color: "transparent" }}
+                          transition={active ? {
+                            textShadow: { duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 },
+                            color: { duration: 0.15 },
+                          } : { duration: 0.15 }}
+                        >
+                          {t(labelKey)}
+                        </motion.span>
+
+                        {/* Neon dot */}
+                        {active && <NeonDot color={clr.icon} glow={clr.glow} />}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="absolute bottom-0 left-0 right-0 px-4 py-3"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
+        >
+          <div className="flex items-center justify-center gap-3">
+            {[
+              { label: "Terms",   href: "/terms",       external: true  },
+              { label: "Support", href: "/app/support", external: false },
+              { label: "Privacy", href: "/privacy",     external: true  },
+            ].map((item, i, arr) => (
+              <span key={item.label} className="flex items-center gap-3">
+                <Link
+                  href={item.href}
+                  target={item.external ? "_blank" : undefined}
+                  className="text-[10px] transition-colors"
+                  style={{ color: "rgba(56,70,92,0.8)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(100,116,139,0.9)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(56,70,92,0.8)")}
+                >
+                  {item.label}
+                </Link>
+                {i < arr.length - 1 && (
+                  <span style={{ color: "rgba(40,52,70,0.7)", fontSize: 10 }}>·</span>
+                )}
+              </span>
+            ))}
+          </div>
+        </div>
+      </nav>
+
+      {/* ── Mobile ──────────────────────────────────────────── */}
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex"
+        style={{
+          background: "rgba(6,8,16,0.97)",
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          borderTop: "1px solid rgba(255,255,255,0.055)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
+      >
+        {mobileItems.map(({ section, path, Icon, labelKey }) => {
           const active = pathname === path;
-          const isError = section === "Decision Errors";
-          const item = (
+          const clr = COLOR[path] ?? { icon: "#94a3b8", active: "", bar: "#94a3b8", glow: "148,163,184" };
+          return (
             <Link
               key={section}
               href={path}
-              onClick={() => { if (section !== "Decision Errors") selectSection(section as Section); }}
-              className="w-full"
+              onClick={() => selectSection(section as Section)}
+              className="flex-1 flex flex-col items-center justify-center py-3 gap-1 min-h-[56px]"
             >
-              <div
-                className={cn(
-                  "flex items-center w-full px-3 py-2.5 rounded-lg transition-all",
-                  active
-                    ? isError
-                      ? "bg-amber-500/15 border border-amber-500/40 shadow-[0_0_18px_rgba(245,158,11,0.3)]"
-                      : "bg-teal-400/15 border border-teal-400/40 shadow-[0_0_18px_rgba(45,212,191,0.4)]"
-                    : isError
-                      ? "border border-transparent hover:border-amber-500/30 hover:bg-amber-500/10"
-                      : "border border-transparent hover:border-teal-400/30 hover:bg-teal-400/10 hover:shadow-[0_0_12px_rgba(45,212,191,0.25)]"
-                )}
+              <motion.span
+                animate={active ? {
+                  filter: [
+                    `drop-shadow(0 0 2px rgba(${clr.glow},0.7))`,
+                    `drop-shadow(0 0 6px rgba(${clr.glow},1)) drop-shadow(0 0 14px rgba(${clr.glow},0.5))`,
+                    `drop-shadow(0 0 2px rgba(${clr.glow},0.7))`,
+                  ],
+                  color: clr.icon,
+                } : { filter: "none", color: "rgba(56,70,92,0.9)" }}
+                transition={active ? {
+                  filter: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                  color: { duration: 0.2 },
+                } : { duration: 0.2 }}
               >
-                <span className={cn(
-                  "relative z-10 mr-3 drop-shadow-[0_0_10px_rgba(45,212,191,0.65)]",
-                  isError
-                    ? active ? "text-amber-300" : "text-amber-500/60"
-                    : "text-teal-200"
-                )}>
-                  {icon}
-                </span>
-                <span className={cn(
-                  "relative z-10 text-sm font-medium",
-                  isError
-                    ? active ? "text-amber-200" : "text-zinc-500"
-                    : "text-teal-100 drop-shadow-[0_0_10px_rgba(45,212,191,0.35)]"
-                )}>
-                  {t(labelKey)}
-                </span>
-                {active && (
-                  <span className={cn(
-                    "absolute right-2 w-1.5 h-1.5 rounded-full",
-                    isError
-                      ? "bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.8)]"
-                      : "bg-teal-300 shadow-[0_0_10px_rgba(45,212,191,0.8)]"
-                  )} />
-                )}
-              </div>
+                <Icon size={17} strokeWidth={active ? 2 : 1.7} />
+              </motion.span>
+              <motion.span
+                className="text-[10px] font-medium"
+                animate={active ? {
+                  textShadow: [
+                    `0 0 4px rgba(${clr.glow},0.5)`,
+                    `0 0 8px rgba(${clr.glow},0.9), 0 0 20px rgba(${clr.glow},0.35)`,
+                    `0 0 4px rgba(${clr.glow},0.5)`,
+                  ],
+                  color: clr.icon,
+                } : { textShadow: "none", color: "rgba(56,70,92,0.9)" }}
+                transition={active ? {
+                  textShadow: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: 0.3 },
+                  color: { duration: 0.2 },
+                } : { duration: 0.2 }}
+              >
+                {t(labelKey).split(" ")[0]}
+              </motion.span>
             </Link>
           );
-          return item;
         })}
-      </div>
-
-      {/* Footer */}
-      <div className="absolute bottom-0 left-0 right-0 px-4 py-3 border-t border-white/[0.04] bg-slate-950">
-        <div className="flex items-center justify-center gap-2.5">
-          {[
-            { label: "Terms",   href: "/terms",       external: true  },
-            { label: "Support", href: "/app/support", external: false },
-            { label: "Privacy", href: "/privacy",     external: true  },
-          ].map((item, i, arr) => (
-            <span key={item.label} className="flex items-center gap-2.5">
-              <Link
-                href={item.href}
-                target={item.external ? "_blank" : undefined}
-                className="text-[10px] font-medium tracking-wide transition-all duration-200"
-                style={{ color: "rgba(100,116,139,0.45)" }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLAnchorElement).style.color = "rgba(45,212,191,0.7)";
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLAnchorElement).style.color = "rgba(100,116,139,0.45)";
-                }}
-              >
-                {item.label}
-              </Link>
-              {i < arr.length - 1 && (
-                <span style={{ color: "rgba(100,116,139,0.2)", fontSize: 10 }}>·</span>
-              )}
-            </span>
-          ))}
-        </div>
-      </div>
-    </nav>
-
-    {/* Mobile bottom navigation */}
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-md border-t border-slate-800 flex" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-      {mobileNav.map(({ section, path, icon, labelKey }) => {
-        const active = pathname === path;
-        return (
-          <Link
-            key={section}
-            href={path}
-            onClick={() => selectSection(section as Section)}
-            className="flex-1 flex flex-col items-center justify-center py-3 gap-0.5 min-h-[56px]"
-          >
-            <span className={cn(
-              "transition-colors",
-              active ? "text-teal-300 drop-shadow-[0_0_8px_rgba(45,212,191,0.7)]" : "text-slate-500"
-            )}>
-              {icon}
-            </span>
-            <span className={cn(
-              "text-[10px] font-medium",
-              active ? "text-teal-300" : "text-slate-600"
-            )}>
-              {t(labelKey).split(" ")[0]}
-            </span>
-          </Link>
-        );
-      })}
-    </nav>
+      </nav>
     </>
   );
 }

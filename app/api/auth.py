@@ -1,6 +1,6 @@
 """Auth routes: register, login, me, logout, Google sign-in."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -13,25 +13,7 @@ from app.services.google_auth import verify_google_id_token
 router = APIRouter(prefix="/api/v1", tags=["auth"])
 
 
-@router.post("/auth/register", response_model=UserResponse)
-def register(
-    data: UserCreate,
-    db: Session = Depends(get_db),
-) -> User:
-    """Register a new user (email + password)."""
-    if db.query(User).filter(User.email == data.email).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
-        )
-    user = User(
-        email=data.email,
-        hashed_password=hash_password(data.password),
-        name=data.name,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+def _user_response(user: User) -> UserResponse:
     return UserResponse(
         id=user.id,
         email=user.email,
@@ -39,7 +21,35 @@ def register(
         avatar_url=user.avatar_url,
         verified=user.is_active,
         created_at=user.created_at,
+        plan=getattr(user, "plan", "core") or "core",
+        plan_expires_at=getattr(user, "plan_expires_at", None),
+        ai_queries_this_month=getattr(user, "ai_queries_this_month", 0) or 0,
+        is_onboarded=getattr(user, "is_onboarded", False) or False,
+        preferred_market=getattr(user, "preferred_market", None),
     )
+
+
+@router.post("/auth/register", response_model=UserResponse)
+def register(
+    data: UserCreate,
+    db: Session = Depends(get_db),
+) -> User:
+    """Register a new user (email + password)."""
+    email = data.email.strip().lower()
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered",
+        )
+    user = User(
+        email=email,
+        hashed_password=hash_password(data.password),
+        name=data.name,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return _user_response(user)
 
 
 @router.post("/auth/login", response_model=Token)
@@ -48,7 +58,8 @@ def login(
     db: Session = Depends(get_db),
 ) -> Token:
     """Login with email and password. Returns JWT."""
-    user = db.query(User).filter(User.email == data.email).first()
+    email = data.email.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
     if not user or not user.hashed_password or not verify_password(data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -60,16 +71,9 @@ def login(
 
 
 @router.get("/auth/me", response_model=UserResponse)
-def me(current_user: User = Depends(get_current_user)) -> User:
+def me(current_user: User = Depends(get_current_user)) -> UserResponse:
     """Return current authenticated user."""
-    return UserResponse(
-        id=current_user.id,
-        email=current_user.email,
-        name=current_user.name,
-        avatar_url=current_user.avatar_url,
-        verified=current_user.is_active,
-        created_at=current_user.created_at,
-    )
+    return _user_response(current_user)
 
 
 @router.get("/user/profile")
@@ -116,6 +120,99 @@ def user_profile(
             "accuracy_rate": round(accuracy_rate, 2),
             "favorite_markets": favorite_markets,
         }
+    }
+
+
+@router.put("/auth/profile", response_model=UserResponse)
+async def update_profile(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update profile fields: name, avatar_url."""
+    body = await request.json()
+    if "name" in body and isinstance(body["name"], str) and body["name"].strip():
+        current_user.name = body["name"].strip()
+    if "avatar_url" in body:
+        current_user.avatar_url = body["avatar_url"] or None
+    db.commit()
+    db.refresh(current_user)
+    return _user_response(current_user)
+
+
+@router.post("/auth/onboarding", response_model=UserResponse)
+async def onboarding(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark user as onboarded, optionally save preferred_market."""
+    body = await request.json()
+    current_user.is_onboarded = True
+    if "preferred_market" in body and isinstance(body["preferred_market"], str) and body["preferred_market"].strip():
+        current_user.preferred_market = body["preferred_market"].strip()
+    db.commit()
+    db.refresh(current_user)
+    return _user_response(current_user)
+
+
+@router.post("/auth/google-access")
+async def google_login_access_token(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Sign in with Google access_token (from OAuth2 flow). Returns JWT + user."""
+    import httpx
+    body = await request.json()
+    access_token = body.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing access_token")
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google token")
+
+    info = resp.json()
+    google_id = info.get("sub")
+    email = (info.get("email") or "").strip().lower() or None
+    name = info.get("name")
+    picture = info.get("picture")
+
+    if not google_id or not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incomplete Google profile")
+
+    if info.get("email_verified") is False:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google email not verified")
+
+    user = db.query(User).filter(User.google_id == google_id).first()
+    if not user:
+        user = db.query(User).filter(User.email == email).first()
+        if user:
+            user.google_id = google_id
+            if not user.avatar_url and picture:
+                user.avatar_url = picture
+            db.commit()
+            db.refresh(user)
+        else:
+            user = User(email=email, google_id=google_id, name=name, avatar_url=picture)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User inactive")
+
+    from app.core.security import create_access_token as _create_token
+    jwt_token = _create_token(str(user.id))
+    return {
+        "access_token": jwt_token,
+        "token_type": "bearer",
+        "user": _user_response(user).model_dump(),
     }
 
 

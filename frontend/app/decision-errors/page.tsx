@@ -664,17 +664,17 @@ export default function DecisionErrorsPage() {
   const allErrorIds = Object.keys(ERROR_META);
 
   return (
-    <div className="h-screen overflow-y-auto overflow-x-hidden bg-[#07080f] text-white">
+    <div className="h-full overflow-y-auto overflow-x-hidden pb-14 md:pb-0 page-bg text-white">
 
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-[#07080f]/95 backdrop-blur border-b border-white/[0.05]">
+      <div className="sticky top-0 z-20 backdrop-blur-xl" style={{ background: "rgba(7,10,18,0.94)", borderBottom: "1px solid rgba(245,158,11,0.13)" }}>
         <div className="max-w-2xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/app" className="p-1.5 hover:bg-white/5 rounded-lg transition-colors">
               <ArrowLeft size={15} className="text-zinc-600" />
             </Link>
             <div>
-              <h1 className="text-sm font-semibold text-white">Decision Errors</h1>
+              <h1 className="text-sm font-semibold neon-amber">Decision Errors</h1>
               <p className="text-[10px] text-zinc-600">
                 {view === "quiz" ? `Question ${step + 1} of ${shuffledQuiz.length}` : view === "results" ? "Your personal profile" : "Error library"}
               </p>

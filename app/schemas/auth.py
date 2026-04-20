@@ -35,6 +35,11 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str] = None
     verified: bool
     created_at: Optional[datetime] = None
+    plan: str = "core"
+    plan_expires_at: Optional[datetime] = None
+    ai_queries_this_month: int = 0
+    is_onboarded: bool = False
+    preferred_market: Optional[str] = None
 
     class Config:
         from_attributes = True

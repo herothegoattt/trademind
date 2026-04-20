@@ -37,9 +37,9 @@ function InvestingPageInner() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-black">
+    <div className="h-full overflow-y-auto pb-14 md:pb-0 page-bg">
       {/* Header - Fixed */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-gradient-to-b from-black via-slate-950 to-transparent border-b border-slate-800 will-change-auto">
+      <div className="fixed top-0 left-0 right-0 z-40 will-change-auto" style={{ background: "rgba(7,10,18,0.94)", borderBottom: "1px solid rgba(74,222,128,0.13)", backdropFilter: "blur(20px)" }}>
         <div className="max-w-7xl mx-auto px-3 py-3 sm:px-6 sm:py-6">
           <div className="flex items-center justify-between mb-3 sm:mb-6">
             <div className="flex items-center gap-4">
@@ -50,7 +50,7 @@ function InvestingPageInner() {
                 <ArrowLeft size={20} />
               </Link>
               <div>
-                <h1 className="text-xl sm:text-3xl font-bold text-slate-100">
+                <h1 className="text-xl sm:text-3xl font-bold neon-emerald">
                   Investment Portfolio
                 </h1>
                 <p className="text-slate-400 text-sm mt-1">

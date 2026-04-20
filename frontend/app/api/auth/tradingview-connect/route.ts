@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromToken, updateUser, userToResponse } from "@/lib/auth-server";
+import { getUserFromBackendToken } from "@/lib/backend-proxy";
 
-/** POST /api/auth/tradingview-connect — link TradingView account */
 export async function POST(req: NextRequest) {
   try {
-    const user = getUserFromToken(req.headers.get("authorization"));
+    const user = await getUserFromBackendToken(req.headers.get("authorization"));
     if (!user) {
       return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
     }
@@ -18,18 +17,10 @@ export async function POST(req: NextRequest) {
       username: username.trim(),
       connected_at: new Date().toISOString(),
       last_sync: new Date().toISOString(),
-      status: "connected" as const,
+      status: "connected",
     };
 
-    const updated = updateUser(user.id, { tradingview: tvData });
-    if (!updated) {
-      return NextResponse.json({ detail: "User not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({
-      ...userToResponse(updated),
-      tradingview: tvData,
-    });
+    return NextResponse.json({ ...user, tradingview: tvData });
   } catch (err) {
     console.error("TradingView connect error:", err);
     return NextResponse.json({ detail: "Internal server error" }, { status: 500 });

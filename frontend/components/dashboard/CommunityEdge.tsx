@@ -2,11 +2,15 @@
 import { useState, useRef } from "react";
 import {
   Heart, MessageCircle, TrendingUp, Plus, X, Image as ImageIcon,
-  Crown, Medal, Flame, Send, Hash,
-  Lightbulb, MessagesSquare, ArrowUp, Sparkles,
+  Crown, Medal, Flame, Send, Hash, Lock,
+  Lightbulb, MessagesSquare, ArrowUp, Sparkles, Users, Zap, ChevronRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useT } from "../../lib/i18n";
+import { usePlanLimits } from "../../lib/plan-limits";
+import { SubscriptionModal } from "./SubscriptionModal";
+import { useAuthStore } from "../../lib/auth-store";
+import type { Plan } from "../../lib/auth-store";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -118,23 +122,31 @@ function useTimeAgo() {
   };
 }
 
-const NEON_AVATAR_COLORS: Record<string, string> = {
-  IV: "#22d3ee", AT: "#a78bfa", MK: "#f472b6", QM: "#34d399",
-  CA: "#fb923c", HK: "#fbbf24", MP: "#e879f9", RM: "#38bdf8",
-  HO: "#22d3ee",
+const AVATAR_COLORS: Record<string, { bg: string; border: string; text: string; glow: string }> = {
+  IV: { bg: "rgba(34,211,238,0.12)", border: "rgba(34,211,238,0.45)", text: "#22d3ee", glow: "rgba(34,211,238,0.3)" },
+  AT: { bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.45)", text: "#a78bfa", glow: "rgba(167,139,250,0.3)" },
+  MK: { bg: "rgba(244,114,182,0.12)", border: "rgba(244,114,182,0.45)", text: "#f472b6", glow: "rgba(244,114,182,0.3)" },
+  QM: { bg: "rgba(52,211,153,0.12)", border: "rgba(52,211,153,0.45)", text: "#34d399", glow: "rgba(52,211,153,0.3)" },
+  CA: { bg: "rgba(251,146,60,0.12)", border: "rgba(251,146,60,0.45)", text: "#fb923c", glow: "rgba(251,146,60,0.3)" },
+  HK: { bg: "rgba(251,191,36,0.12)", border: "rgba(251,191,36,0.45)", text: "#fbbf24", glow: "rgba(251,191,36,0.3)" },
+  MP: { bg: "rgba(232,121,249,0.12)", border: "rgba(232,121,249,0.45)", text: "#e879f9", glow: "rgba(232,121,249,0.3)" },
+  RM: { bg: "rgba(56,189,248,0.12)", border: "rgba(56,189,248,0.45)", text: "#38bdf8", glow: "rgba(56,189,248,0.3)" },
+  HO: { bg: "rgba(34,211,238,0.12)", border: "rgba(34,211,238,0.45)", text: "#22d3ee", glow: "rgba(34,211,238,0.3)" },
 };
+const DEFAULT_AVATAR = { bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.45)", text: "#a78bfa", glow: "rgba(167,139,250,0.3)" };
 
 function Avatar({ initials, size = 32 }: { initials: string; size?: number }) {
-  const color = NEON_AVATAR_COLORS[initials] || "#a78bfa";
+  const c = AVATAR_COLORS[initials] || DEFAULT_AVATAR;
   return (
     <div
-      className="rounded-full flex items-center justify-center text-xs font-bold shrink-0 select-none"
+      className="rounded-full flex items-center justify-center font-bold shrink-0 select-none"
       style={{
         width: size, height: size,
-        background: `${color}18`,
-        border: `1.5px solid ${color}60`,
-        color,
-        boxShadow: `0 0 8px ${color}30`,
+        background: c.bg,
+        border: `1.5px solid ${c.border}`,
+        color: c.text,
+        boxShadow: `0 0 10px ${c.glow}`,
+        fontSize: size < 30 ? "10px" : "12px",
       }}
     >
       {initials}
@@ -143,10 +155,30 @@ function Avatar({ initials, size = 32 }: { initials: string; size?: number }) {
 }
 
 function RankBadge({ rank }: { rank: number }) {
-  if (rank === 1) return <Crown size={14} className="text-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.8)]" />;
-  if (rank === 2) return <Medal size={14} className="text-slate-300 drop-shadow-[0_0_6px_rgba(203,213,225,0.6)]" />;
-  if (rank === 3) return <Medal size={14} className="text-orange-400 drop-shadow-[0_0_6px_rgba(251,146,60,0.7)]" />;
-  return <span className="text-xs text-gray-500 font-mono w-4 text-center">{rank}</span>;
+  if (rank === 1) return (
+    <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
+      style={{ background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.4)" }}>
+      <Crown size={11} className="text-yellow-400" style={{ filter: "drop-shadow(0 0 4px rgba(251,191,36,0.9))" }} />
+    </div>
+  );
+  if (rank === 2) return (
+    <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
+      style={{ background: "rgba(148,163,184,0.15)", border: "1px solid rgba(148,163,184,0.4)" }}>
+      <Medal size={11} className="text-slate-300" style={{ filter: "drop-shadow(0 0 4px rgba(203,213,225,0.7))" }} />
+    </div>
+  );
+  if (rank === 3) return (
+    <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
+      style={{ background: "rgba(251,146,60,0.15)", border: "1px solid rgba(251,146,60,0.4)" }}>
+      <Medal size={11} className="text-orange-400" style={{ filter: "drop-shadow(0 0 4px rgba(251,146,60,0.8))" }} />
+    </div>
+  );
+  return (
+    <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
+      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+      <span className="text-[10px] text-gray-500 font-mono">{rank}</span>
+    </div>
+  );
 }
 
 function LikeButton({
@@ -155,20 +187,25 @@ function LikeButton({
   return (
     <motion.button
       onClick={(e) => { e.stopPropagation(); onLike(); }}
-      whileTap={{ scale: 0.85 }}
-      className={`flex items-center gap-1 rounded-lg transition-all ${
-        small ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-xs font-semibold"
+      whileTap={{ scale: 0.82 }}
+      whileHover={{ scale: 1.05 }}
+      className={`flex items-center gap-1.5 rounded-lg transition-all ${
+        small ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-xs font-semibold"
       } ${
         liked
-          ? "bg-pink-500/20 text-pink-400 border border-pink-500/40"
-          : "bg-white/5 text-gray-400 border border-white/10 hover:border-pink-500/30 hover:text-pink-400"
+          ? "bg-pink-500/15 text-pink-400"
+          : "text-gray-500 hover:text-pink-400"
       }`}
-      style={liked ? { boxShadow: "0 0 10px rgba(236,72,153,0.25)" } : {}}
+      style={{
+        border: liked ? "1px solid rgba(236,72,153,0.4)" : "1px solid rgba(255,255,255,0.08)",
+        boxShadow: liked ? "0 0 12px rgba(236,72,153,0.2)" : "none",
+        background: liked ? "rgba(236,72,153,0.1)" : "rgba(255,255,255,0.04)",
+      }}
     >
       <Heart
-        size={small ? 11 : 13}
+        size={small ? 10 : 12}
         className={liked ? "fill-pink-400" : ""}
-        style={liked ? { filter: "drop-shadow(0 0 4px rgba(236,72,153,0.7))" } : {}}
+        style={liked ? { filter: "drop-shadow(0 0 3px rgba(236,72,153,0.8))" } : {}}
       />
       <span>{count}</span>
     </motion.button>
@@ -177,26 +214,83 @@ function LikeButton({
 
 // ─── Comment item ─────────────────────────────────────────────────────────────
 
-function CommentItem({
-  comment, rank, onLike,
-}: { comment: Comment; rank: number; onLike: () => void }) {
+const RANK_ACCENT: Record<number, { border: string; bg: string; label: string; labelColor: string }> = {
+  1: { border: "rgba(251,191,36,0.5)",  bg: "rgba(251,191,36,0.06)",  label: "#1", labelColor: "#fbbf24" },
+  2: { border: "rgba(148,163,184,0.4)", bg: "rgba(148,163,184,0.04)", label: "#2", labelColor: "#94a3b8" },
+  3: { border: "rgba(251,146,60,0.45)", bg: "rgba(251,146,60,0.05)",  label: "#3", labelColor: "#fb923c" },
+};
+
+function CommentItem({ comment, rank, onLike }: { comment: Comment; rank: number; onLike: () => void }) {
   const timeAgo = useTimeAgo();
+  const c = AVATAR_COLORS[comment.avatar] || DEFAULT_AVATAR;
+  const ra = RANK_ACCENT[rank];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex gap-3"
+      transition={{ duration: 0.18 }}
+      className="relative rounded-xl overflow-hidden group"
+      style={{
+        background: ra ? ra.bg : "rgba(255,255,255,0.02)",
+        border: `1px solid ${ra ? ra.border : "rgba(255,255,255,0.05)"}`,
+      }}
     >
-      <Avatar initials={comment.avatar} size={28} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          {rank <= 3 && <RankBadge rank={rank} />}
-          <span className="text-xs font-semibold text-cyan-300">@{comment.author}</span>
-          <span className="text-xs text-gray-600">{timeAgo(comment.created_at)}</span>
+      {/* Rank left stripe */}
+      {ra && (
+        <div
+          className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl"
+          style={{ background: `linear-gradient(180deg, ${ra.border} 0%, transparent 100%)` }}
+        />
+      )}
+
+      <div className="px-4 py-3 pl-5">
+        {/* Author row */}
+        <div className="flex items-center gap-2 mb-2">
+          <Avatar initials={comment.avatar} size={24} />
+          <span className="text-xs font-bold leading-none" style={{ color: c.text }}>
+            {comment.author}
+          </span>
+          {ra && (
+            <span
+              className="text-[9px] font-black px-1.5 py-0.5 rounded-md leading-none"
+              style={{ background: `${ra.border}30`, color: ra.labelColor, border: `1px solid ${ra.border}` }}
+            >
+              {ra.label}
+            </span>
+          )}
+          <span className="text-[10px] text-gray-600 ml-auto tabular-nums">
+            {timeAgo(comment.created_at)}
+          </span>
         </div>
-        <p className="text-sm text-gray-300 leading-relaxed">{comment.text}</p>
-        <div className="mt-2">
-          <LikeButton count={comment.likes} liked={comment.likedByMe} onLike={onLike} small />
+
+        {/* Text — main readable content */}
+        <p className="text-[13px] text-gray-200 leading-[1.6] mb-3 pl-[32px]">
+          {comment.text}
+        </p>
+
+        {/* Footer */}
+        <div className="pl-[32px] flex items-center gap-2">
+          <motion.button
+            onClick={(e) => { e.stopPropagation(); onLike(); }}
+            whileTap={{ scale: 0.85 }}
+            className="flex items-center gap-1.5 text-[11px] font-semibold transition-all px-2.5 py-1 rounded-lg"
+            style={{
+              background: comment.likedByMe ? "rgba(236,72,153,0.12)" : "rgba(255,255,255,0.04)",
+              border: comment.likedByMe ? "1px solid rgba(236,72,153,0.35)" : "1px solid rgba(255,255,255,0.06)",
+              color: comment.likedByMe ? "#f472b6" : "#6b7280",
+            }}
+          >
+            <Heart
+              size={10}
+              className={comment.likedByMe ? "fill-pink-400" : ""}
+              style={comment.likedByMe ? { filter: "drop-shadow(0 0 3px rgba(236,72,153,0.7))" } : {}}
+            />
+            <span>{comment.likes}</span>
+          </motion.button>
+          <span className="text-[10px] text-gray-700 group-hover:text-gray-600 transition-colors">
+            helpful?
+          </span>
         </div>
       </div>
     </motion.div>
@@ -205,80 +299,119 @@ function CommentItem({
 
 // ─── Post card ────────────────────────────────────────────────────────────────
 
-function PostCard({
-  post, rank, onLike, onOpen,
-}: { post: Post; rank: number; onLike: () => void; onOpen: () => void }) {
+function PostCard({ post, rank, onLike, onOpen }: { post: Post; rank: number; onLike: () => void; onOpen: () => void }) {
   const t = useT();
   const timeAgo = useTimeAgo();
-  const accentColor = post.type === "idea" ? "#22d3ee" : "#a78bfa";
-  const isTop3 = rank <= 3;
+  const isIdea = post.type === "idea";
+  const accent = isIdea ? "#22d3ee" : "#a78bfa";
+  const isTop = rank <= 3;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -4, transition: { duration: 0.2 } }}
       onClick={onOpen}
-      className="relative rounded-xl cursor-pointer overflow-hidden transition-all"
+      className="relative rounded-2xl cursor-pointer overflow-hidden group"
       style={{
-        background: "rgba(2,4,20,0.85)",
-        border: `1px solid ${isTop3 ? accentColor + "50" : "rgba(255,255,255,0.06)"}`,
-        boxShadow: isTop3 ? `0 0 20px ${accentColor}15, inset 0 0 20px ${accentColor}05` : "none",
+        background: "linear-gradient(145deg, rgba(8,10,28,0.95) 0%, rgba(4,6,18,0.98) 100%)",
+        border: `1px solid ${isTop ? accent + "40" : "rgba(255,255,255,0.07)"}`,
+        boxShadow: isTop
+          ? `0 4px 24px ${accent}10, 0 1px 0 ${accent}20 inset`
+          : "0 4px 16px rgba(0,0,0,0.3)",
       }}
     >
-      {isTop3 && (
-        <div
-          className="absolute top-0 left-0 right-0 h-px"
-          style={{ background: `linear-gradient(90deg, transparent, ${accentColor}80, transparent)` }}
-        />
-      )}
+      {/* Top accent line */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[1.5px]"
+        style={{
+          background: isTop
+            ? `linear-gradient(90deg, transparent 0%, ${accent}90 40%, ${accent}90 60%, transparent 100%)`
+            : `linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%)`,
+        }}
+      />
 
-      <div className="p-4">
-        <div className="flex items-start gap-3 mb-3">
-          <div className="flex items-center gap-2 mt-0.5">
-            <RankBadge rank={rank} />
-            <Avatar initials={post.avatar} size={30} />
-          </div>
+      {/* Type indicator stripe */}
+      <div
+        className="absolute top-0 left-0 w-[3px] h-full rounded-l-2xl"
+        style={{ background: `linear-gradient(180deg, ${accent}80 0%, ${accent}20 100%)` }}
+      />
+
+      <div className="p-5 pl-6">
+        {/* Author row */}
+        <div className="flex items-center gap-2.5 mb-3">
+          <Avatar initials={post.avatar} size={32} />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-              <span className="text-xs font-semibold" style={{ color: accentColor }}>@{post.author}</span>
-              <span className="text-xs text-gray-600">{timeAgo(post.created_at)}</span>
-              <span
-                className="text-xs px-2 py-0.5 rounded-full font-medium"
-                style={{ background: `${accentColor}15`, color: accentColor, border: `1px solid ${accentColor}30` }}
-              >
-                {post.tag}
-              </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold" style={{ color: accent }}>@{post.author}</span>
+              <span className="text-[10px] text-gray-600">{timeAgo(post.created_at)}</span>
             </div>
-            <h4 className="text-sm font-bold text-white leading-snug line-clamp-2 hover:text-cyan-300 transition-colors">
-              {post.title}
-            </h4>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <RankBadge rank={rank} />
+            <span
+              className="text-[10px] px-2 py-0.5 rounded-full font-medium hidden sm:inline-flex"
+              style={{ background: `${accent}12`, color: accent, border: `1px solid ${accent}25` }}
+            >
+              {post.tag}
+            </span>
           </div>
         </div>
 
-        {post.image && (
-          <div className="mb-3 rounded-lg overflow-hidden border border-white/10">
-            <img src={post.image} alt="" className="w-full h-32 object-cover" />
-          </div>
-        )}
+        {/* Title */}
+        <h4
+          className="text-sm font-bold text-white leading-snug mb-2 line-clamp-2 group-hover:opacity-90 transition-opacity"
+          style={{ textShadow: `0 0 20px ${accent}15` }}
+        >
+          {post.title}
+        </h4>
 
-        <p className="text-xs text-gray-400 line-clamp-2 mb-3 leading-relaxed">{post.body}</p>
+        {/* Body */}
+        <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed mb-4">{post.body}</p>
 
-        <div className="flex items-center gap-2 pt-3 border-t border-white/5">
+        {/* Tag mobile */}
+        <div className="sm:hidden mb-3">
+          <span
+            className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+            style={{ background: `${accent}12`, color: accent, border: `1px solid ${accent}25` }}
+          >
+            {post.tag}
+          </span>
+        </div>
+
+        {/* Footer */}
+        <div
+          className="flex items-center gap-2 pt-3"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
+        >
           <LikeButton count={post.likes} liked={post.likedByMe} onLike={onLike} />
           <button
             onClick={(e) => { e.stopPropagation(); onOpen(); }}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-white/5 text-gray-400 border border-white/10 hover:border-purple-500/30 hover:text-purple-400 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-gray-500 hover:text-purple-400 transition-all"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
           >
-            <MessageCircle size={12} />
+            <MessageCircle size={11} />
             <span>{post.comments.length}</span>
           </button>
-          {post.likes >= 20 && (
-            <div className="flex items-center gap-1 text-xs text-orange-400 ml-auto">
-              <Flame size={11} className="drop-shadow-[0_0_4px_rgba(251,146,60,0.8)]" />
-              <span>{t("ce_hot")}</span>
+
+          <div className="ml-auto flex items-center gap-2">
+            {post.likes >= 20 && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="flex items-center gap-1 text-[10px] font-bold text-orange-400 px-2 py-0.5 rounded-full"
+                style={{ background: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.25)" }}
+              >
+                <Flame size={9} style={{ filter: "drop-shadow(0 0 4px rgba(251,146,60,0.8))" }} />
+                {t("ce_hot")}
+              </motion.div>
+            )}
+            <div
+              className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[10px] text-gray-600"
+            >
+              <ChevronRight size={12} />
             </div>
-          )}
+          </div>
         </div>
       </div>
     </motion.div>
@@ -287,9 +420,7 @@ function PostCard({
 
 // ─── Post detail modal ────────────────────────────────────────────────────────
 
-function PostModal({
-  post, onClose, onLikePost, onLikeComment, onAddComment,
-}: {
+function PostModal({ post, onClose, onLikePost, onLikeComment, onAddComment }: {
   post: Post;
   onClose: () => void;
   onLikePost: () => void;
@@ -300,7 +431,9 @@ function PostModal({
   const timeAgo = useTimeAgo();
   const [text, setText] = useState("");
   const sortedComments = [...post.comments].sort((a, b) => b.likes - a.likes);
-  const accentColor = post.type === "idea" ? "#22d3ee" : "#a78bfa";
+  const isIdea = post.type === "idea";
+  const accent = isIdea ? "#22d3ee" : "#a78bfa";
+  const TypeIcon = isIdea ? Lightbulb : MessagesSquare;
 
   const submit = () => {
     const trimmed = text.trim();
@@ -314,124 +447,182 @@ function PostModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(12px)" }}
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.96, opacity: 0, y: 20 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.96, opacity: 0, y: 20 }}
+        initial={{ y: 60, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 60, opacity: 0 }}
+        transition={{ type: "spring", damping: 28, stiffness: 320 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl max-h-[88vh] flex flex-col rounded-2xl overflow-hidden"
+        className="w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col rounded-t-3xl sm:rounded-2xl overflow-hidden"
         style={{
-          background: "linear-gradient(160deg, rgba(6,8,30,0.98) 0%, rgba(2,4,20,0.99) 100%)",
-          border: `1px solid ${accentColor}40`,
-          boxShadow: `0 0 40px ${accentColor}15, 0 25px 50px rgba(0,0,0,0.6)`,
+          background: "linear-gradient(160deg, rgba(8,10,28,0.99) 0%, rgba(4,6,20,0.99) 100%)",
+          border: `1px solid ${accent}35`,
+          boxShadow: `0 0 60px ${accent}12, 0 30px 60px rgba(0,0,0,0.7)`,
         }}
       >
-        <div className="h-px w-full" style={{ background: `linear-gradient(90deg, transparent, ${accentColor}90, transparent)` }} />
+        {/* Top accent */}
+        <div className="h-[2px] w-full shrink-0" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
+
+        {/* Handle bar (mobile) */}
+        <div className="flex justify-center pt-2 pb-0 sm:hidden shrink-0">
+          <div className="w-10 h-1 rounded-full bg-white/10" />
+        </div>
 
         {/* Header */}
-        <div className="flex items-start gap-3 p-6 pb-4">
-          <Avatar initials={post.avatar} size={38} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="text-sm font-bold" style={{ color: accentColor }}>@{post.author}</span>
-              <span className="text-xs text-gray-500">{timeAgo(post.created_at)}</span>
-              <span
-                className="text-xs px-2 py-0.5 rounded-full"
-                style={{ background: `${accentColor}15`, color: accentColor, border: `1px solid ${accentColor}25` }}
-              >
-                {post.tag}
-              </span>
+        <div
+          className="px-5 pt-4 pb-4 shrink-0"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className="p-2 rounded-xl shrink-0"
+              style={{ background: `${accent}12`, border: `1px solid ${accent}25` }}
+            >
+              <TypeIcon size={16} style={{ color: accent }} />
             </div>
-            <h2 className="text-xl font-bold text-white leading-tight">{post.title}</h2>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <Avatar initials={post.avatar} size={22} />
+                <span className="text-xs font-bold" style={{ color: accent }}>@{post.author}</span>
+                <span className="text-[10px] text-gray-600">{timeAgo(post.created_at)}</span>
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full"
+                  style={{ background: `${accent}12`, color: accent, border: `1px solid ${accent}22` }}
+                >
+                  {post.tag}
+                </span>
+              </div>
+              <h2 className="text-base sm:text-lg font-black text-white leading-snug">{post.title}</h2>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-gray-600 hover:text-white hover:bg-white/8 transition-all shrink-0"
+              style={{ border: "1px solid rgba(255,255,255,0.07)" }}
+            >
+              <X size={16} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-all shrink-0"
-          >
-            <X size={18} />
-          </button>
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-6 space-y-5" style={{ scrollbarWidth: "thin" }}>
-          <div
-            className="p-4 rounded-xl text-sm text-gray-200 leading-relaxed"
-            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-          >
-            {post.body}
-          </div>
+        <div className="flex-1 overflow-y-auto min-h-0" style={{ scrollbarWidth: "thin", scrollbarColor: `${accent}25 transparent` }}>
 
-          {post.image && (
-            <div className="rounded-xl overflow-hidden border border-white/10">
-              <img src={post.image} alt="" className="w-full max-h-64 object-contain" style={{ background: "#000" }} />
+          {/* Post body */}
+          <div className="px-5 pt-4 pb-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+            <div
+              className="rounded-xl p-4 text-[13px] text-gray-200 leading-[1.7]"
+              style={{ background: `${accent}06`, border: `1px solid ${accent}14` }}
+            >
+              {post.body}
             </div>
-          )}
 
-          <div className="flex items-center gap-3">
-            <LikeButton count={post.likes} liked={post.likedByMe} onLike={onLikePost} />
-            <span className="text-xs text-gray-500">{post.comments.length} {t("ce_comments")}</span>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
-            <span className="text-xs font-semibold text-gray-400 flex items-center gap-1">
-              <ArrowUp size={10} className="text-pink-400" />
-              {t("ce_top_by_likes")}
-            </span>
-            <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
-          </div>
-
-          {/* Comments */}
-          <div className="space-y-4 pb-2">
-            {sortedComments.length === 0 ? (
-              <p className="text-center text-gray-600 text-sm py-6">{t("ce_be_first")}</p>
-            ) : (
-              sortedComments.map((c, i) => (
-                <CommentItem
-                  key={c.id}
-                  comment={c}
-                  rank={i + 1}
-                  onLike={() => onLikeComment(c.id)}
-                />
-              ))
+            {post.image && (
+              <div className="mt-3 rounded-xl overflow-hidden border border-white/10">
+                <img src={post.image} alt="" className="w-full max-h-56 object-contain" style={{ background: "#000" }} />
+              </div>
             )}
+
+            {/* Like row */}
+            <div className="flex items-center gap-3 mt-3">
+              <LikeButton count={post.likes} liked={post.likedByMe} onLike={onLikePost} />
+              <span className="text-[11px] text-gray-600 flex items-center gap-1">
+                <MessageCircle size={11} />
+                {post.comments.length} {t("ce_comments")}
+              </span>
+            </div>
+          </div>
+
+          {/* Comments section */}
+          <div>
+            {/* Sticky comments header */}
+            <div
+              className="sticky top-0 z-10 flex items-center justify-between px-5 py-2.5"
+              style={{
+                background: "rgba(4,6,18,0.97)",
+                backdropFilter: "blur(12px)",
+                borderBottom: "1px solid rgba(255,255,255,0.05)",
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <MessageCircle size={12} style={{ color: accent }} />
+                <span className="text-xs font-bold text-white">
+                  {t("ce_comments")}
+                  <span className="ml-1.5 text-[10px] font-normal text-gray-600">
+                    ({sortedComments.length})
+                  </span>
+                </span>
+              </div>
+              {sortedComments.length > 0 && (
+                <div className="flex items-center gap-1 text-[10px] text-gray-600">
+                  <ArrowUp size={9} className="text-pink-500" />
+                  {t("ce_top_by_likes")}
+                </div>
+              )}
+            </div>
+
+            {/* Comment list */}
+            <div className="px-5 py-3 space-y-2 pb-4">
+              {sortedComments.length === 0 ? (
+                <div className="text-center py-10 flex flex-col items-center gap-2">
+                  <div
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                  >
+                    <MessageCircle size={20} className="text-gray-700" />
+                  </div>
+                  <p className="text-gray-600 text-sm">{t("ce_be_first")}</p>
+                </div>
+              ) : (
+                sortedComments.map((c, i) => (
+                  <CommentItem
+                    key={c.id}
+                    comment={c}
+                    rank={i + 1}
+                    onLike={() => onLikeComment(c.id)}
+                  />
+                ))
+              )}
+            </div>
           </div>
         </div>
 
         {/* Comment input */}
         <div
-          className="p-4 border-t"
-          style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(2,4,20,0.8)" }}
+          className="px-5 py-4 shrink-0"
+          style={{ borderTop: `1px solid ${accent}15`, background: "rgba(4,6,18,0.9)" }}
         >
-          <div className="flex gap-2">
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-              placeholder={t("ce_comment_ph")}
-              className="flex-1 px-4 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none transition-all"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: `1px solid ${text ? accentColor + "50" : "rgba(255,255,255,0.08)"}`,
-              }}
-            />
+          <div className="flex gap-2 items-center">
+            <div className="flex-1 relative">
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
+                placeholder={t("ce_comment_ph")}
+                className="w-full px-4 py-2.5 pr-4 rounded-xl text-sm text-white placeholder-gray-600 outline-none transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: `1px solid ${text ? accent + "45" : "rgba(255,255,255,0.07)"}`,
+                  boxShadow: text ? `0 0 0 1px ${accent}15` : "none",
+                }}
+              />
+            </div>
             <motion.button
-              whileTap={{ scale: 0.9 }}
+              whileTap={{ scale: 0.88 }}
               onClick={submit}
               disabled={!text.trim()}
-              className="px-3 py-2.5 rounded-xl transition-all disabled:opacity-30"
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all disabled:opacity-30"
               style={{
-                background: text.trim() ? `${accentColor}25` : "rgba(255,255,255,0.05)",
-                border: `1px solid ${text.trim() ? accentColor + "50" : "rgba(255,255,255,0.08)"}`,
-                color: text.trim() ? accentColor : "#6b7280",
+                background: text.trim() ? `${accent}20` : "rgba(255,255,255,0.05)",
+                border: `1px solid ${text.trim() ? accent + "45" : "rgba(255,255,255,0.07)"}`,
+                color: text.trim() ? accent : "#4b5563",
+                boxShadow: text.trim() ? `0 0 12px ${accent}20` : "none",
               }}
             >
-              <Send size={16} />
+              <Send size={15} />
             </motion.button>
           </div>
         </div>
@@ -442,9 +633,7 @@ function PostModal({
 
 // ─── New post form ─────────────────────────────────────────────────────────────
 
-function NewPostForm({
-  type, onClose, onSubmit,
-}: {
+function NewPostForm({ type, onClose, onSubmit }: {
   type: "idea" | "discussion";
   onClose: () => void;
   onSubmit: (p: Omit<Post, "id" | "likes" | "likedByMe" | "comments" | "created_at">) => void;
@@ -455,7 +644,9 @@ function NewPostForm({
   const [tag, setTag] = useState("");
   const [image, setImage] = useState<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
-  const accentColor = type === "idea" ? "#22d3ee" : "#a78bfa";
+  const isIdea = type === "idea";
+  const accent = isIdea ? "#22d3ee" : "#a78bfa";
+  const TypeIcon = isIdea ? Lightbulb : MessagesSquare;
 
   const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -471,41 +662,59 @@ function NewPostForm({
       type,
       title: title.trim(),
       body: body.trim(),
-      tag: tag.trim() || (type === "idea" ? "Idea" : "Discussion"),
+      tag: tag.trim() || (isIdea ? "Idea" : "Discussion"),
       author: "you",
       avatar: "HO",
-      image: type === "idea" ? image : undefined,
+      image: isIdea ? image : undefined,
     });
     onClose();
   };
 
+  const fieldStyle = (hasValue: boolean) => ({
+    background: "rgba(255,255,255,0.04)",
+    border: `1px solid ${hasValue ? accent + "45" : "rgba(255,255,255,0.07)"}`,
+    outline: "none",
+    transition: "border-color 0.2s",
+  });
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: -12, height: 0 }}
-      animate={{ opacity: 1, y: 0, height: "auto" }}
-      exit={{ opacity: 0, y: -12, height: 0 }}
-      className="overflow-hidden"
+      initial={{ opacity: 0, y: -16, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -12, scale: 0.98 }}
     >
       <div
-        className="rounded-2xl p-5 mb-6"
+        className="rounded-2xl p-5 mb-5"
         style={{
-          background: "rgba(2,4,20,0.9)",
-          border: `1px solid ${accentColor}35`,
-          boxShadow: `0 0 24px ${accentColor}10`,
+          background: "linear-gradient(145deg, rgba(8,10,28,0.97) 0%, rgba(4,6,18,0.98) 100%)",
+          border: `1px solid ${accent}30`,
+          boxShadow: `0 0 30px ${accent}08, 0 8px 32px rgba(0,0,0,0.4)`,
         }}
       >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            {type === "idea"
-              ? <Lightbulb size={16} style={{ color: accentColor }} />
-              : <MessagesSquare size={16} style={{ color: accentColor }} />
-            }
-            <span className="font-bold text-white text-sm">
-              {type === "idea" ? t("new_idea") : t("ce_new_discussion")}
-            </span>
+        {/* Form header */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center"
+              style={{ background: `${accent}15`, border: `1px solid ${accent}35` }}
+            >
+              <TypeIcon size={15} style={{ color: accent }} />
+            </div>
+            <div>
+              <span className="font-bold text-white text-sm block">
+                {isIdea ? t("new_idea") : t("ce_new_discussion")}
+              </span>
+              <span className="text-[10px] text-gray-600">
+                {isIdea ? "Share your trade setup" : "Start a conversation"}
+              </span>
+            </div>
           </div>
-          <button onClick={onClose} className="p-1 text-gray-500 hover:text-white transition-colors">
-            <X size={16} />
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-600 hover:text-white hover:bg-white/8 transition-all"
+            style={{ border: "1px solid rgba(255,255,255,0.07)" }}
+          >
+            <X size={14} />
           </button>
         </div>
 
@@ -514,73 +723,72 @@ function NewPostForm({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder={t("ce_title_ph")}
-            className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none transition-all"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${title ? accentColor + "50" : "rgba(255,255,255,0.08)"}`,
-            }}
+            className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-gray-600"
+            style={fieldStyle(!!title)}
           />
 
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder={type === "idea" ? t("ce_idea_ph") : t("ce_disc_ph")}
+            placeholder={isIdea ? t("ce_idea_ph") : t("ce_disc_ph")}
             rows={4}
-            className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none resize-none transition-all"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${body ? accentColor + "50" : "rgba(255,255,255,0.08)"}`,
-            }}
+            className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 resize-none"
+            style={fieldStyle(!!body)}
           />
 
-          <input
-            value={tag}
-            onChange={(e) => setTag(e.target.value)}
-            placeholder={type === "idea" ? t("ce_idea_tag_ph") : t("ce_disc_tag_ph")}
-            className="w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none transition-all"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Hash size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
+              <input
+                value={tag}
+                onChange={(e) => setTag(e.target.value)}
+                placeholder={isIdea ? t("ce_idea_tag_ph") : t("ce_disc_tag_ph")}
+                className="w-full pl-8 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-gray-600"
+                style={fieldStyle(!!tag)}
+              />
+            </div>
 
-          {type === "idea" && (
-            <div>
-              {image ? (
-                <div className="relative rounded-xl overflow-hidden border border-white/10 group">
-                  <img src={image} alt="" className="w-full h-36 object-cover" />
-                  <button
-                    onClick={() => setImage("")}
-                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs"
-                  >
-                    <X size={12} />
-                    {t("ce_remove_img")}
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  className="w-full py-3 rounded-xl border border-dashed text-xs text-gray-500 flex items-center justify-center gap-2 hover:border-cyan-500/40 hover:text-cyan-400 transition-all"
-                  style={{ borderColor: "rgba(255,255,255,0.1)" }}
-                >
-                  <ImageIcon size={14} />
-                  {t("ce_attach_img")}
-                </button>
-              )}
-              <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
+            {isIdea && (
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="px-3 py-2.5 rounded-xl text-xs text-gray-500 hover:text-cyan-400 transition-all flex items-center gap-1.5 shrink-0"
+                style={{
+                  background: image ? "rgba(34,211,238,0.1)" : "rgba(255,255,255,0.04)",
+                  border: image ? "1px solid rgba(34,211,238,0.35)" : "1px solid rgba(255,255,255,0.07)",
+                  color: image ? "#22d3ee" : undefined,
+                }}
+              >
+                <ImageIcon size={13} />
+                {image ? "1 img" : t("ce_attach_img")}
+              </button>
+            )}
+          </div>
+
+          {image && (
+            <div className="relative rounded-xl overflow-hidden border border-white/10 group">
+              <img src={image} alt="" className="w-full h-32 object-cover" />
+              <button
+                onClick={() => setImage("")}
+                className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/70 text-white text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X size={11} /> {t("ce_remove_img")}
+              </button>
             </div>
           )}
 
+          <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
+
           <motion.button
             whileTap={{ scale: 0.97 }}
+            whileHover={{ scale: 1.01 }}
             onClick={submit}
             disabled={!title.trim() || !body.trim()}
-            className="w-full py-2.5 rounded-xl font-bold text-sm transition-all disabled:opacity-30"
+            className="w-full py-2.5 rounded-xl font-bold text-sm transition-all disabled:opacity-25"
             style={{
-              background: `linear-gradient(135deg, ${accentColor}30, ${accentColor}15)`,
-              border: `1px solid ${accentColor}50`,
-              color: accentColor,
-              boxShadow: `0 0 16px ${accentColor}15`,
+              background: `linear-gradient(135deg, ${accent}25 0%, ${accent}12 100%)`,
+              border: `1px solid ${accent}45`,
+              color: accent,
+              boxShadow: `0 0 20px ${accent}12`,
             }}
           >
             {t("ce_publish")}
@@ -596,53 +804,126 @@ function NewPostForm({
 function Leaderboard({ posts }: { posts: Post[] }) {
   const t = useT();
   const top3 = [...posts].sort((a, b) => b.likes - a.likes).slice(0, 3);
-  const medals = [
-    { color: "#fbbf24", glow: "rgba(251,191,36,0.6)", icon: <Crown size={14} /> },
-    { color: "#94a3b8", glow: "rgba(148,163,184,0.5)", icon: <Medal size={14} /> },
-    { color: "#fb923c", glow: "rgba(251,146,60,0.6)", icon: <Medal size={14} /> },
+  const podium = [
+    { color: "#fbbf24", glow: "rgba(251,191,36,0.5)", icon: <Crown size={12} />, label: "1st" },
+    { color: "#94a3b8", glow: "rgba(148,163,184,0.4)", icon: <Medal size={12} />, label: "2nd" },
+    { color: "#fb923c", glow: "rgba(251,146,60,0.5)", icon: <Medal size={12} />, label: "3rd" },
   ];
 
   return (
-    <div
-      className="rounded-2xl p-5 mb-6"
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+      className="rounded-2xl overflow-hidden mb-5"
       style={{
-        background: "linear-gradient(135deg, rgba(6,8,30,0.9) 0%, rgba(2,4,20,0.95) 100%)",
-        border: "1px solid rgba(250,204,21,0.15)",
-        boxShadow: "0 0 30px rgba(250,204,21,0.06)",
+        background: "linear-gradient(145deg, rgba(8,10,28,0.97) 0%, rgba(4,6,18,0.98) 100%)",
+        border: "1px solid rgba(251,191,36,0.18)",
+        boxShadow: "0 0 40px rgba(251,191,36,0.05)",
       }}
     >
-      <div className="flex items-center gap-2 mb-4">
-        <Sparkles size={15} className="text-yellow-400" style={{ filter: "drop-shadow(0 0 6px rgba(250,204,21,0.8))" }} />
-        <span className="text-sm font-bold text-yellow-400">{t("ce_top_label")}</span>
-        <span className="text-xs text-gray-600 ml-auto">{t("ce_by_likes")}</span>
+      {/* Header */}
+      <div
+        className="px-5 py-3 flex items-center gap-2"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(251,191,36,0.04)" }}
+      >
+        <Sparkles size={13} className="text-yellow-400" style={{ filter: "drop-shadow(0 0 6px rgba(251,191,36,0.8))" }} />
+        <span className="text-xs font-bold text-yellow-400 tracking-wide uppercase">{t("ce_top_label")}</span>
+        <div className="flex-1" />
+        <span className="text-[10px] text-gray-600 uppercase tracking-wider">{t("ce_by_likes")}</span>
       </div>
 
-      <div className="space-y-2.5">
+      {/* Entries */}
+      <div className="p-4 space-y-2">
         {top3.map((p, i) => (
-          <div key={p.id} className="flex items-center gap-3">
+          <motion.div
+            key={p.id}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.15 + i * 0.07 }}
+            className="flex items-center gap-3 p-2.5 rounded-xl transition-all hover:bg-white/[0.025]"
+            style={{ cursor: "default" }}
+          >
             <div
-              className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
+              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
               style={{
-                background: `${medals[i].color}15`,
-                border: `1px solid ${medals[i].color}40`,
-                color: medals[i].color,
-                filter: `drop-shadow(0 0 4px ${medals[i].glow})`,
+                background: `${podium[i].color}15`,
+                border: `1px solid ${podium[i].color}35`,
+                color: podium[i].color,
+                boxShadow: `0 0 8px ${podium[i].glow}`,
               }}
             >
-              {medals[i].icon}
+              {podium[i].icon}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-gray-200 truncate">{p.title}</p>
-              <span className="text-xs text-gray-600">@{p.author}</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Avatar initials={p.avatar} size={14} />
+                <span className="text-[10px] text-gray-600">@{p.author}</span>
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-full"
+                  style={{
+                    background: p.type === "idea" ? "rgba(34,211,238,0.08)" : "rgba(167,139,250,0.08)",
+                    color: p.type === "idea" ? "#22d3ee" : "#a78bfa",
+                  }}
+                >
+                  {p.type}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-1 text-xs font-bold text-pink-400">
-              <Heart size={10} className="fill-pink-400" />
+            <div
+              className="flex items-center gap-1 text-xs font-bold shrink-0 px-2 py-1 rounded-lg"
+              style={{ background: "rgba(236,72,153,0.1)", border: "1px solid rgba(236,72,153,0.2)", color: "#f472b6" }}
+            >
+              <Heart size={9} className="fill-pink-400" />
               {p.likes}
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
-    </div>
+    </motion.div>
+  );
+}
+
+// ─── Community stats bar ──────────────────────────────────────────────────────
+
+function StatsBar({ posts }: { posts: Post[] }) {
+  const totalLikes = posts.reduce((s, p) => s + p.likes, 0);
+  const totalComments = posts.reduce((s, p) => s + p.comments.length, 0);
+  const stats = [
+    { icon: <Users size={12} />, value: "847", label: "Members", color: "#22d3ee" },
+    { icon: <Lightbulb size={12} />, value: posts.filter(p => p.type === "idea").length.toString(), label: "Ideas", color: "#22d3ee" },
+    { icon: <MessagesSquare size={12} />, value: posts.filter(p => p.type === "discussion").length.toString(), label: "Discussions", color: "#a78bfa" },
+    { icon: <Heart size={12} />, value: totalLikes.toString(), label: "Likes", color: "#f472b6" },
+    { icon: <MessageCircle size={12} />, value: totalComments.toString(), label: "Comments", color: "#34d399" },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex gap-2 overflow-x-auto pb-1 mb-5 no-scrollbar"
+    >
+      {stats.map((s, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.05 * i }}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl shrink-0"
+          style={{
+            background: `${s.color}08`,
+            border: `1px solid ${s.color}18`,
+          }}
+        >
+          <span style={{ color: s.color }}>{s.icon}</span>
+          <div>
+            <div className="text-xs font-bold text-white leading-none">{s.value}</div>
+            <div className="text-[9px] text-gray-600 leading-none mt-0.5">{s.label}</div>
+          </div>
+        </motion.div>
+      ))}
+    </motion.div>
   );
 }
 
@@ -650,6 +931,10 @@ function Leaderboard({ posts }: { posts: Post[] }) {
 
 export function CommunityEdge() {
   const t = useT();
+  const limits = usePlanLimits();
+  const user = useAuthStore((s) => s.user);
+  const currentPlan = (user?.plan as Plan) || "core";
+  const [subOpen, setSubOpen] = useState(false);
   const [posts, setPosts] = useState<Post[]>(SEED);
   const [tab, setTab] = useState<"ideas" | "discussions">("ideas");
   const [showForm, setShowForm] = useState(false);
@@ -704,52 +989,77 @@ export function CommunityEdge() {
 
   const openPostData = posts.find((p) => p.id === openPost);
   const currentList = tab === "ideas" ? ideas : discussions;
+  const isIdeasTab = tab === "ideas";
 
   return (
-    <div className="space-y-0">
+    <div>
       {/* Page header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div
-              className="p-2 rounded-xl"
-              style={{ background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)" }}
+              className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+              style={{
+                background: "linear-gradient(135deg, rgba(34,211,238,0.15), rgba(167,139,250,0.1))",
+                border: "1px solid rgba(34,211,238,0.3)",
+                boxShadow: "0 0 20px rgba(34,211,238,0.15)",
+              }}
             >
-              <TrendingUp size={18} style={{ color: "#22d3ee", filter: "drop-shadow(0 0 6px rgba(34,211,238,0.7))" }} />
+              <TrendingUp size={20} style={{ color: "#22d3ee", filter: "drop-shadow(0 0 6px rgba(34,211,238,0.8))" }} />
             </div>
             <div>
               <h2
-                className="text-2xl font-black tracking-tight"
+                className="text-2xl sm:text-3xl font-black tracking-tight leading-none"
                 style={{
-                  background: "linear-gradient(90deg, #22d3ee, #a78bfa, #f472b6)",
+                  background: "linear-gradient(90deg, #22d3ee 0%, #a78bfa 50%, #f472b6 100%)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
-                  filter: "drop-shadow(0 0 8px rgba(34,211,238,0.3))",
+                  filter: "drop-shadow(0 0 20px rgba(34,211,238,0.2))",
                 }}
               >
                 Community Edge
               </h2>
-              <p className="text-xs text-gray-500">{t("ce_subtitle")}</p>
+              <p className="text-xs text-gray-500 mt-1">{t("ce_subtitle")}</p>
             </div>
           </div>
 
-          <motion.button
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.96 }}
-            onClick={() => setShowForm((v) => !v)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
-            style={{
-              background: showForm ? "rgba(239,68,68,0.15)" : "linear-gradient(135deg, rgba(34,211,238,0.15), rgba(167,139,250,0.15))",
-              border: showForm ? "1px solid rgba(239,68,68,0.35)" : "1px solid rgba(34,211,238,0.35)",
-              color: showForm ? "#f87171" : "#22d3ee",
-              boxShadow: showForm ? "0 0 12px rgba(239,68,68,0.15)" : "0 0 12px rgba(34,211,238,0.12)",
-            }}
-          >
-            {showForm ? <X size={15} /> : <Plus size={15} />}
-            {showForm ? t("cancel") : t("ce_create")}
-          </motion.button>
+          {limits.community_can_post ? (
+            <motion.button
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setShowForm((v) => !v)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0"
+              style={
+                showForm
+                  ? { background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171" }
+                  : {
+                      background: "linear-gradient(135deg, rgba(34,211,238,0.15), rgba(167,139,250,0.1))",
+                      border: "1px solid rgba(34,211,238,0.35)",
+                      color: "#22d3ee",
+                      boxShadow: "0 0 16px rgba(34,211,238,0.12)",
+                    }
+              }
+            >
+              {showForm ? <X size={14} /> : <Plus size={14} />}
+              {showForm ? t("cancel") : t("ce_create")}
+            </motion.button>
+          ) : (
+            <motion.button
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setSubOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold shrink-0"
+              style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", color: "rgba(34,211,238,0.4)" }}
+            >
+              <Lock size={13} />
+              Edge required
+            </motion.button>
+          )}
         </div>
       </div>
+
+      {/* Stats bar */}
+      <StatsBar posts={posts} />
 
       {/* Leaderboard */}
       <Leaderboard posts={posts} />
@@ -767,82 +1077,112 @@ export function CommunityEdge() {
 
       {/* Tabs */}
       <div
-        className="flex rounded-xl p-1 mb-5"
-        style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+        className="flex gap-1 p-1 rounded-2xl mb-4"
+        style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)" }}
       >
         {(["ideas", "discussions"] as const).map((tabKey) => {
           const active = tab === tabKey;
-          const accentColor = tabKey === "ideas" ? "#22d3ee" : "#a78bfa";
+          const tabAccent = tabKey === "ideas" ? "#22d3ee" : "#a78bfa";
           const Icon = tabKey === "ideas" ? Lightbulb : MessagesSquare;
           const label = tabKey === "ideas" ? t("ce_ideas_tab") : t("ce_discussions_tab");
           const count = tabKey === "ideas" ? ideas.length : discussions.length;
+
           return (
-            <button
+            <motion.button
               key={tabKey}
               onClick={() => setTab(tabKey)}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all"
-              style={
-                active
-                  ? {
-                      background: `${accentColor}15`,
-                      color: accentColor,
-                      border: `1px solid ${accentColor}35`,
-                      boxShadow: `0 0 14px ${accentColor}15`,
-                    }
-                  : { color: "#4b5563", border: "1px solid transparent" }
-              }
+              className="relative flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+              style={{ color: active ? tabAccent : "#4b5563" }}
             >
-              <Icon size={14} />
-              {label}
-              <span
-                className="text-xs px-1.5 py-0.5 rounded-full"
-                style={
-                  active
-                    ? { background: `${accentColor}20`, color: accentColor }
-                    : { background: "rgba(255,255,255,0.05)", color: "#6b7280" }
-                }
-              >
-                {count}
+              {active && (
+                <motion.div
+                  layoutId="tabBg"
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    background: `${tabAccent}12`,
+                    border: `1px solid ${tabAccent}30`,
+                    boxShadow: `0 0 16px ${tabAccent}12`,
+                  }}
+                  transition={{ type: "spring", damping: 30, stiffness: 400 }}
+                />
+              )}
+              <span className="relative flex items-center gap-2">
+                <Icon size={14} />
+                {label}
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                  style={
+                    active
+                      ? { background: `${tabAccent}20`, color: tabAccent }
+                      : { background: "rgba(255,255,255,0.05)", color: "#4b5563" }
+                  }
+                >
+                  {count}
+                </span>
               </span>
-            </button>
+            </motion.button>
           );
         })}
       </div>
 
       {/* Tab description */}
-      <div className="mb-5 px-1">
-        {tab === "ideas" ? (
-          <p className="text-xs text-gray-600 flex items-center gap-1.5">
-            <ImageIcon size={11} className="text-cyan-500/60" />
-            {t("ce_ideas_desc")}
-          </p>
-        ) : (
-          <p className="text-xs text-gray-600 flex items-center gap-1.5">
-            <Hash size={11} className="text-purple-500/60" />
-            {t("ce_discussions_desc")}
-          </p>
-        )}
+      <div className="mb-4 px-1">
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={tab}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="text-xs text-gray-600 flex items-center gap-1.5"
+          >
+            {isIdeasTab
+              ? <><ImageIcon size={11} className="text-cyan-500/50" />{t("ce_ideas_desc")}</>
+              : <><Hash size={11} className="text-purple-500/50" />{t("ce_discussions_desc")}</>
+            }
+          </motion.p>
+        </AnimatePresence>
       </div>
 
-      {/* Posts grid */}
-      <div className={tab === "ideas" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-3"}>
-        {currentList.length === 0 ? (
-          <div className="col-span-2 text-center py-16 text-gray-600">
-            <div className="text-4xl mb-3">🌐</div>
-            <p className="text-sm">{t("ce_empty")}</p>
-          </div>
-        ) : (
-          currentList.map((p) => (
-            <PostCard
-              key={p.id}
-              post={p}
-              rank={rankOf(p.id)}
-              onLike={() => likePost(p.id)}
-              onOpen={() => setOpenPost(p.id)}
-            />
-          ))
-        )}
-      </div>
+      {/* Posts */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.2 }}
+          className={isIdeasTab ? "grid grid-cols-1 md:grid-cols-2 gap-3" : "flex flex-col gap-3"}
+        >
+          {currentList.length === 0 ? (
+            <div className="col-span-2 text-center py-20 text-gray-600">
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+              >
+                {isIdeasTab ? <Lightbulb size={24} className="text-gray-700" /> : <MessagesSquare size={24} className="text-gray-700" />}
+              </div>
+              <p className="text-sm">{t("ce_empty")}</p>
+            </div>
+          ) : (
+            currentList.map((p, i) => (
+              <motion.div
+                key={p.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+              >
+                <PostCard
+                  post={p}
+                  rank={rankOf(p.id)}
+                  onLike={() => likePost(p.id)}
+                  onOpen={() => setOpenPost(p.id)}
+                />
+              </motion.div>
+            ))
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Post modal */}
       <AnimatePresence>
@@ -856,6 +1196,14 @@ export function CommunityEdge() {
           />
         )}
       </AnimatePresence>
+
+      {/* Upgrade modal */}
+      <SubscriptionModal
+        isOpen={subOpen}
+        onClose={() => setSubOpen(false)}
+        currentPlan={currentPlan}
+        onUpgrade={() => setSubOpen(false)}
+      />
     </div>
   );
 }

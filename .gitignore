@@ -35,6 +35,7 @@ ENV/
 # Environment variables
 .env
 .env.local
+.env.production
 
 # Logs
 *.log
@@ -61,6 +62,7 @@ dmypy.json
 trademind.db
 
 # Next.js
+.next/
 frontend/.next/
 frontend/node_modules/
 node_modules/

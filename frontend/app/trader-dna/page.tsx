@@ -6,9 +6,9 @@ import { motion } from "framer-motion";
 
 export default function TraderDNAPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black to-black/95 text-white">
+    <div className="h-full overflow-y-auto pb-14 md:pb-0 page-bg text-white">
       {/* Header */}
-      <div className="sticky top-0 z-20 border-b border-cyan-500/20 bg-black/50 backdrop-blur-lg">
+      <div className="sticky top-0 z-20" style={{ background: "rgba(7,10,18,0.94)", borderBottom: "1px solid rgba(192,132,252,0.15)", backdropFilter: "blur(20px)" }}>
         <div className="flex items-center justify-between px-3 py-3 sm:p-6 max-w-7xl mx-auto">
           <motion.div 
             className="flex items-center gap-4"
@@ -23,7 +23,7 @@ export default function TraderDNAPage() {
                 <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg blur-md opacity-40" />
                 <Brain className="w-7 h-7 text-cyan-400 relative" />
               </div>
-              <h1 className="text-xl sm:text-3xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
+              <h1 className="text-xl sm:text-3xl font-bold text-gradient neon-white" style={{ animationDuration: "6s" }}>
                 Trader DNA
               </h1>
             </div>

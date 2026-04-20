@@ -1,0 +1,62 @@
+name: Deploy Frontend → Azure App Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend-azure.yml"
+  workflow_dispatch:   # allow manual trigger from GitHub UI
+
+env:
+  # ── Fill these in GitHub → Settings → Secrets and variables → Actions ──────
+  # ACR_LOGIN_SERVER   : trademindacr.azurecr.io
+  # ACR_USERNAME       : trademindacr  (or service principal client ID)
+  # ACR_PASSWORD       : <ACR admin password or SP secret>
+  # AZURE_WEBAPP_NAME  : trademind-frontend  (App Service name)
+  # BACKEND_INTERNAL_URL: http://YOUR_VPS_IP:8000  (FastAPI direct URL from Azure)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  IMAGE_NAME: trademind-frontend
+  NEXT_PUBLIC_API_URL: https://trademindtech.com
+
+jobs:
+  build-and-deploy:
+    name: Build → Push → Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Log in to Azure Container Registry
+      - name: Log in to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      # 3. Build Docker image (bakes NEXT_PUBLIC_API_URL at build time)
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }} \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest \
+            ./frontend
+
+      # 4. Push to ACR
+      - name: Push to ACR
+        run: |
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+
+      # 5. Deploy to Azure App Service
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          images: ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}

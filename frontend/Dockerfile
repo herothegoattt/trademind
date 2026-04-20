@@ -24,9 +24,9 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# BACKEND_INTERNAL_URL is set at runtime in Azure App Service → Configuration
-# It tells the Next.js proxy where to forward /api/v1/* requests.
-ENV BACKEND_INTERNAL_URL=https://trademindtech.com
+# Overridden at runtime: docker-compose sets http://backend:8000,
+# Azure App Service sets the VPS URL via Configuration → App settings.
+ENV BACKEND_INTERNAL_URL=http://localhost:8000
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./

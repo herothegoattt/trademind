@@ -1,8 +1,11 @@
 "use client";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check, Zap, Shield, Crown, Sparkles } from "lucide-react";
+import { X, Check, Zap, Shield, Crown, Sparkles, Loader2, Ticket, Gift } from "lucide-react";
 import { useT } from "../../lib/i18n";
+import { useAuthStore } from "../../lib/auth-store";
+import { ReferralModal } from "./ReferralModal";
+import { AuthRequiredModal } from "../AuthRequiredModal";
 
 export type Plan = "core" | "edge" | "apex";
 
@@ -247,30 +250,125 @@ function CongratsOverlay({
 
 export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: SubscriptionModalProps) {
   const t = useT();
+  const token = useAuthStore((s) => s.token);
   const [selected, setSelected] = useState<Plan>(currentPlan);
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
   const [congratsPlan, setCongratsPlan] = useState<(typeof PLAN_DEFS)[number] | null>(null);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoApplied, setPromoApplied] = useState<{ code: string; discountPct: number; couponId?: string } | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [referralOpen, setReferralOpen] = useState(false);
 
   const currentIdx  = PLAN_ORDER.indexOf(currentPlan);
   const selectedIdx = PLAN_ORDER.indexOf(selected);
   const isDowngrade = selectedIdx < currentIdx;
   const isSame      = selected === currentPlan;
 
-  const handleConfirm = () => {
-    if (isSame) return;
-    setConfirming(true);
-    setTimeout(() => {
-      const chosenPlan = PLAN_DEFS.find(p => p.id === selected)!;
-      onUpgrade(selected);
+  const handleConfirm = async () => {
+    if (isSame || confirming) return;
+    setError(null);
+
+    // Require authentication
+    const localToken = token || localStorage.getItem("access_token");
+    if (!localToken) {
+      setAuthOpen(true);
+      return;
+    }
+
+    // Downgrade = show portal to cancel
+    if (isDowngrade) {
+      setConfirming(true);
+      try {
+        const res = await fetch("/api/v1/payments/customer-portal", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ return_url: window.location.href }),
+        });
+        if (res.ok) {
+          const { portal_url } = await res.json();
+          window.location.href = portal_url;
+          return;
+        }
+      } catch {}
       setConfirming(false);
-      setCongratsPlan(chosenPlan);
-    }, 800);
+      return;
+    }
+
+    // Free plan → paid plan: create Stripe Checkout session
+    if (selected === "core") return; // core is free, nothing to pay
+    setConfirming(true);
+    try {
+      const localToken = token || localStorage.getItem("access_token");
+      const res = await fetch("/api/v1/payments/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(localToken ? { Authorization: `Bearer ${localToken}` } : {}),
+        },
+        body: JSON.stringify({
+          plan: selected,
+          billing,
+          success_url: `${window.location.origin}/app?plan_success=1`,
+          cancel_url: window.location.href,
+          coupon_id: promoApplied?.couponId ?? undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Payment setup failed");
+      }
+
+      const { checkout_url } = await res.json();
+      window.location.href = checkout_url;
+    } catch (e: any) {
+      setError(e.message || "Payment failed. Please try again.");
+      setConfirming(false);
+    }
   };
 
   const handleCongratsClose = () => {
     setCongratsPlan(null);
     onClose();
+  };
+
+  const handleApplyPromo = async () => {
+    if (!promoCode.trim()) return;
+    setPromoLoading(true);
+    setPromoError(null);
+    setPromoApplied(null);
+    try {
+      const localToken = token || localStorage.getItem("access_token");
+      const res = await fetch("/api/v1/referral/validate-promo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(localToken ? { Authorization: `Bearer ${localToken}` } : {}),
+        },
+        body: JSON.stringify({ code: promoCode.trim().toUpperCase(), plan: selected !== "core" ? selected : undefined }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPromoApplied({
+          code: data.code,
+          discountPct: data.discount_type === "percent" ? data.discount_value : 0,
+          couponId: data.stripe_coupon_id,
+        });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setPromoError(err.detail || "Invalid code");
+      }
+    } catch {
+      setPromoError("Could not validate code");
+    }
+    setPromoLoading(false);
   };
 
   const discount = billing === "annual" ? 0.8 : 1;
@@ -473,46 +571,111 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
 
               {/* Footer */}
               <div
-                className="flex items-center justify-between px-7 py-4 flex-shrink-0"
+                className="flex-shrink-0"
                 style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
               >
-                <div className="text-xs text-gray-600">
-                  {t('cancel_anytime')}
-                </div>
-                <div className="flex gap-2.5">
-                  <button
-                    onClick={onClose}
-                    className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-gray-200 transition-colors"
-                    style={{ border: "1px solid rgba(255,255,255,0.07)" }}
-                  >
-                    {t('cancel')}
-                  </button>
-                  <button
-                    onClick={handleConfirm}
-                    disabled={isSame || confirming}
-                    className="px-5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{
-                      background: isSame
-                        ? "rgba(255,255,255,0.05)"
-                        : isDowngrade
-                          ? "rgba(239,68,68,0.15)"
-                          : "linear-gradient(135deg, rgba(139,92,246,0.7), rgba(6,182,212,0.7))",
-                      border: isSame
-                        ? "1px solid rgba(255,255,255,0.08)"
-                        : isDowngrade
-                          ? "1px solid rgba(239,68,68,0.3)"
-                          : "1px solid rgba(139,92,246,0.4)",
-                      color: isSame ? "#4b5563" : isDowngrade ? "#f87171" : "#fff",
-                    }}
-                  >
-                    {confirming
-                      ? t('processing_text')
-                      : isSame
-                        ? t('current_plan_btn')
-                        : isDowngrade
-                          ? `${t('downgrade_to')} ${PLAN_DEFS.find(p => p.id === selected)?.name}`
-                          : `${t('upgrade_to_plan')} ${PLAN_DEFS.find(p => p.id === selected)?.name}`}
-                  </button>
+                {/* Promo code row */}
+                {selected !== "core" && !isSame && (
+                  <div className="px-7 py-3 flex items-center gap-2"
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <Ticket className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
+                    {promoApplied ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <span className="text-xs font-mono font-bold text-violet-300 tracking-wider">{promoApplied.code}</span>
+                        {promoApplied.discountPct > 0 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 font-semibold border border-violet-500/25">
+                            -{promoApplied.discountPct}%
+                          </span>
+                        )}
+                        <span className="text-[10px] text-emerald-400">Applied ✓</span>
+                        <button onClick={() => { setPromoApplied(null); setPromoCode(""); }}
+                          className="ml-auto text-[10px] text-gray-600 hover:text-red-400 transition-colors">
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-1">
+                        <input
+                          type="text"
+                          value={promoCode}
+                          onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromoError(null); }}
+                          onKeyDown={(e) => e.key === "Enter" && handleApplyPromo()}
+                          placeholder="Promo code..."
+                          className="flex-1 px-2.5 py-1 rounded-lg text-xs font-mono font-bold tracking-widest bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-gray-600 focus:outline-none focus:border-violet-500/40 transition-colors"
+                        />
+                        <button
+                          onClick={handleApplyPromo}
+                          disabled={promoLoading || !promoCode.trim()}
+                          className="px-3 py-1 rounded-lg text-xs font-semibold text-violet-300 bg-violet-500/10 border border-violet-500/25 hover:bg-violet-500/20 transition-all disabled:opacity-40"
+                        >
+                          {promoLoading ? "..." : "Apply"}
+                        </button>
+                        <button
+                          onClick={() => setReferralOpen(true)}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-gray-500 hover:text-cyan-400 transition-colors"
+                        >
+                          <Gift className="w-3 h-3" />
+                          Deals
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {promoError && (
+                  <div className="px-7 py-1.5 text-[11px] text-red-400">⚠ {promoError}</div>
+                )}
+                {error && (
+                  <div className="px-7 pt-3 text-xs text-red-400 bg-red-500/5 border-b border-red-500/10 py-2">
+                    {error}
+                  </div>
+                )}
+                <div className="flex items-center justify-between px-7 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="text-xs text-gray-600">{t('cancel_anytime')}</div>
+                    <button
+                      onClick={() => setReferralOpen(true)}
+                      className="flex items-center gap-1.5 text-[10px] text-gray-600 hover:text-violet-400 transition-colors"
+                    >
+                      <Gift className="w-3 h-3" />
+                      Earn credits
+                    </button>
+                  </div>
+                  <div className="flex gap-2.5">
+                    <button
+                      onClick={onClose}
+                      className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-gray-200 transition-colors"
+                      style={{ border: "1px solid rgba(255,255,255,0.07)" }}
+                    >
+                      {t('cancel')}
+                    </button>
+                    <button
+                      onClick={handleConfirm}
+                      disabled={isSame || confirming}
+                      className="px-5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                      style={{
+                        background: isSame
+                          ? "rgba(255,255,255,0.05)"
+                          : isDowngrade
+                            ? "rgba(239,68,68,0.15)"
+                            : "linear-gradient(135deg, rgba(139,92,246,0.7), rgba(6,182,212,0.7))",
+                        border: isSame
+                          ? "1px solid rgba(255,255,255,0.08)"
+                          : isDowngrade
+                            ? "1px solid rgba(239,68,68,0.3)"
+                            : "1px solid rgba(139,92,246,0.4)",
+                        color: isSame ? "#4b5563" : isDowngrade ? "#f87171" : "#fff",
+                      }}
+                    >
+                      {confirming && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      {confirming
+                        ? t('processing_text')
+                        : isSame
+                          ? t('current_plan_btn')
+                          : isDowngrade
+                            ? `${t('downgrade_to')} ${PLAN_DEFS.find(p => p.id === selected)?.name}`
+                            : `${t('upgrade_to_plan')} ${PLAN_DEFS.find(p => p.id === selected)?.name}`}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -527,6 +690,17 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
         <CongratsOverlay plan={congratsPlan} onClose={handleCongratsClose} />
       )}
     </AnimatePresence>
+
+    {/* Referral & Promo modal */}
+    <ReferralModal isOpen={referralOpen} onClose={() => setReferralOpen(false)} />
+
+    {/* Auth modal — shown when user tries to upgrade without being logged in */}
+    <AuthRequiredModal
+      isOpen={authOpen}
+      onClose={() => setAuthOpen(false)}
+      title="Sign in to upgrade"
+      message="Create a free account or sign in to subscribe to a paid plan."
+    />
     </>
   );
 }

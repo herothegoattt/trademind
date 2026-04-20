@@ -48,7 +48,7 @@ function CandleChart({
   entryCandle?: number; slPrice?: number; tpPrice?: number;
   vw?: number; vh?: number; labels?: boolean;
 }) {
-  const PL = 28, PR = 6, PT = 8, PB = 4, VOLH = 26, GAP = 3;
+  const PL = 8, PR = 48, PT = 10, PB = 4, VOLH = 20, GAP = 3;
   const PH = vh - PT - PB - VOLH - GAP;
   const CW = vw - PL - PR;
 
@@ -75,83 +75,133 @@ function CandleChart({
   const bw = Math.max(step * 0.56, 3);
   const cx = (i: number) => PL + (i + 0.5) * step;
 
+  // Y-axis price labels
+  const yAxisPrices = [
+    { p: maxP - pRng * 0.05, y: PT + PH * 0.05 },
+    { p: maxP - pRng * 0.5,  y: PT + PH * 0.5 },
+    { p: minP + pRng * 0.05, y: PT + PH * 0.95 },
+  ];
+
+  const fmtP = (p: number) => p.toFixed(4);
+
   return (
     <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" preserveAspectRatio="none">
-      <rect width={vw} height={vh} fill="#05050d" rx="4" />
+      {/* Background */}
+      <rect width={vw} height={vh} fill="#06090f" />
+      <rect width={vw} height={vh} fill="rgba(34,211,238,0.02)" />
 
-      {/* Grid */}
-      {[0.33, 0.66].map((f, i) => (
-        <line key={i} x1={PL} y1={PT + f * PH} x2={vw - PR} y2={PT + f * PH} stroke="#111120" strokeWidth="1" />
+      {/* Horizontal grid lines */}
+      {[0.25, 0.5, 0.75, 1.0].map((f, i) => (
+        <line key={`hg${i}`}
+          x1={PL} y1={PT + f * PH}
+          x2={vw - PR} y2={PT + f * PH}
+          stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
       ))}
-      <line x1={PL} y1={PT + PH + GAP} x2={vw - PR} y2={PT + PH + GAP} stroke="#111120" strokeWidth="1" />
+
+      {/* Vertical right-edge separator */}
+      <line x1={vw - PR} y1={PT} x2={vw - PR} y2={PT + PH + GAP + VOLH}
+        stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+
+      {/* Volume separator */}
+      <line x1={PL} y1={PT + PH + GAP} x2={vw - PR} y2={PT + PH + GAP}
+        stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
 
       {/* Zones */}
       {zones.map((z, i) => {
         const y = Math.min(py(z.y1), py(z.y2));
         const h = Math.max(Math.abs(py(z.y1) - py(z.y2)), 2);
-        return <rect key={i} x={PL} y={y} width={CW} height={h} fill={z.color} />;
+        return <rect key={`z${i}`} x={PL} y={y} width={CW} height={h}
+          fill={z.color.replace(/[\d.]+\)$/, '0.12)')} />;
       })}
 
-      {/* TP */}
-      {tpPrice != null && (
-        <g>
-          <line x1={PL} y1={py(tpPrice)} x2={vw - PR} y2={py(tpPrice)} stroke="#10b981" strokeWidth="1.5" strokeDasharray="5,3" />
-          {labels && <text x={PL + 1} y={py(tpPrice) - 2} fill="#10b981" fontSize="7" fontFamily="monospace">TP</text>}
-        </g>
-      )}
-
-      {/* SL */}
-      {slPrice != null && (
-        <g>
-          <line x1={PL} y1={py(slPrice)} x2={vw - PR} y2={py(slPrice)} stroke="#ef4444" strokeWidth="1.5" strokeDasharray="5,3" />
-          {labels && <text x={PL + 1} y={py(slPrice) + 9} fill="#ef4444" fontSize="7" fontFamily="monospace">SL</text>}
-        </g>
-      )}
-
-      {/* H-Lines */}
+      {/* HLines */}
       {hlines.map((h, i) => (
-        <g key={i}>
-          <line x1={PL} y1={py(h.y)} x2={vw - PR} y2={py(h.y)} stroke={h.color} strokeWidth="1" strokeDasharray="4,3" opacity="0.8" />
-          {labels && h.label && <text x={PL + 2} y={py(h.y) - 2} fill={h.color} fontSize="6.5" fontFamily="monospace">{h.label}</text>}
+        <g key={`hl${i}`}>
+          <line x1={PL} y1={py(h.y)} x2={vw - PR} y2={py(h.y)}
+            stroke={h.color} strokeWidth="1" strokeDasharray="4,3" opacity="0.75" />
+          {labels && h.label && (
+            <text x={vw - PR + 3} y={py(h.y) + 2.5}
+              fill={h.color} fontSize="5.5" fontFamily="monospace" opacity="0.75">{h.label}</text>
+          )}
         </g>
       ))}
+
+      {/* TP dashed line + right label pill */}
+      {tpPrice != null && (
+        <g>
+          <line x1={PL} y1={py(tpPrice)} x2={vw - PR} y2={py(tpPrice)}
+            stroke="#34d399" strokeWidth="1.5" strokeDasharray="6,3" />
+          <rect x={vw - PR + 1} y={py(tpPrice) - 5} width={PR - 2} height={10}
+            fill="rgba(52,211,153,0.15)" rx="2" />
+          <text x={vw - PR + (PR - 2) / 2 + 1} y={py(tpPrice) + 3}
+            fill="#34d399" fontSize="6.5" fontFamily="monospace" textAnchor="middle" fontWeight="bold">TP</text>
+        </g>
+      )}
+
+      {/* SL dashed line + right label pill */}
+      {slPrice != null && (
+        <g>
+          <line x1={PL} y1={py(slPrice)} x2={vw - PR} y2={py(slPrice)}
+            stroke="#f87171" strokeWidth="1.5" strokeDasharray="6,3" />
+          <rect x={vw - PR + 1} y={py(slPrice) - 5} width={PR - 2} height={10}
+            fill="rgba(248,113,113,0.15)" rx="2" />
+          <text x={vw - PR + (PR - 2) / 2 + 1} y={py(slPrice) + 3}
+            fill="#f87171" fontSize="6.5" fontFamily="monospace" textAnchor="middle" fontWeight="bold">SL</text>
+        </g>
+      )}
 
       {/* Trendlines */}
       {trendlines.map((tl, i) => (
-        <line key={i} x1={cx(tl.x1)} y1={py(tl.y1)} x2={cx(tl.x2)} y2={py(tl.y2)}
-          stroke={tl.color || '#60a5fa'} strokeWidth="1.5" opacity="0.85" strokeLinecap="round" />
+        <line key={`tl${i}`}
+          x1={cx(tl.x1)} y1={py(tl.y1)} x2={cx(tl.x2)} y2={py(tl.y2)}
+          stroke="#60a5fa" strokeWidth="1.5" opacity="0.7" strokeLinecap="round" />
       ))}
 
-      {/* Volume */}
+      {/* Volume bars */}
       {candles.map((c, i) => (
-        <rect key={`v${i}`} x={cx(i) - bw / 2} y={vy(c.v)} width={bw} height={volBase - vy(c.v)}
-          fill={c.c >= c.o ? '#10b98130' : '#ef444430'} rx="1" />
+        <rect key={`v${i}`}
+          x={cx(i) - bw / 2} y={vy(c.v)} width={bw} height={volBase - vy(c.v)}
+          fill={c.c >= c.o ? 'rgba(34,211,238,0.15)' : 'rgba(248,113,113,0.15)'} rx="1" />
       ))}
 
       {/* Candles */}
       {candles.map((c, i) => {
         const isUp = c.c >= c.o;
         const isE = i === entryCandle;
-        const col = isE ? '#f59e0b' : isUp ? '#10b981' : '#ef4444';
+        let col: string;
+        if (isE) col = '#f59e0b';
+        else if (isUp) col = '#22d3ee';
+        else col = '#f87171';
+
         const by = py(Math.max(c.o, c.c));
         const bh = Math.max(py(Math.min(c.o, c.c)) - by, 1.5);
+        const bodyFill = isE ? '#f59e0b' : isUp ? '#22d3ee' : 'transparent';
         return (
           <g key={`c${i}`}>
-            <line x1={cx(i)} y1={py(c.h)} x2={cx(i)} y2={py(c.l)} stroke={col} strokeWidth="1.5" />
+            {/* Wick */}
+            <line x1={cx(i)} y1={py(c.h)} x2={cx(i)} y2={py(c.l)}
+              stroke={col} strokeWidth="1.2" />
+            {/* Body */}
             <rect x={cx(i) - bw / 2} y={by} width={bw} height={bh}
-              fill={isUp ? col : '#05050d'} stroke={col} strokeWidth={isE ? 2 : 1.5} rx="1" />
+              fill={bodyFill} stroke={col} strokeWidth={isE ? 2.5 : 1.5} rx="1" />
           </g>
         );
       })}
 
-      {/* Entry label */}
-      {entryCandle != null && labels && (
-        <text x={cx(entryCandle)} y={py(candles[entryCandle].l) + 18}
-          fill="#f59e0b" fontSize="6.5" textAnchor="middle" fontFamily="monospace" fontWeight="bold">ENTRY</text>
+      {/* Entry arrow: small amber triangle below the entry candle wick */}
+      {entryCandle != null && (
+        <polygon
+          points={`${cx(entryCandle)},${py(candles[entryCandle].l) + 12} ${cx(entryCandle) - 4},${py(candles[entryCandle].l) + 19} ${cx(entryCandle) + 4},${py(candles[entryCandle].l) + 19}`}
+          fill="#f59e0b" opacity="0.9"
+        />
       )}
 
-      {/* VOL label */}
-      <text x={PL + 1} y={PT + PH + GAP + 9} fill="#1e1e30" fontSize="6" fontFamily="monospace">VOL</text>
+      {/* Y-axis price labels on right */}
+      {labels && yAxisPrices.map((item, i) => (
+        <text key={`ya${i}`}
+          x={vw - PR + 3} y={item.y + 2}
+          fill="rgba(148,163,184,0.45)" fontSize="6.5" fontFamily="monospace">{fmtP(item.p)}</text>
+      ))}
     </svg>
   );
 }
@@ -649,21 +699,36 @@ const SETUPS: Setup[] = [
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const LEVEL_CFG = {
   beginner: {
-    label: 'Beginner', emoji: '🟢', color: 'text-emerald-400',
-    border: 'border-emerald-500/30', bg: 'bg-emerald-500/5',
-    badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    label: 'Beginner',
+    color: '#34d399',
+    colorClass: 'text-emerald-400',
+    accentFrom: '#34d399',
+    accentTo: 'transparent',
+    badgeBg: 'rgba(52,211,153,0.1)',
+    badgeBorder: 'rgba(52,211,153,0.3)',
+    badgeText: '#6ee7b7',
     grad: 'from-emerald-500 to-teal-500',
   },
   amateur: {
-    label: 'Intermediate', emoji: '🔵', color: 'text-blue-400',
-    border: 'border-blue-500/30', bg: 'bg-blue-500/5',
-    badge: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+    label: 'Intermediate',
+    color: '#60a5fa',
+    colorClass: 'text-blue-400',
+    accentFrom: '#60a5fa',
+    accentTo: 'transparent',
+    badgeBg: 'rgba(96,165,250,0.1)',
+    badgeBorder: 'rgba(96,165,250,0.3)',
+    badgeText: '#93c5fd',
     grad: 'from-blue-500 to-cyan-500',
   },
   professional: {
-    label: 'Professional', emoji: '💎', color: 'text-purple-400',
-    border: 'border-purple-500/30', bg: 'bg-purple-500/5',
-    badge: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+    label: 'Professional',
+    color: '#a78bfa',
+    colorClass: 'text-purple-400',
+    accentFrom: '#a78bfa',
+    accentTo: 'transparent',
+    badgeBg: 'rgba(167,139,250,0.1)',
+    badgeBorder: 'rgba(167,139,250,0.3)',
+    badgeText: '#c4b5fd',
     grad: 'from-purple-500 to-pink-500',
   },
 };
@@ -686,12 +751,24 @@ function SetupCard({ setup, onClick }: { setup: Setup; onClick: () => void }) {
       initial={{ opacity: 0, y: 16 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      whileHover={{ y: -4 }}
+      whileHover={{ y: -3, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', borderColor: 'rgba(255,255,255,0.15)' }}
       onClick={onClick}
-      className={`group cursor-pointer rounded-xl border ${cfg.border} ${cfg.bg} overflow-hidden transition-all hover:border-opacity-60 hover:shadow-lg`}
+      style={{
+        background: 'rgba(7,10,20,0.85)',
+        border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: '1rem',
+        overflow: 'hidden',
+        cursor: 'pointer',
+      }}
     >
-      {/* Mini Chart */}
-      <div className="relative w-full" style={{ height: 150 }}>
+      {/* Top accent bar */}
+      <div style={{
+        height: 2,
+        background: `linear-gradient(to right, ${cfg.accentFrom}, ${cfg.accentTo})`,
+      }} />
+
+      {/* Chart area */}
+      <div className="relative w-full" style={{ height: 160, background: '#06090f' }}>
         <CandleChart
           candles={setup.candles}
           hlines={setup.hlines}
@@ -700,47 +777,107 @@ function SetupCard({ setup, onClick }: { setup: Setup; onClick: () => void }) {
           entryCandle={setup.entryCandle}
           slPrice={setup.slPrice}
           tpPrice={setup.tpPrice}
-          vw={300} vh={150} labels={true}
+          vw={300} vh={160} labels={true}
         />
-        {/* Direction badge */}
-        <div className={`absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border ${cfg.badge}`}>
-          {setup.direction === 'Long' ? <TrendingUp className="w-3 h-3" /> : setup.direction === 'Short' ? <TrendingDown className="w-3 h-3" /> : <Layers className="w-3 h-3" />}
+        {/* Direction badge — overlay top-right */}
+        <div style={{
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '2px 8px',
+          borderRadius: 6,
+          fontSize: 11,
+          fontWeight: 700,
+          background: 'rgba(7,10,20,0.82)',
+          border: `1px solid ${cfg.badgeBorder}`,
+          color: cfg.badgeText,
+          backdropFilter: 'blur(4px)',
+        }}>
+          {setup.direction === 'Long'
+            ? <TrendingUp style={{ width: 11, height: 11 }} />
+            : setup.direction === 'Short'
+              ? <TrendingDown style={{ width: 11, height: 11 }} />
+              : <Layers style={{ width: 11, height: 11 }} />}
           {setup.direction}
         </div>
       </div>
 
       {/* Card body */}
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className={`font-bold text-base leading-tight group-hover:${cfg.color} transition-colors`}>{setup.title}</h3>
-          <span className={`shrink-0 text-xs px-2 py-0.5 rounded border ${cfg.badge}`}>{cfg.emoji} {cfg.label}</span>
+      <div style={{ padding: 16 }}>
+        {/* Row 1: level badge + type tag */}
+        <div className="flex items-center gap-2 mb-2">
+          <span style={{
+            fontSize: 10,
+            fontWeight: 600,
+            padding: '2px 8px',
+            borderRadius: 99,
+            background: cfg.badgeBg,
+            border: `1px solid ${cfg.badgeBorder}`,
+            color: cfg.badgeText,
+          }}>{cfg.label}</span>
+          <span style={{
+            fontSize: 10,
+            padding: '2px 8px',
+            borderRadius: 99,
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            color: 'rgba(148,163,184,0.7)',
+          }}>{setup.type}</span>
         </div>
 
-        <p className="text-xs text-gray-400 mb-3 line-clamp-2">{setup.description}</p>
+        {/* Title */}
+        <h3 style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', marginBottom: 6, lineHeight: 1.3 }}>
+          {setup.title}
+        </h3>
 
-        {/* Tags */}
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          <span className="text-xs px-2 py-0.5 rounded bg-gray-800/60 text-gray-300 border border-gray-700/50">{setup.type}</span>
-          <span className="text-xs px-2 py-0.5 rounded bg-gray-800/60 text-gray-300 border border-gray-700/50 flex items-center gap-1">
-            <Clock className="w-3 h-3" />{setup.timeframe}
-          </span>
-          <span className={`text-xs px-2 py-0.5 rounded bg-gray-800/60 border border-gray-700/50 ${setup.marketCondition === 'Trending' ? 'text-cyan-400' : setup.marketCondition === 'Ranging' ? 'text-orange-400' : 'text-gray-300'}`}>
-            {setup.marketCondition}
+        {/* Description */}
+        <p style={{
+          fontSize: 12,
+          color: 'rgba(148,163,184,0.65)',
+          marginBottom: 10,
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical' as const,
+          overflow: 'hidden',
+          lineHeight: 1.5,
+        }}>
+          {setup.description}
+        </p>
+
+        {/* Timeframe tag */}
+        <div className="flex items-center gap-1.5 mb-10px" style={{ marginBottom: 12 }}>
+          <span style={{
+            fontSize: 11,
+            fontFamily: 'monospace',
+            padding: '2px 8px',
+            borderRadius: 6,
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            color: 'rgba(148,163,184,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}>
+            <Clock style={{ width: 10, height: 10 }} />
+            {setup.timeframe}
           </span>
         </div>
 
         {/* Metrics row */}
-        <div className="flex items-center justify-between pt-3 border-t border-gray-700/40">
-          <div className="text-center">
-            <div className="text-xs text-gray-500 mb-0.5">R:R</div>
-            <div className="text-sm font-bold text-cyan-300">{setup.rr}</div>
+        <div className="flex items-center justify-between" style={{ marginTop: 12 }}>
+          <div>
+            <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.45)', marginBottom: 2 }}>R:R</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#22d3ee' }}>{setup.rr}</div>
           </div>
-          <div className="text-center">
-            <div className="text-xs text-gray-500 mb-0.5">Win Rate</div>
-            <div className="text-sm font-bold text-green-300">{setup.winRateRange}</div>
+          <div>
+            <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.45)', marginBottom: 2 }}>Win Rate</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>{setup.winRateRange}</div>
           </div>
-          <div className="text-center">
-            <div className="text-xs text-gray-500 mb-0.5">Difficulty</div>
+          <div>
+            <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.45)', marginBottom: 2 }}>Difficulty</div>
             <DifficultyStars n={setup.difficulty} />
           </div>
         </div>
@@ -757,7 +894,14 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        padding: 16,
+        background: 'rgba(0,0,0,0.85)',
+        backdropFilter: 'blur(8px)',
+        overflowY: 'auto',
+      }}
       onClick={onClose}
     >
       <motion.div
@@ -765,34 +909,77 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.96, opacity: 0, y: 20 }}
         transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-        className={`relative w-full max-w-3xl my-4 rounded-2xl border ${cfg.border} bg-gradient-to-b from-gray-950 to-black overflow-hidden`}
+        style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: 768,
+          margin: '16px 0',
+          borderRadius: '1rem',
+          background: '#070a14',
+          border: '1px solid rgba(255,255,255,0.09)',
+          overflow: 'hidden',
+        }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Close */}
-        <button onClick={onClose} className="absolute top-4 right-4 z-10 p-1.5 rounded-lg bg-gray-800/60 hover:bg-gray-700 transition-colors">
-          <X className="w-5 h-5 text-gray-400" />
+        {/* Gradient top bar */}
+        <div style={{
+          height: 2,
+          background: `linear-gradient(to right, ${cfg.accentFrom}, ${cfg.accentTo})`,
+        }} />
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute', top: 16, right: 16, zIndex: 10,
+            padding: '6px',
+            borderRadius: 8,
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            cursor: 'pointer',
+            transition: 'background 0.15s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+        >
+          <X style={{ width: 18, height: 18, color: 'rgba(148,163,184,0.8)' }} />
         </button>
 
         {/* Header */}
-        <div className={`px-3 sm:px-6 pt-4 sm:pt-6 pb-4 border-b ${cfg.border}`}>
-          <div className="flex items-center gap-3 mb-2">
-            <span className={`text-xs font-bold px-2.5 py-1 rounded border ${cfg.badge}`}>{cfg.emoji} {cfg.label}</span>
-            <span className="text-xs text-gray-500">{setup.type}</span>
-            <span className="text-xs text-gray-500 flex items-center gap-1"><Clock className="w-3 h-3" />{setup.timeframe}</span>
+        <div style={{ padding: '24px 24px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <span style={{
+              fontSize: 11, fontWeight: 600,
+              padding: '3px 10px', borderRadius: 99,
+              background: cfg.badgeBg, border: `1px solid ${cfg.badgeBorder}`, color: cfg.badgeText,
+            }}>{cfg.label}</span>
+            <span style={{ fontSize: 12, color: 'rgba(148,163,184,0.5)' }}>{setup.type}</span>
+            <span className="flex items-center gap-1" style={{ fontSize: 12, color: 'rgba(148,163,184,0.5)' }}>
+              <Clock style={{ width: 12, height: 12 }} />{setup.timeframe}
+            </span>
           </div>
-          <h2 className={`text-lg sm:text-2xl font-bold bg-gradient-to-r ${cfg.grad} bg-clip-text text-transparent`}>{setup.title}</h2>
-          <p className="text-gray-400 text-sm mt-1">{setup.description}</p>
+          <h2 className={`text-xl sm:text-2xl font-bold bg-gradient-to-r ${cfg.grad} bg-clip-text text-transparent`}>
+            {setup.title}
+          </h2>
+          <p style={{ fontSize: 13, color: 'rgba(148,163,184,0.65)', marginTop: 6, lineHeight: 1.6 }}>
+            {setup.description}
+          </p>
         </div>
 
-        <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
-          {/* Chart */}
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Chart section */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <BarChart2 className="w-4 h-4 text-gray-400" />
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Pattern Visualization</span>
-              <span className="ml-auto text-xs text-gray-600 italic">Educational chart model — not real market data</span>
+              <BarChart2 style={{ width: 14, height: 14, color: 'rgba(148,163,184,0.5)' }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(148,163,184,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Pattern Visualization</span>
+              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'rgba(148,163,184,0.3)', fontStyle: 'italic' }}>Educational model — not real data</span>
             </div>
-            <div className="rounded-xl overflow-hidden border border-gray-800" style={{ height: 220 }}>
+            <div style={{
+              height: 240, borderRadius: 12,
+              border: '1px solid rgba(255,255,255,0.08)',
+              background: '#06090f',
+              overflow: 'hidden',
+            }}>
               <CandleChart
                 candles={setup.candles}
                 hlines={setup.hlines}
@@ -801,96 +988,131 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
                 entryCandle={setup.entryCandle}
                 slPrice={setup.slPrice}
                 tpPrice={setup.tpPrice}
-                vw={600} vh={220} labels={true}
+                vw={600} vh={240} labels={true}
               />
             </div>
 
-            {/* Chart Legend */}
-            <div className="flex flex-wrap gap-4 mt-2 px-1">
-              <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                <div className="w-6 h-0.5 bg-green-500" style={{ borderTop: '1.5px dashed #10b981' }} />
-                Take Profit (TP)
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                <div className="w-6 h-0.5" style={{ borderTop: '1.5px dashed #ef4444' }} />
-                Stop Loss (SL)
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                <div className="w-3 h-3 rounded border-2 border-yellow-400" />
-                Entry Candle
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                <div className="w-8 h-3 opacity-40" style={{ background: 'rgba(168,85,247,0.3)' }} />
-                Key Zone
-              </div>
+            {/* Chart legend */}
+            <div className="flex flex-wrap gap-4 mt-3 px-1">
+              {[
+                { line: true, color: '#34d399', dash: true, label: 'Take Profit (TP)' },
+                { line: true, color: '#f87171', dash: true, label: 'Stop Loss (SL)' },
+                { line: false, swatch: '#f59e0b', label: 'Entry Candle' },
+                { line: false, swatch: 'rgba(129,140,248,0.3)', label: 'Key Zone' },
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-1.5" style={{ fontSize: 11, color: 'rgba(148,163,184,0.55)' }}>
+                  {item.line ? (
+                    <svg width="22" height="8">
+                      <line x1="0" y1="4" x2="22" y2="4"
+                        stroke={item.color} strokeWidth="1.5"
+                        strokeDasharray={item.dash ? '5,3' : 'none'} />
+                    </svg>
+                  ) : (
+                    <div style={{ width: 12, height: 12, borderRadius: 3, background: item.swatch, border: `1.5px solid ${item.swatch}` }} />
+                  )}
+                  {item.label}
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+          {/* Metrics row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { label: 'Risk : Reward', value: setup.rr, icon: <Target className="w-4 h-4 text-cyan-400" />, col: 'text-cyan-300' },
-              { label: 'Est. Win Rate', value: setup.winRateRange, icon: <TrendingUp className="w-4 h-4 text-green-400" />, col: 'text-green-300' },
-              { label: 'Market Type', value: setup.marketCondition, icon: <BarChart2 className="w-4 h-4 text-blue-400" />, col: 'text-blue-300' },
+              { label: 'Risk : Reward', value: setup.rr, icon: <Target style={{ width: 14, height: 14, color: '#22d3ee' }} />, col: '#22d3ee' },
+              { label: 'Est. Win Rate', value: setup.winRateRange, icon: <TrendingUp style={{ width: 14, height: 14, color: '#34d399' }} />, col: '#34d399' },
+              { label: 'Market Type', value: setup.marketCondition, icon: <BarChart2 style={{ width: 14, height: 14, color: '#60a5fa' }} />, col: '#60a5fa' },
             ].map((m, i) => (
-              <div key={i} className="rounded-lg border border-gray-700/50 bg-gray-900/40 p-3 flex sm:flex-col items-center sm:text-center gap-3 sm:gap-1">
-                <div className="flex items-center gap-1.5 sm:justify-center sm:mb-1 flex-shrink-0">{m.icon}<span className="text-xs text-gray-400">{m.label}</span></div>
-                <div className={`text-base sm:text-lg font-bold ${m.col} ml-auto sm:ml-0`}>{m.value}</div>
+              <div key={i} style={{
+                borderRadius: 10, padding: '12px 14px',
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}>
+                <div className="flex items-center gap-1.5">
+                  {m.icon}
+                  <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.55)' }}>{m.label}</span>
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: m.col }}>{m.value}</div>
               </div>
             ))}
           </div>
 
-          {/* Concept */}
-          <div className="rounded-xl border border-gray-700/40 bg-gray-900/30 p-4">
+          {/* Concept block */}
+          <div style={{
+            borderRadius: 12, padding: 16,
+            background: 'rgba(245,158,11,0.06)',
+            border: '1px solid rgba(245,158,11,0.18)',
+          }}>
             <div className="flex items-center gap-2 mb-2">
-              <Layers className="w-4 h-4 text-yellow-400" />
-              <span className="text-xs font-bold text-yellow-300 uppercase tracking-wider">Core Concept</span>
+              <Layers style={{ width: 14, height: 14, color: '#f59e0b' }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Core Concept</span>
             </div>
-            <p className="text-sm text-gray-300 leading-relaxed">{setup.concept}</p>
+            <p style={{ fontSize: 13, color: 'rgba(226,232,240,0.8)', lineHeight: 1.7 }}>{setup.concept}</p>
           </div>
 
-          {/* Steps + Confluence */}
+          {/* Entry checklist + confluence/exit grid */}
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+            {/* Entry checklist */}
+            <div style={{
+              borderRadius: 12, padding: 16,
+              background: 'rgba(34,211,238,0.05)',
+              border: '1px solid rgba(34,211,238,0.15)',
+            }}>
               <div className="flex items-center gap-2 mb-3">
-                <Target className="w-4 h-4 text-cyan-400" />
-                <span className="text-xs font-bold text-cyan-300 uppercase tracking-wider">Entry Checklist</span>
+                <Target style={{ width: 14, height: 14, color: '#22d3ee' }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#67e8f9', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Entry Checklist</span>
               </div>
-              <ol className="space-y-2">
+              <ol style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {setup.steps.map((s, i) => (
-                  <li key={i} className="flex gap-2.5 text-xs text-gray-300">
-                    <span className="shrink-0 w-5 h-5 rounded bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-xs">{i + 1}</span>
-                    <span className="pt-0.5 leading-relaxed">{s}</span>
+                  <li key={i} className="flex gap-2.5" style={{ fontSize: 12, color: 'rgba(226,232,240,0.75)' }}>
+                    <span style={{
+                      flexShrink: 0, width: 20, height: 20, borderRadius: '50%',
+                      background: 'rgba(34,211,238,0.15)', color: '#22d3ee',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 10, fontWeight: 700,
+                    }}>{i + 1}</span>
+                    <span style={{ paddingTop: 2, lineHeight: 1.6 }}>{s}</span>
                   </li>
                 ))}
               </ol>
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Confluence */}
+              <div style={{
+                borderRadius: 12, padding: 16,
+                background: 'rgba(129,140,248,0.05)',
+                border: '1px solid rgba(129,140,248,0.15)',
+              }}>
                 <div className="flex items-center gap-2 mb-3">
-                  <Shield className="w-4 h-4 text-purple-400" />
-                  <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">Confluence Factors</span>
+                  <Shield style={{ width: 14, height: 14, color: '#818cf8' }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Confluence Factors</span>
                 </div>
-                <ul className="space-y-1.5">
+                <ul style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {setup.confluence.map((c, i) => (
-                    <li key={i} className="flex gap-2 text-xs text-gray-300">
-                      <CheckCircle className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
+                    <li key={i} className="flex gap-2" style={{ fontSize: 12, color: 'rgba(226,232,240,0.75)' }}>
+                      <CheckCircle style={{ width: 13, height: 13, color: '#818cf8', flexShrink: 0, marginTop: 1 }} />
                       {c}
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
+              {/* Exit strategy */}
+              <div style={{
+                borderRadius: 12, padding: 16,
+                background: 'rgba(52,211,153,0.05)',
+                border: '1px solid rgba(52,211,153,0.15)',
+              }}>
                 <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp className="w-4 h-4 text-green-400" />
-                  <span className="text-xs font-bold text-green-300 uppercase tracking-wider">Exit Strategy</span>
+                  <TrendingUp style={{ width: 14, height: 14, color: '#34d399' }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#6ee7b7', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Exit Strategy</span>
                 </div>
-                <ul className="space-y-1.5">
+                <ul style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {setup.exitStrategy.map((e, i) => (
-                    <li key={i} className="flex gap-2 text-xs text-gray-300">
-                      <span className="text-green-400 font-bold shrink-0">→</span>
+                    <li key={i} className="flex gap-2" style={{ fontSize: 12, color: 'rgba(226,232,240,0.75)' }}>
+                      <span style={{ color: '#34d399', fontWeight: 700, flexShrink: 0 }}>→</span>
                       {e}
                     </li>
                   ))}
@@ -899,16 +1121,20 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
             </div>
           </div>
 
-          {/* Common Mistakes */}
-          <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+          {/* Common mistakes */}
+          <div style={{
+            borderRadius: 12, padding: 16,
+            background: 'rgba(248,113,113,0.05)',
+            border: '1px solid rgba(248,113,113,0.15)',
+          }}>
             <div className="flex items-center gap-2 mb-3">
-              <XCircle className="w-4 h-4 text-red-400" />
-              <span className="text-xs font-bold text-red-300 uppercase tracking-wider">Common Mistakes to Avoid</span>
+              <XCircle style={{ width: 14, height: 14, color: '#f87171' }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#fca5a5', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Common Mistakes to Avoid</span>
             </div>
             <div className="grid sm:grid-cols-2 gap-2">
               {setup.commonMistakes.map((m, i) => (
-                <div key={i} className="flex gap-2 text-xs text-gray-400">
-                  <span className="text-red-500 font-bold shrink-0">✕</span>
+                <div key={i} className="flex gap-2" style={{ fontSize: 12, color: 'rgba(148,163,184,0.65)' }}>
+                  <span style={{ color: '#f87171', fontWeight: 700, flexShrink: 0 }}>✕</span>
                   {m}
                 </div>
               ))}
@@ -916,10 +1142,15 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
           </div>
 
           {/* Disclaimer */}
-          <div className="flex gap-2 p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/5">
-            <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-yellow-200/70">
-              <strong>Educational Model Only.</strong> This is a pattern model for learning purposes, not a trading signal or financial advice. Always backtest on your own data and manage risk accordingly.
+          <div className="flex gap-2" style={{
+            padding: 12, borderRadius: 10,
+            background: 'rgba(245,158,11,0.06)',
+            border: '1px solid rgba(245,158,11,0.2)',
+          }}>
+            <AlertTriangle style={{ width: 15, height: 15, color: '#f59e0b', flexShrink: 0, marginTop: 1 }} />
+            <p style={{ fontSize: 12, color: 'rgba(253,230,138,0.65)', lineHeight: 1.6 }}>
+              <strong style={{ color: 'rgba(253,230,138,0.85)' }}>Educational Model Only.</strong>{' '}
+              This is a pattern model for learning purposes, not a trading signal or financial advice. Always backtest on your own data and manage risk accordingly.
             </p>
           </div>
         </div>
@@ -941,57 +1172,97 @@ export default function SetupsPage() {
     professional: filtered.filter(s => s.level === 'professional'),
   };
 
+  const filterTabs = [
+    { key: 'all' as const, label: 'All', count: SETUPS.length },
+    { key: 'beginner' as const, label: 'Beginner', count: SETUPS.filter(s => s.level === 'beginner').length },
+    { key: 'amateur' as const, label: 'Intermediate', count: SETUPS.filter(s => s.level === 'amateur').length },
+    { key: 'professional' as const, label: 'Professional', count: SETUPS.filter(s => s.level === 'professional').length },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#06060f] to-black text-white">
+    <div style={{ height: '100%', overflowY: 'auto', background: '#070a12', color: '#fff', paddingBottom: 64 }}>
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-black/70 backdrop-blur-xl border-b border-white/5">
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 30,
+        background: 'rgba(5,7,15,0.96)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        backdropFilter: 'blur(16px)',
+      }}>
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+            <h1 style={{
+              fontSize: 22, fontWeight: 800,
+              background: 'linear-gradient(to right, #a78bfa, #818cf8)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>
               Setups Library
             </h1>
-            <p className="text-xs text-gray-500 mt-0.5">Pattern models with candlestick charts · Educational use only</p>
+            <p style={{ fontSize: 11, color: 'rgba(148,163,184,0.45)', marginTop: 2 }}>
+              Pattern models with candlestick charts · Educational use only
+            </p>
           </div>
-          <Link href="/app" className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800/60 hover:bg-gray-700/60 text-gray-300 text-sm transition-colors">
-            <ArrowLeft size={16} /> <span className="hidden sm:inline">Dashboard</span>
+          <Link href="/app" style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 12px', borderRadius: 8,
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            color: 'rgba(148,163,184,0.7)', fontSize: 13,
+            textDecoration: 'none', transition: 'background 0.15s',
+          }}>
+            <ArrowLeft size={15} />
+            <span className="hidden sm:inline">Dashboard</span>
           </Link>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-3 sm:px-6 pt-2 pb-0">
-        <p className="text-[11px] text-gray-600">Not financial advice. Educational pattern models for learning purposes only.</p>
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 pt-2">
+        <p style={{ fontSize: 11, color: 'rgba(148,163,184,0.3)' }}>
+          Not financial advice. Educational pattern models for learning purposes only.
+        </p>
       </div>
 
       {/* Filter Tabs */}
-      <div className="sticky top-[57px] z-20 bg-black/60 backdrop-blur-xl border-b border-white/5">
+      <div style={{
+        position: 'sticky', top: 57, zIndex: 20,
+        background: 'rgba(5,7,15,0.94)',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        backdropFilter: 'blur(12px)',
+      }}>
         <div className="max-w-6xl mx-auto px-2 sm:px-6 py-3 flex items-center gap-2 sm:gap-3 overflow-x-auto">
-          {([
-            { key: 'all', label: '📚 All', count: SETUPS.length },
-            { key: 'beginner', label: '🟢 Beginner', count: SETUPS.filter(s => s.level === 'beginner').length },
-            { key: 'amateur', label: '🔵 Intermediate', count: SETUPS.filter(s => s.level === 'amateur').length },
-            { key: 'professional', label: '💎 Professional', count: SETUPS.filter(s => s.level === 'professional').length },
-          ] as const).map(tab => (
-            <motion.button
-              key={tab.key}
-              onClick={() => setFilterLevel(tab.key as any)}
-              whileTap={{ scale: 0.95 }}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                filterLevel === tab.key
-                  ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300'
-                  : 'bg-gray-800/30 border border-gray-700/40 text-gray-400 hover:text-gray-300 hover:border-gray-600'
-              }`}
-            >
-              {tab.label}
-              <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${filterLevel === tab.key ? 'bg-cyan-500/30 text-cyan-200' : 'bg-gray-700/50 text-gray-500'}`}>
-                {tab.count}
-              </span>
-            </motion.button>
-          ))}
+          {filterTabs.map(tab => {
+            const active = filterLevel === tab.key;
+            return (
+              <motion.button
+                key={tab.key}
+                onClick={() => setFilterLevel(tab.key)}
+                whileTap={{ scale: 0.95 }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 14px', borderRadius: 8,
+                  fontSize: 12, fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  background: active ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.03)',
+                  border: active ? '1px solid rgba(129,140,248,0.3)' : '1px solid rgba(255,255,255,0.07)',
+                  color: active ? '#a5b4fc' : 'rgba(148,163,184,0.5)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {tab.label}
+                <span style={{
+                  padding: '1px 6px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+                  background: active ? 'rgba(129,140,248,0.25)' : 'rgba(255,255,255,0.06)',
+                  color: active ? '#c7d2fe' : 'rgba(148,163,184,0.4)',
+                }}>{tab.count}</span>
+              </motion.button>
+            );
+          })}
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-8 sm:space-y-12">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-10" style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
         {(['beginner', 'amateur', 'professional'] as const).map(level => {
           const levelSetups = groups[level];
           if (levelSetups.length === 0) return null;
@@ -1000,18 +1271,26 @@ export default function SetupsPage() {
           return (
             <motion.section key={level} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
               {/* Section header */}
-              <div className="flex items-end gap-4 mb-6 pb-4 border-b border-gray-800">
+              <div className="flex items-end gap-4 mb-6" style={{ paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <div>
-                  <h2 className={`text-xl font-bold bg-gradient-to-r ${cfg.grad} bg-clip-text text-transparent`}>
-                    {cfg.emoji} {cfg.label} Setups
+                  <h2 style={{
+                    fontSize: 18, fontWeight: 700,
+                    background: `linear-gradient(to right, ${cfg.color}, rgba(255,255,255,0.5))`,
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    marginBottom: 4,
+                  }}>
+                    {cfg.label} Setups
                   </h2>
-                  <p className="text-sm text-gray-500 mt-0.5">
+                  <p style={{ fontSize: 13, color: 'rgba(148,163,184,0.45)' }}>
                     {level === 'beginner' && 'Foundation patterns — clear rules, simple execution'}
                     {level === 'amateur' && 'Intermediate concepts — requires understanding of market structure'}
                     {level === 'professional' && 'Advanced confluence strategies — multi-timeframe, high R:R'}
                   </p>
                 </div>
-                <span className="ml-auto text-xs text-gray-600">{levelSetups.length} {levelSetups.length === 1 ? 'setup' : 'setups'}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'rgba(148,163,184,0.3)' }}>
+                  {levelSetups.length} {levelSetups.length === 1 ? 'setup' : 'setups'}
+                </span>
               </div>
 
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

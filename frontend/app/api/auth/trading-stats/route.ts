@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromToken } from "@/lib/auth-server";
+import { getUserFromBackendToken } from "@/lib/backend-proxy";
 
-/**
- * GET /api/auth/trading-stats
- * Returns trading statistics. When TradingView is connected, returns enriched data.
- * Currently uses mock/demo data — will integrate with TradingView API when available.
- */
 export async function GET(req: NextRequest) {
   try {
-    const user = getUserFromToken(req.headers.get("authorization"));
+    const user = await getUserFromBackendToken(req.headers.get("authorization"));
     if (!user) {
       return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
     }
 
-    const hasTv = !!user.tradingview?.username;
+    const hasTv = !!(user as any).tradingview?.username;
 
-    // In production, this would fetch from TradingView API or local trade journal
     const stats = {
       total_trades: hasTv ? 156 : 23,
       win_rate: hasTv ? 0.62 : 0.52,

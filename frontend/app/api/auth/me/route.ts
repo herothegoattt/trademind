@@ -1,28 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUsers, verifyToken, userToResponse } from "@/lib/auth-server";
+import { proxyToBackend } from "@/lib/backend-proxy";
 
 export async function GET(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ detail: "Missing token" }, { status: 401 });
-    }
-
-    const token = authHeader.slice(7);
-    const payload = verifyToken(token);
-    if (!payload) {
-      return NextResponse.json({ detail: "Invalid or expired token" }, { status: 401 });
-    }
-
-    const users = getUsers();
-    const user = users.find((u) => u.id === Number(payload.sub));
-    if (!user) {
-      return NextResponse.json({ detail: "User not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(userToResponse(user));
+    const auth = req.headers.get("authorization");
+    const res = await proxyToBackend("/api/v1/auth/me", "GET", undefined, auth);
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
   } catch (err) {
-    console.error("Me error:", err);
+    console.error("Me proxy error:", err);
     return NextResponse.json({ detail: "Internal server error" }, { status: 500 });
   }
 }

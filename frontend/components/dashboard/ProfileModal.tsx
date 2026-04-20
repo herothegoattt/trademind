@@ -5,7 +5,7 @@ import Image from "next/image";
 import {
   X, LogOut, Edit2, Check, ChevronLeft, Camera, Zap, Shield, Crown,
   Link2, Unlink, RefreshCw, TrendingUp, BarChart3, Target, Trophy,
-  Clock, Flame, ChevronRight, ExternalLink, Activity, Upload,
+  Clock, Flame, ChevronRight, ExternalLink, Activity, Upload, Gift,
 } from "lucide-react";
 
 // ─── Local profile prefs (avatar + personalization, stored client-side) ───────
@@ -40,6 +40,7 @@ function savePrefs(p: ProfilePrefs) {
 import { cn } from "../../lib/utils";
 import { useAuthStore, type Plan } from "../../lib/auth-store";
 import { SubscriptionModal } from "./SubscriptionModal";
+import { ReferralModal } from "./ReferralModal";
 import {
   connectTradingView,
   disconnectTradingView,
@@ -212,6 +213,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
   const [plan, setPlan] = useState<Plan>((authUser?.plan as Plan) || "core");
   const [subOpen, setSubOpen] = useState(false);
+  const [referralOpen, setReferralOpen] = useState(false);
 
   // TradingView
   const [tvUsername, setTvUsername] = useState("");
@@ -283,7 +285,6 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       const { fetchCurrentUser } = useAuthStore.getState();
       await fetchCurrentUser();
       setTvUsername("");
-      setStats(null); // force reload stats
     } catch (err: any) {
       setTvError(err.message || "Connection failed");
     } finally {
@@ -296,7 +297,6 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       await disconnectTradingView();
       const { fetchCurrentUser } = useAuthStore.getState();
       await fetchCurrentUser();
-      setStats(null);
     } catch {
       // silent
     }
@@ -306,7 +306,6 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     setSyncing(true);
     try {
       await syncTradingView();
-      setStats(null); // force reload
     } catch {
       // silent
     } finally {
@@ -401,7 +400,6 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       <div
         className="w-full sm:w-[480px] flex flex-col rounded-t-2xl sm:rounded-2xl overflow-hidden"
         style={{
-          maxHeight: "92vh",
           background: "rgba(7,9,18,0.98)",
           border: "1px solid rgba(255,255,255,0.06)",
           boxShadow: "0 40px 100px rgba(0,0,0,0.8)",
@@ -453,8 +451,8 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
           </div>
         )}
 
-        {/* ── Scrollable content ─────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+        {/* ── Content ────────────────────────────────────────────────────── */}
+        <div className="flex-1 px-5 py-5 space-y-5">
           {isEditing ? (
             /* ════ EDIT MODE ════ */
             <div className="space-y-5">
@@ -643,27 +641,50 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                 </div>
               </div>
 
-              {/* Upgrade CTA */}
-              {plan !== "apex" && (
+              {/* Upgrade CTA + Referral */}
+              <div className="space-y-2">
+                {plan !== "apex" && (
+                  <button
+                    onClick={() => setSubOpen(true)}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all hover:brightness-110"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(139,92,246,0.06), rgba(6,182,212,0.04))",
+                      border: "1px solid rgba(139,92,246,0.15)",
+                    }}
+                  >
+                    <div className="text-left">
+                      <div className="text-xs font-medium text-white">
+                        {plan === "core" ? t('upgrade_to_edge_apex') : t('upgrade_to_apex')}
+                      </div>
+                      <div className="text-[10px] text-gray-500 mt-0.5">
+                        {plan === "core" ? t('upgrade_desc_core') : t('upgrade_desc_edge')}
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-600" />
+                  </button>
+                )}
+                {/* Referral & Promo button */}
                 <button
-                  onClick={() => setSubOpen(true)}
+                  onClick={() => setReferralOpen(true)}
                   className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all hover:brightness-110"
                   style={{
-                    background: "linear-gradient(135deg, rgba(139,92,246,0.06), rgba(6,182,212,0.04))",
-                    border: "1px solid rgba(139,92,246,0.15)",
+                    background: "linear-gradient(135deg, rgba(167,139,250,0.05), rgba(34,211,238,0.03))",
+                    border: "1px solid rgba(167,139,250,0.12)",
                   }}
                 >
-                  <div className="text-left">
-                    <div className="text-xs font-medium text-white">
-                      {plan === "core" ? t('upgrade_to_edge_apex') : t('upgrade_to_apex')}
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-lg flex items-center justify-center"
+                      style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.2)" }}>
+                      <Gift size={12} style={{ color: "#a78bfa" }} />
                     </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">
-                      {plan === "core" ? t('upgrade_desc_core') : t('upgrade_desc_edge')}
+                    <div className="text-left">
+                      <div className="text-xs font-medium text-white">Referrals & Promos</div>
+                      <div className="text-[10px] text-gray-500">Earn $10/referral · Early-user discounts</div>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-600" />
                 </button>
-              )}
+              </div>
 
               {/* Plan Perks */}
               <div className="space-y-2">
@@ -1022,6 +1043,9 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         currentPlan={plan}
         onUpgrade={(p) => setPlan(p)}
       />
+
+      {/* Referral & Promo modal */}
+      <ReferralModal isOpen={referralOpen} onClose={() => setReferralOpen(false)} />
     </div>
   );
 }

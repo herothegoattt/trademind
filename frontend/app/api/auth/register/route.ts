@@ -1,39 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUsers, saveUsers, hashPassword, createToken, userToResponse } from "@/lib/auth-server";
+import { proxyToBackend } from "@/lib/backend-proxy";
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, name } = await req.json();
+    const body = await req.json();
 
-    if (!email || !password || !name) {
-      return NextResponse.json({ detail: "Email, password, and name are required" }, { status: 400 });
+    // Register user in FastAPI
+    const registerRes = await proxyToBackend("/api/v1/auth/register", "POST", body);
+    const registerData = await registerRes.json();
+
+    if (!registerRes.ok) {
+      return NextResponse.json(registerData, { status: registerRes.status });
     }
 
-    if (password.length < 6) {
-      return NextResponse.json({ detail: "Password must be at least 6 characters" }, { status: 400 });
+    // Auto-login to get FastAPI JWT
+    const loginRes = await proxyToBackend("/api/v1/auth/login", "POST", {
+      email: body.email,
+      password: body.password,
+    });
+    const loginData = await loginRes.json();
+
+    if (!loginRes.ok) {
+      return NextResponse.json(registerData, { status: 201 });
     }
 
-    const users = getUsers();
-
-    if (users.find((u) => u.email.toLowerCase() === email.toLowerCase())) {
-      return NextResponse.json({ detail: "Email already registered" }, { status: 409 });
-    }
-
-    const newUser = {
-      id: users.length > 0 ? Math.max(...users.map((u) => u.id)) + 1 : 1,
-      email: email.toLowerCase().trim(),
-      name: name.trim(),
-      password_hash: hashPassword(password),
-      created_at: new Date().toISOString(),
-      is_active: true,
-    };
-
-    users.push(newUser);
-    saveUsers(users);
-
-    return NextResponse.json(userToResponse(newUser), { status: 201 });
+    return NextResponse.json(
+      { ...registerData, access_token: loginData.access_token },
+      { status: 201 }
+    );
   } catch (err) {
-    console.error("Register error:", err);
+    console.error("Register proxy error:", err);
     return NextResponse.json({ detail: "Internal server error" }, { status: 500 });
   }
 }

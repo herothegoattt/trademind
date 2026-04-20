@@ -97,7 +97,7 @@ const inner = { width:"100%", maxWidth:1040, margin:"0 auto" } as React.CSSPrope
 // ═════════════════════════════════════════════════════════════════════════════
 // SLIDE 1 — HERO
 // ═════════════════════════════════════════════════════════════════════════════
-function SlideHero({ onLaunch, active }: { onLaunch: ()=>void; active: boolean }) {
+function SlideHero({ onLaunch, active }: { onLaunch: (plan?: string, billing?: string)=>void; active: boolean }) {
   const t = useT();
   const [spot, setSpot] = useState({ x:50, y:45 });
   const mouse = useRef({ x:50, y:45 });
@@ -142,8 +142,10 @@ function SlideHero({ onLaunch, active }: { onLaunch: ()=>void; active: boolean }
           <motion.h1 {...enter(.26)}
             style={{ margin:"0 0 18px", fontWeight:800, letterSpacing:"-.045em", lineHeight:1.06,
               fontSize:"clamp(2.6rem,7.5vw,5.2rem)",
-              background:"linear-gradient(155deg,#f1f5f9 20%,rgba(139,92,246,.9) 55%,rgba(34,211,238,.88) 90%)",
-              WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>
+              background:"linear-gradient(135deg, #f8fafc 0%, #bfdbfe 18%, #818cf8 36%, #7c3aed 54%, #4c1d95 68%, #7c3aed 80%, #bfdbfe 92%, #f8fafc 100%)",
+              backgroundSize:"300% auto",
+              WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent",
+              animation:"heroShimmer 8s linear infinite" }}>
             {t("lp_hero_headline_1")}<br />{t("lp_hero_headline_2")}
           </motion.h1>
 
@@ -577,67 +579,93 @@ function AnimNum({ to, suf="", dec=0, active }: { to:number; suf?:string; dec?:n
   return <span>{dec>0?n.toFixed(dec):Math.round(n).toLocaleString()}{suf}</span>;
 }
 
+const ALL_REVIEWS = [
+  { name:"Алексей М.",  role:"Forex · 4 года",       c:VIO, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Alexey&backgroundColor=b6e3f4",   text:"After TradeMind I finally saw that 70% of losses were in the NY overlap. Dropped the session — ended the month in profit." },
+  { name:"Дина К.",     role:"Crypto · Almaty",       c:CYN, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Dina&backgroundColor=d1d4f9",     text:"Trader DNA showed I was cutting profits at 2.3R. Platform paid for itself in the first week." },
+  { name:"Rustam T.",   role:"Stocks · Tashkent",     c:GRN, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Rustam&backgroundColor=c0aede",   text:"In 2 months win-rate went from 38% to 52%. AI found I was entering too early without confirmation." },
+  { name:"Sarah W.",    role:"Options · London",       c:AMB, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Sarah&backgroundColor=ffd5dc",    text:"The risk analyzer flagged patterns I'd been ignoring for years. My drawdown dropped 40% in six weeks." },
+  { name:"Marcus L.",   role:"Futures · New York",     c:RED, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Marcus&backgroundColor=ffdfbf",   text:"Daily Bias alone is worth the subscription. Stopped fighting the trend every morning. Huge shift." },
+  { name:"Yuki T.",     role:"Crypto · Tokyo",         c:VIO, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Yuki&backgroundColor=c0aede",     text:"TradeMind caught that I revenge-trade after losers. Fixed it with a cooling-off rule. Best month ever." },
+  { name:"Elena P.",    role:"Forex · Madrid",         c:CYN, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Elena&backgroundColor=b6e3f4",    text:"Psychology section is gold. I never realized how much FOMO was costing me — now I have data to prove it." },
+  { name:"James K.",    role:"Equities · Chicago",     c:GRN, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=James&backgroundColor=d1fae5",    text:"Setups section replaced my manual spreadsheet. Everything in one place, AI notes on every entry." },
+  { name:"Amir H.",     role:"Crypto · Dubai",         c:AMB, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Amir&backgroundColor=fef3c7",     text:"Community Edge signals have been consistently accurate. 3× better than my old signals group." },
+  { name:"Nina V.",     role:"Forex · Prague",         c:RED, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Nina&backgroundColor=ffd5dc",     text:"The AI coach picked up I was over-leveraging on Fridays. Simple fix, massive difference in monthly PnL." },
+];
+
+function ReviewCard({ r }: { r: typeof ALL_REVIEWS[0] }) {
+  return (
+    <div style={{
+      flex:"0 0 320px", background:"rgba(255,255,255,.025)",
+      border:`1px solid ${r.c}22`, borderRadius:16,
+      padding:"20px 18px", display:"flex", flexDirection:"column", gap:14,
+    }}>
+      <div style={{ color:AMB, fontSize:".8rem", letterSpacing:2 }}>★★★★★</div>
+      <p style={{ margin:0, fontSize:".8rem", color:"rgba(148,163,184,.75)", lineHeight:1.7, flex:1 }}>
+        &ldquo;{r.text}&rdquo;
+      </p>
+      <div style={{ display:"flex", alignItems:"center", gap:12, paddingTop:12, borderTop:"1px solid rgba(255,255,255,.05)" }}>
+        <div style={{ position:"relative", flexShrink:0 }}>
+          <div style={{ width:42, height:42, borderRadius:12, overflow:"hidden", border:`1.5px solid ${r.c}40`, boxShadow:`0 0 14px ${r.c}30` }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={r.img} alt={r.name} width={42} height={42} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display="none"; }} />
+          </div>
+          <div style={{ position:"absolute", bottom:1, right:1, width:10, height:10, borderRadius:"50%", background:GRN, border:"2px solid #07080f", boxShadow:`0 0 6px ${GRN}` }} />
+        </div>
+        <div>
+          <div style={{ fontSize:".82rem", fontWeight:600, color:"#f1f5f9" }}>{r.name}</div>
+          <div style={{ fontSize:".63rem", color:`${r.c}99`, marginTop:2 }}>{r.role}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SlideStats({ active }: { active: boolean }) {
   const t = useT();
-  const reviews = [
-    { name:"Алексей М.", role:"Forex · 4 года",  av:"АМ", grad:"135deg,#7c3aed,#4f46e5", c:VIO, key:"lp_review_1_text", img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Alexey&backgroundColor=b6e3f4&backgroundType=gradientLinear" },
-    { name:"Дина К.",    role:"Crypto · Almaty", av:"ДК", grad:"135deg,#0891b2,#06b6d4",  c:CYN, key:"lp_review_2_text", img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Dina&backgroundColor=d1d4f9&backgroundType=gradientLinear" },
-    { name:"Rustam T.",  role:"Stocks",           av:"RT", grad:"135deg,#059669,#10b981",  c:GRN, key:"lp_review_3_text", img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Rustam&backgroundColor=c0aede&backgroundType=gradientLinear" },
-  ];
+  const doubled = [...ALL_REVIEWS, ...ALL_REVIEWS];
+  const CARD_W = 320 + 14; // card width + gap
+  const totalPx = ALL_REVIEWS.length * CARD_W;
+
   return (
     <Slide id="slide-stats" bg="#05060f">
       <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 60% 50% at 50% 50%,rgba(139,92,246,.05) 0%,transparent 70%)", pointerEvents:"none" }} />
-      <div style={{ ...inner, ...px, zIndex:10 }}>
-        {/* stats row — updated numbers */}
-        <motion.div initial={{ opacity:0, y:24 }} animate={active?{ opacity:1, y:0 }:{}} transition={{ duration:.6, delay:.1 }}
-          style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16, marginBottom:40 }}>
-          {([{to:120,suf:"+",labelKey:"lp_stats_traders_label",c:VIO},{to:3000,suf:"+",labelKey:"lp_stats_trades_label",c:CYN},{to:2.1,suf:"×",labelKey:"lp_stats_rr_label",c:AMB,dec:1}] as {to:number;suf:string;labelKey:string;c:string;dec?:number}[]).map((s,i)=>(
-            <motion.div key={i} initial={{ opacity:0, y:16 }} animate={active?{ opacity:1, y:0 }:{}} transition={{ duration:.5, delay:.15+i*.08 }}
-              style={{ textAlign:"center", padding:"24px 16px", background:"rgba(255,255,255,.025)", border:"1px solid rgba(255,255,255,.07)", borderRadius:14 }}>
-              <div style={{ fontSize:"clamp(2rem,4vw,2.8rem)", fontWeight:800, letterSpacing:"-.04em", color:s.c, lineHeight:1, marginBottom:8 }}>
-                <AnimNum to={s.to} suf={s.suf} dec={s.dec??0} active={active} />
-              </div>
-              <div style={{ fontSize:".62rem", fontFamily:"monospace", color:"rgba(100,116,139,.5)", letterSpacing:".09em", lineHeight:1.4 }}>{t(s.labelKey).toUpperCase()}</div>
-            </motion.div>
-          ))}
-        </motion.div>
-        {/* testimonials */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
-          {reviews.map((r,i)=>(
-            <motion.div key={i} initial={{ opacity:0, y:20 }} animate={active?{ opacity:1, y:0 }:{}} transition={{ duration:.55, delay:.38+i*.09 }}
-              style={{ background:"rgba(255,255,255,.025)", border:"1px solid rgba(255,255,255,.065)", borderRadius:16, padding:"20px 18px", display:"flex", flexDirection:"column", gap:14 }}>
-              <div style={{ color:AMB, fontSize:".82rem", letterSpacing:3 }}>★★★★★</div>
-              <p style={{ margin:0, fontSize:".81rem", color:"rgba(148,163,184,.72)", lineHeight:1.68, flex:1 }}>&ldquo;{t(r.key)}&rdquo;</p>
-              <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:"auto", paddingTop:4, borderTop:"1px solid rgba(255,255,255,.05)" }}>
-                {/* avatar */}
-                <div style={{ position:"relative", flexShrink:0 }}>
-                  <div style={{
-                    width:48, height:48, borderRadius:14, overflow:"hidden",
-                    background:`linear-gradient(${r.grad})`,
-                    boxShadow:`0 0 18px ${r.c}35`,
-                    border:`1.5px solid ${r.c}40`,
-                    flexShrink:0,
-                  }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={r.img}
-                      alt={r.name}
-                      width={48} height={48}
-                      style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}
-                      onError={e => { (e.currentTarget as HTMLImageElement).style.display="none"; }}
-                    />
-                  </div>
-                  {/* online dot */}
-                  <div style={{ position:"absolute", bottom:1, right:1, width:11, height:11, borderRadius:"50%", background:GRN, border:"2px solid #07080f", boxShadow:`0 0 7px ${GRN}` }} />
+      <div style={{ width:"100%", zIndex:10 }}>
+        {/* stats row */}
+        <div style={{ ...inner, ...px, marginBottom:44 }}>
+          <motion.div initial={{ opacity:0, y:24 }} animate={active?{ opacity:1, y:0 }:{}} transition={{ duration:.6, delay:.1 }}
+            style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+            {([{to:120,suf:"+",labelKey:"lp_stats_traders_label",c:VIO},{to:3000,suf:"+",labelKey:"lp_stats_trades_label",c:CYN},{to:2.1,suf:"×",labelKey:"lp_stats_rr_label",c:AMB,dec:1}] as {to:number;suf:string;labelKey:string;c:string;dec?:number}[]).map((s,i)=>(
+              <motion.div key={i} initial={{ opacity:0, y:16 }} animate={active?{ opacity:1, y:0 }:{}} transition={{ duration:.5, delay:.15+i*.08 }}
+                style={{ textAlign:"center", padding:"22px 16px", background:"rgba(255,255,255,.025)", border:"1px solid rgba(255,255,255,.07)", borderRadius:14 }}>
+                <div style={{ fontSize:"clamp(2rem,4vw,2.8rem)", fontWeight:800, letterSpacing:"-.04em", color:s.c, lineHeight:1, marginBottom:8 }}>
+                  <AnimNum to={s.to} suf={s.suf} dec={s.dec??0} active={active} />
                 </div>
-                <div>
-                  <div style={{ fontSize:".84rem", fontWeight:600, color:"#f1f5f9", letterSpacing:"-.01em" }}>{r.name}</div>
-                  <div style={{ fontSize:".65rem", color:"rgba(100,116,139,.5)", marginTop:2 }}>{r.role}</div>
-                </div>
-              </div>
-            </motion.div>
-          ))}
+                <div style={{ fontSize:".62rem", fontFamily:"monospace", color:"rgba(100,116,139,.5)", letterSpacing:".09em" }}>{t(s.labelKey).toUpperCase()}</div>
+              </motion.div>
+            ))}
+          </motion.div>
         </div>
+
+        {/* section label */}
+        <motion.div initial={{ opacity:0 }} animate={active?{ opacity:1 }:{}} transition={{ duration:.5, delay:.3 }}
+          style={{ textAlign:"center", marginBottom:24 }}>
+          <span style={{ fontSize:".62rem", fontFamily:"monospace", letterSpacing:".22em", color:`${VIO}88`, textTransform:"uppercase" }}>
+            — Traders about TradeMind —
+          </span>
+        </motion.div>
+
+        {/* Marquee carousel */}
+        <motion.div initial={{ opacity:0 }} animate={active?{ opacity:1 }:{}} transition={{ duration:.6, delay:.4 }}
+          style={{ overflow:"hidden", maskImage:"linear-gradient(90deg,transparent,black 5%,black 95%,transparent)", WebkitMaskImage:"linear-gradient(90deg,transparent,black 5%,black 95%,transparent)" }}>
+          <motion.div
+            style={{ display:"flex", gap:14, width:"max-content" }}
+            animate={{ x: [0, -totalPx] }}
+            transition={{ duration: 35, repeat: Infinity, ease:"linear" }}
+          >
+            {doubled.map((r, i) => <ReviewCard key={i} r={r} />)}
+          </motion.div>
+        </motion.div>
       </div>
     </Slide>
   );
@@ -646,13 +674,13 @@ function SlideStats({ active }: { active: boolean }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // SLIDE 8 — PRICING
 // ═════════════════════════════════════════════════════════════════════════════
-function SlidePricing({ active, onLaunch }: { active: boolean; onLaunch: ()=>void }) {
+function SlidePricing({ active, onLaunch }: { active: boolean; onLaunch: (plan?: string, billing?: string)=>void }) {
   const t = useT();
   const [annual, setAnnual] = useState(false);
   const plans = [
-    { key:"core", name:"Core", price:0,  color:CYN, popular:false, feats:[t("plan_core_feat1"),t("plan_core_feat2"),t("plan_core_feat3"),t("plan_core_feat4")] },
-    { key:"edge", name:"Edge", price:29, color:VIO, popular:true,  feats:[t("plan_edge_feat1"),t("plan_edge_feat2"),t("plan_edge_feat3"),t("plan_edge_feat4"),t("plan_edge_feat5")] },
-    { key:"apex", name:"Apex", price:79, color:AMB, popular:false, feats:[t("plan_apex_feat1"),t("plan_apex_feat2"),t("plan_apex_feat3"),t("plan_apex_feat4"),t("plan_apex_feat5")] },
+    { key:"core", name:"Core", price:0,  color:CYN, popular:false, feats:[t("plan_core_feat1"),t("plan_core_feat2"),t("plan_core_feat3"),t("plan_core_feat4"),t("plan_core_feat5")] },
+    { key:"edge", name:"Edge", price:29, color:VIO, popular:true,  feats:[t("plan_edge_feat1"),t("plan_edge_feat2"),t("plan_edge_feat3"),t("plan_edge_feat4"),t("plan_edge_feat5"),t("plan_edge_feat6")] },
+    { key:"apex", name:"Apex", price:79, color:AMB, popular:false, feats:[t("plan_apex_feat1"),t("plan_apex_feat2"),t("plan_apex_feat3"),t("plan_apex_feat4"),t("plan_apex_feat5"),t("plan_apex_feat6")] },
   ];
   return (
     <Slide id="slide-pricing" bg="rgba(5,6,15,1)">
@@ -695,7 +723,7 @@ function SlidePricing({ active, onLaunch }: { active: boolean; onLaunch: ()=>voi
                   <span style={{ fontSize:"2.2rem", fontWeight:800, letterSpacing:"-.04em", color:"#f1f5f9" }}>{pl.price===0?"Free":`$${price}`}</span>
                   {pl.price>0&&<span style={{ fontSize:".74rem", color:"rgba(100,116,139,.45)" }}>{t("lp_pricing_per_mo")}</span>}
                 </div>
-                <motion.button whileHover={{ scale:1.03 }} whileTap={{ scale:.97 }} onClick={onLaunch}
+                <motion.button whileHover={{ scale:1.03 }} whileTap={{ scale:.97 }} onClick={()=>onLaunch(pl.key, annual?"annual":"monthly")}
                   style={{ width:"100%", height:40, borderRadius:9, cursor:"pointer", marginBottom:18, fontFamily:"monospace", fontSize:".7rem", letterSpacing:".13em", fontWeight:700, background:pl.popular?`linear-gradient(135deg,${VIO}48,${VIO}26)`:"rgba(255,255,255,.06)", border:pl.popular?`1px solid ${VIO}62`:"1px solid rgba(255,255,255,.09)", color:pl.popular?"#e9d5ff":"rgba(148,163,184,.65)" }}>
                   {pl.price===0?t("lp_pricing_cta_free"):t("lp_pricing_cta_paid")}
                 </motion.button>
@@ -721,7 +749,7 @@ function SlidePricing({ active, onLaunch }: { active: boolean; onLaunch: ()=>voi
 // ═════════════════════════════════════════════════════════════════════════════
 // SLIDE 9 — FINAL CTA
 // ═════════════════════════════════════════════════════════════════════════════
-function SlideCTA({ active, onLaunch }: { active: boolean; onLaunch: ()=>void }) {
+function SlideCTA({ active, onLaunch }: { active: boolean; onLaunch: (plan?: string, billing?: string)=>void }) {
   const t = useT();
   return (
     <Slide id="slide-cta" bg="#05060f">
@@ -736,8 +764,10 @@ function SlideCTA({ active, onLaunch }: { active: boolean; onLaunch: ()=>void })
         <motion.h2 initial={{ opacity:0, y:28 }} animate={active?{ opacity:1, y:0 }:{}} transition={{ duration:.7, delay:.18 }}
           style={{ margin:"0 0 18px", fontWeight:800, letterSpacing:"-.045em", lineHeight:1.08,
             fontSize:"clamp(2.4rem,6vw,4.8rem)",
-            background:"linear-gradient(155deg,#f1f5f9 20%,rgba(139,92,246,.9) 55%,rgba(34,211,238,.88) 90%)",
-            WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>
+            background:"linear-gradient(135deg, #f8fafc 0%, #bfdbfe 18%, #818cf8 36%, #7c3aed 54%, #4c1d95 68%, #7c3aed 80%, #bfdbfe 92%, #f8fafc 100%)",
+            backgroundSize:"300% auto",
+            WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent",
+            animation:"heroShimmer 8s linear infinite" }}>
           {t("lp_cta_headline_1")}<br />{t("lp_cta_headline_2")}
         </motion.h2>
         <motion.p initial={{ opacity:0, y:18 }} animate={active?{ opacity:1, y:0 }:{}} transition={{ duration:.6, delay:.28 }}
@@ -814,12 +844,23 @@ export default function HomePage() {
   const [activeSlide, setActiveSlide] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const launch = useCallback(() => {
+  const [launchPlan, setLaunchPlan] = useState<string | null>(null);
+  const [launchBilling, setLaunchBilling] = useState<string | null>(null);
+
+  const launch = useCallback((plan?: string, billing?: string) => {
     if (didLaunch.current) return;
     didLaunch.current = true;
+    if (plan && plan !== "core") {
+      setLaunchPlan(plan);
+      setLaunchBilling(billing || "monthly");
+    }
     setBooting(true);
   }, []);
-  const onDone = useCallback(() => router.push("/app"), [router]);
+  const onDone = useCallback(() => {
+    const params = new URLSearchParams();
+    if (launchPlan) { params.set("upgrade_plan", launchPlan); if (launchBilling) params.set("billing", launchBilling); }
+    router.push("/app" + (params.toString() ? `?${params}` : ""));
+  }, [router, launchPlan, launchBilling]);
 
   // track which slide is in view
   useEffect(() => {
@@ -908,6 +949,10 @@ export default function HomePage() {
         a { text-decoration: none; color: inherit; }
         button { font-family: inherit; }
         @keyframes tmPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+        @keyframes heroShimmer {
+          0%   { background-position: 200% center; }
+          100% { background-position: -200% center; }
+        }
       `}} />
     </>
   );

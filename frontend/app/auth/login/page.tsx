@@ -46,11 +46,26 @@ export default function LoginPage() {
     if (isAuthenticated) router.replace("/app");
   }, [isAuthenticated, router]);
 
+  const applyStoredReferral = async () => {
+    try {
+      const code = localStorage.getItem("tm_ref_code");
+      if (!code) return;
+      const token = localStorage.getItem("access_token");
+      if (!token) return;
+      await fetch(`/api/v1/referral/register-referral?ref_code=${encodeURIComponent(code)}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      localStorage.removeItem("tm_ref_code");
+    } catch {}
+  };
+
   const handleGoogleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       setError("");
       try {
         await loginWithGoogle(tokenResponse.access_token);
+        await applyStoredReferral();
         router.push("/app");
       } catch (err) {
         setError(err instanceof Error ? err.message : t('google_signin_failed'));
@@ -72,6 +87,7 @@ export default function LoginPage() {
         if (password !== confirmPassword) { setError(t('passwords_dont_match')); return; }
         if (password.length < 6) { setError(t('password_min_6')); return; }
         await register(email, password, name);
+        await applyStoredReferral();
         router.push("/app");
       }
     } catch (err) {

@@ -2,21 +2,48 @@
 import { LeftInsightPanel } from "../../components/dashboard/LeftInsightPanel";
 import { CoreHub } from "../../components/dashboard/CoreHub";
 import { AuthRequiredModal } from "../../components/AuthRequiredModal";
+import { SubscriptionModal } from "../../components/dashboard/SubscriptionModal";
 import { useDashboardStore } from "../../lib/store";
 import { useAuthAction } from "../../lib/use-auth-action";
 import { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ArrowLeft, Sparkles } from "lucide-react";
+import { useAuthStore } from "../../lib/auth-store";
+import type { Plan } from "../../lib/auth-store";
 
 export default function DashboardPage() {
   const init = useDashboardStore((s: any) => s.initDashboard);
   const selectedErrorType = useDashboardStore((s: any) => s.selectedErrorType);
   const selectErrorType = useDashboardStore((s: any) => s.selectErrorType);
   const [mounted, setMounted] = useState(false);
+  const [planSuccess, setPlanSuccess] = useState(false);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradePlan, setUpgradePlan] = useState<Plan>("edge");
   const { showAuthModal, closeAuthModal } = useAuthAction();
+  const searchParams = useSearchParams();
+  const { fetchCurrentUser, user } = useAuthStore();
 
   useEffect(() => {
     init();
     setMounted(true);
+    // Stripe success redirect
+    if (searchParams.get("plan_success") === "1") {
+      setPlanSuccess(true);
+      fetchCurrentUser(); // refresh plan from backend
+      const url = new URL(window.location.href);
+      url.searchParams.delete("plan_success");
+      window.history.replaceState({}, "", url.toString());
+    }
+    // Auto-open upgrade modal from landing page plan CTA
+    const upgradePlanParam = searchParams.get("upgrade_plan");
+    if (upgradePlanParam && (upgradePlanParam === "edge" || upgradePlanParam === "apex")) {
+      setUpgradePlan(upgradePlanParam as Plan);
+      setUpgradeModalOpen(true);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("upgrade_plan");
+      url.searchParams.delete("billing");
+      window.history.replaceState({}, "", url.toString());
+    }
   }, [init]);
 
   if (!mounted) return null;
@@ -25,11 +52,38 @@ export default function DashboardPage() {
 
   return (
     <>
+      {/* Plan upgrade success toast */}
+      {planSuccess && (
+        <div
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl"
+          style={{
+            background: "linear-gradient(135deg, rgba(7,9,18,0.98), rgba(20,10,40,0.98))",
+            border: "1px solid rgba(167,139,250,0.4)",
+            boxShadow: "0 0 40px rgba(167,139,250,0.2)",
+          }}
+        >
+          <Sparkles className="w-5 h-5 text-violet-400" />
+          <div>
+            <div className="text-sm font-semibold text-white">Subscription activated!</div>
+            <div className="text-xs text-gray-400">Your plan has been upgraded successfully.</div>
+          </div>
+          <button onClick={() => setPlanSuccess(false)} className="ml-2 text-gray-600 hover:text-gray-300 text-xs">✕</button>
+        </div>
+      )}
+
       <AuthRequiredModal
         isOpen={showAuthModal}
         onClose={closeAuthModal}
         title="Save Your Analysis"
         message="Create a free account to save your trading decisions and analysis. All your data will be securely stored."
+      />
+
+      {/* Auto-open upgrade modal when coming from landing page plan CTA */}
+      <SubscriptionModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        currentPlan={(user?.plan as Plan) || "core"}
+        onUpgrade={() => setUpgradeModalOpen(false)}
       />
 
       {/* ── Error detail overlay ── */}

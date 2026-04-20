@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromToken, updateUser } from "@/lib/auth-server";
+import { getUserFromBackendToken } from "@/lib/backend-proxy";
 
-/** POST /api/auth/tradingview-disconnect — unlink TradingView account */
 export async function POST(req: NextRequest) {
   try {
-    const user = getUserFromToken(req.headers.get("authorization"));
+    const user = await getUserFromBackendToken(req.headers.get("authorization"));
     if (!user) {
       return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
     }
-
-    updateUser(user.id, { tradingview: null });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("TradingView disconnect error:", err);

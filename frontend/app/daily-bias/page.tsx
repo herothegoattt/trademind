@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, TrendingUp, TrendingDown, Minus,
-  Clock, RefreshCw, AlertTriangle, Target,
-  Activity, ChevronDown, ChevronUp, Zap, Globe,
-  BarChart2, Shield, Star, ChevronLeft, ChevronRight
+  RefreshCw, Target, Activity, Zap, Globe,
+  BarChart2, Shield, ChevronLeft, ChevronRight,
+  ChevronDown, ChevronUp, Clock, AlertTriangle,
 } from 'lucide-react';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 type Bias = 'bullish' | 'bearish' | 'neutral';
 type Category = 'majors' | 'minors' | 'exotics' | 'crypto';
 type Rec = 'trade' | 'avoid' | 'watch';
@@ -28,6 +28,11 @@ interface PairAnalysis {
   sessions: { asia: Bias; london: Bias; ny: Bias };
   events: any[];
   volatilityRisk: 'low' | 'medium' | 'high';
+}
+
+interface LivePrices {
+  prices: Record<string, number>;
+  changes: Record<string, number>;
 }
 
 // ─── Pair Configs ─────────────────────────────────────────────────────────────
@@ -89,6 +94,71 @@ const PRICE_DEC: Record<string, number> = {
   BTCUSD: 0, ETHUSD: 0, SOLUSD: 1, BNBUSD: 1, LINKUSD: 2,
 };
 
+// ─── Live Price Fetcher ───────────────────────────────────────────────────────
+async function fetchLivePrices(): Promise<LivePrices> {
+  const prices: Record<string, number> = { ...PRICE_BASES };
+  const changes: Record<string, number> = {};
+  const seed = dateSeed();
+
+  // Simulate realistic forex % changes from seed
+  Object.keys(PRICE_BASES).forEach((pair, i) => {
+    const raw = (seeded(seed + i * 53) - 0.5) * 1.2;
+    changes[pair] = +raw.toFixed(3);
+  });
+
+  try {
+    const [fxRes, cryptoRes] = await Promise.allSettled([
+      fetch('https://api.frankfurter.app/latest?from=USD', { signal: AbortSignal.timeout(5000) }),
+      fetch(
+        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,ripple,solana,binancecoin,cardano,chainlink&vs_currencies=usd&include_24hr_change=true',
+        { signal: AbortSignal.timeout(5000) }
+      ),
+    ]);
+
+    if (fxRes.status === 'fulfilled' && fxRes.value.ok) {
+      const d = await fxRes.value.json();
+      const r: Record<string, number> = d.rates || {};
+
+      if (r.EUR) prices.EURUSD = +(1 / r.EUR).toFixed(5);
+      if (r.GBP) prices.GBPUSD = +(1 / r.GBP).toFixed(5);
+      if (r.JPY) prices.USDJPY = +r.JPY.toFixed(3);
+      if (r.CHF) prices.USDCHF = +r.CHF.toFixed(5);
+      if (r.AUD) prices.AUDUSD = +(1 / r.AUD).toFixed(5);
+      if (r.NZD) prices.NZDUSD = +(1 / r.NZD).toFixed(5);
+      if (r.CAD) prices.USDCAD = +r.CAD.toFixed(5);
+      if (r.EUR && r.JPY) prices.EURJPY = +((1 / r.EUR) * r.JPY).toFixed(3);
+      if (r.GBP && r.JPY) prices.GBPJPY = +((1 / r.GBP) * r.JPY).toFixed(3);
+      if (r.EUR && r.GBP) prices.EURGBP = +(r.GBP / r.EUR).toFixed(5);
+      if (r.EUR && r.AUD) prices.EURAUD = +(r.AUD / r.EUR).toFixed(5);
+      if (r.GBP && r.AUD) prices.GBPAUD = +(r.AUD / r.GBP).toFixed(5);
+      if (r.AUD && r.CAD) prices.AUDCAD = +(r.CAD / r.AUD).toFixed(5);
+      if (r.CAD && r.JPY) prices.CADJPY = +(r.JPY / r.CAD).toFixed(3);
+      if (r.AUD && r.NZD) prices.AUDNZD = +(r.NZD / r.AUD).toFixed(5);
+      if (r.MXN) prices.USDMXN = +r.MXN.toFixed(4);
+      if (r.ZAR) prices.USDZAR = +r.ZAR.toFixed(4);
+      if (r.TRY) prices.USDTRY = +r.TRY.toFixed(4);
+      if (r.SEK) prices.USDSEK = +r.SEK.toFixed(4);
+      if (r.NOK) prices.USDNOK = +r.NOK.toFixed(4);
+      if (r.SGD) prices.USDSGD = +r.SGD.toFixed(5);
+      if (r.HUF) prices.USDHUF = +r.HUF.toFixed(2);
+    }
+
+    if (cryptoRes.status === 'fulfilled' && cryptoRes.value.ok) {
+      const d = await cryptoRes.value.json();
+      const map: Record<string, string> = {
+        bitcoin: 'BTCUSD', ethereum: 'ETHUSD', ripple: 'XRPUSD',
+        solana: 'SOLUSD', binancecoin: 'BNBUSD', cardano: 'ADAUSD', chainlink: 'LINKUSD',
+      };
+      for (const [id, pair] of Object.entries(map)) {
+        if (d[id]?.usd)           prices[pair]  = d[id].usd;
+        if (d[id]?.usd_24h_change !== undefined) changes[pair] = +(d[id].usd_24h_change as number).toFixed(3);
+      }
+    }
+  } catch {}
+
+  return { prices, changes };
+}
+
 // ─── Bias Engine ──────────────────────────────────────────────────────────────
 function seeded(n: number) { const x = Math.sin(n) * 10000; return x - Math.floor(x); }
 function dateSeed() {
@@ -115,15 +185,13 @@ function buildStrength(ffEvents: any[]): Record<string, number> {
     if (e.actual && e.forecast) {
       const act = parseFloat(String(e.actual).replace(/[^-\d.]/g, ''));
       const fcast = parseFloat(String(e.forecast).replace(/[^-\d.]/g, ''));
-      if (!isNaN(act) && !isNaN(fcast)) {
+      if (!isNaN(act) && !isNaN(fcast))
         s[cur] = Math.max(5, Math.min(95, s[cur] + (act > fcast ? w : act < fcast ? -w : 0)));
-      }
     } else if (impact === 'high') {
       s[cur] = Math.max(30, Math.min(70, s[cur]));
     }
   });
 
-  // Crypto correlation to BTC
   const btc = s['BTC'];
   s['ETH']  = s['ETH']  * 0.35 + btc * 0.65;
   s['SOL']  = s['SOL']  * 0.30 + btc * 0.70;
@@ -166,11 +234,11 @@ const TF_NOTES: Record<string, Record<Bias, string[]>> = {
 
 function buildTimeframes(baseV: number, quoteV: number, seed: number, pIdx: number): TFBias[] {
   return [
-    { tf: 'M15', label: '15 Min', noise: 28 },
-    { tf: 'H1',  label: '1 Hour', noise: 18 },
-    { tf: 'H4',  label: '4 Hour', noise: 9  },
-    { tf: 'D1',  label: 'Daily',  noise: 4  },
-    { tf: 'W1',  label: 'Weekly', noise: 2  },
+    { tf: 'M15', label: '15m', noise: 28 },
+    { tf: 'H1',  label: '1H',  noise: 18 },
+    { tf: 'H4',  label: '4H',  noise: 9  },
+    { tf: 'D1',  label: 'D1',  noise: 4  },
+    { tf: 'W1',  label: 'W1',  noise: 2  },
   ].map(({ tf, label, noise }, i) => {
     const n = (seeded(seed + pIdx * 97 + i * 31) - 0.5) * noise;
     const diff = (baseV - quoteV) + n;
@@ -181,8 +249,8 @@ function buildTimeframes(baseV: number, quoteV: number, seed: number, pIdx: numb
   });
 }
 
-function buildLevels(pair: string, seed: number) {
-  const base = PRICE_BASES[pair] || 1;
+function buildLevels(pair: string, seed: number, livePrice?: number) {
+  const base = livePrice || PRICE_BASES[pair] || 1;
   const dec  = PRICE_DEC[pair] ?? 4;
   const n1 = seeded(seed + pair.charCodeAt(0) * 7) * base * 0.004 + base * 0.001;
   const n2 = seeded(seed + pair.charCodeAt(1) * 13) * base * 0.008 + base * 0.003;
@@ -194,7 +262,7 @@ function buildLevels(pair: string, seed: number) {
   };
 }
 
-function analyzeAll(ffEvents: any[]): PairAnalysis[] {
+function analyzeAll(ffEvents: any[], livePrices: Record<string, number>): PairAnalysis[] {
   const s = buildStrength(ffEvents);
   const seed = dateSeed();
   const result: PairAnalysis[] = [];
@@ -269,7 +337,7 @@ function analyzeAll(ffEvents: any[]): PairAnalysis[] {
         intradayBias, swingBias,
         timeframes: tfs,
         recommendation, reasoning, setups,
-        keyLevels: buildLevels(pair, seed),
+        keyLevels: buildLevels(pair, seed, livePrices[pair]),
         sessions,
         events: pairEvents.slice(0, 3),
         volatilityRisk: volRisk,
@@ -281,109 +349,225 @@ function analyzeAll(ffEvents: any[]): PairAnalysis[] {
 }
 
 // ─── Session Helper ────────────────────────────────────────────────────────────
+const SESSIONS = [
+  { name: 'TOKYO',          start: 0,  end: 8,  color: '#60a5fa', bg: 'rgba(96,165,250,0.08)',  border: 'rgba(96,165,250,0.25)',  flag: '🇯🇵', desc: 'JPY & AUD pairs — lower vol, range-bound' },
+  { name: 'LONDON',         start: 8,  end: 13, color: '#fb923c', bg: 'rgba(251,146,60,0.08)',  border: 'rgba(251,146,60,0.25)',  flag: '🇬🇧', desc: 'EUR & GBP pairs — highest daily volume' },
+  { name: 'NY OVERLAP',     start: 13, end: 17, color: '#34d399', bg: 'rgba(52,211,153,0.08)',  border: 'rgba(52,211,153,0.25)',  flag: '⚡', desc: 'Peak liquidity — best setups of the day' },
+  { name: 'NEW YORK',       start: 17, end: 22, color: '#fbbf24', bg: 'rgba(251,191,36,0.08)',  border: 'rgba(251,191,36,0.25)',  flag: '🇺🇸', desc: 'USD volatile — watch London close reversal' },
+  { name: 'OFF-HOURS',      start: 22, end: 24, color: '#6b7280', bg: 'rgba(107,114,128,0.06)', border: 'rgba(107,114,128,0.18)', flag: '🌙', desc: 'Low liquidity — review & prepare setups' },
+];
+
 function getSession() {
   const h = new Date().getUTCHours();
-  if (h >= 0  && h < 8)  return { name: 'TOKYO',              color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30',    desc: 'Asian session — JPY & AUD pairs most active, lower volatility' };
-  if (h >= 8  && h < 13) return { name: 'LONDON',             color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/30', desc: 'London open — EUR & GBP pairs, highest volume of the day' };
-  if (h >= 13 && h < 17) return { name: 'LONDON + NY OVERLAP',color: 'text-emerald-400',bg: 'bg-emerald-500/10 border-emerald-500/30',desc: 'Power hour — peak liquidity, tightest spreads, best setups' };
-  if (h >= 17 && h < 22) return { name: 'NEW YORK',           color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/30', desc: 'NY session — USD pairs volatile, watch for London close reversals' };
-  return { name: 'OFF-HOURS', color: 'text-gray-500', bg: 'bg-gray-800/20 border-gray-700/30', desc: 'Low liquidity — prepare for next session, review setups' };
+  return SESSIONS.find(s => h >= s.start && h < s.end) || SESSIONS[4];
+}
+
+function getNextSession() {
+  const h = new Date().getUTCHours();
+  const m = new Date().getUTCMinutes();
+  const cur = SESSIONS.findIndex(s => h >= s.start && h < s.end);
+  const next = SESSIONS[(cur + 1) % SESSIONS.length];
+  const endH = SESSIONS[cur]?.end ?? 0;
+  const mins = (endH - h - 1) * 60 + (60 - m);
+  return { session: next, minsLeft: Math.max(0, mins) };
 }
 
 // ─── Style Maps ───────────────────────────────────────────────────────────────
-const BIAS_STYLE: Record<Bias, { icon: any; color: string; bg: string; border: string; text: string; bar: string }> = {
-  bullish: { icon: TrendingUp,   color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'BULLISH', bar: 'bg-emerald-400' },
-  bearish: { icon: TrendingDown, color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    text: 'BEARISH', bar: 'bg-rose-400'    },
-  neutral: { icon: Minus,        color: 'text-gray-400',    bg: 'bg-gray-800/30',    border: 'border-gray-700/30',    text: 'NEUTRAL', bar: 'bg-gray-500'    },
+const BIAS_CFG: Record<Bias, { icon: any; color: string; bg: string; border: string; label: string; barColor: string }> = {
+  bullish: { icon: TrendingUp,   color: '#34d399', bg: 'rgba(52,211,153,0.08)',  border: 'rgba(52,211,153,0.28)',  label: 'BULL', barColor: '#34d399' },
+  bearish: { icon: TrendingDown, color: '#f87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.28)', label: 'BEAR', barColor: '#f87171' },
+  neutral: { icon: Minus,        color: '#9ca3af', bg: 'rgba(156,163,175,0.06)', border: 'rgba(156,163,175,0.18)', label: 'NEUT', barColor: '#6b7280' },
 };
-const REC_STYLE: Record<Rec, { label: string; color: string; bg: string; border: string }> = {
-  trade: { label: '✓ TRADE', color: 'text-emerald-300', bg: 'bg-emerald-500/15', border: 'border-emerald-500/40' },
-  watch: { label: '◎ WATCH', color: 'text-yellow-300',  bg: 'bg-yellow-500/15',  border: 'border-yellow-500/40'  },
-  avoid: { label: '✗ AVOID', color: 'text-rose-300',    bg: 'bg-rose-500/15',    border: 'border-rose-500/40'    },
+const REC_CFG: Record<Rec, { label: string; dot: string; color: string; bg: string; border: string }> = {
+  trade: { label: 'TRADE', dot: '#34d399', color: '#86efac', bg: 'rgba(52,211,153,0.1)',  border: 'rgba(52,211,153,0.35)'  },
+  watch: { label: 'WATCH', dot: '#fbbf24', color: '#fde68a', bg: 'rgba(251,191,36,0.1)',  border: 'rgba(251,191,36,0.35)'  },
+  avoid: { label: 'AVOID', dot: '#f87171', color: '#fca5a5', bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.35)' },
 };
 
-function BiasIcon({ bias, size = 16 }: { bias: Bias; size?: number }) {
-  const { icon: Icon, color } = BIAS_STYLE[bias];
-  return <Icon size={size} className={color} />;
+// ─── Micro components ─────────────────────────────────────────────────────────
+
+function BiasIcon({ bias, size = 14 }: { bias: Bias; size?: number }) {
+  const { icon: Icon, color } = BIAS_CFG[bias];
+  return <Icon size={size} style={{ color }} />;
 }
 
-function Stars({ count }: { count: number }) {
+function StrengthBar({ value, color, height = 4 }: { value: number; color: string; height?: number }) {
   return (
-    <div className="flex gap-0.5">
+    <div className="flex-1 rounded-full overflow-hidden" style={{ height, background: 'rgba(255,255,255,0.06)' }}>
+      <motion.div
+        className="h-full rounded-full"
+        initial={{ width: 0 }}
+        animate={{ width: `${value}%` }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        style={{ background: color, boxShadow: `0 0 6px ${color}60` }}
+      />
+    </div>
+  );
+}
+
+function BiasStrengthDots({ count, color }: { count: number; color: string }) {
+  return (
+    <div className="flex gap-0.5 items-center">
       {[1,2,3,4,5].map(i => (
-        <Star key={i} size={10} className={i <= count ? 'text-amber-400 fill-amber-400' : 'text-gray-700'} />
+        <div
+          key={i}
+          className="rounded-full transition-all"
+          style={{
+            width: 6, height: 6,
+            background: i <= count ? color : 'rgba(255,255,255,0.1)',
+            boxShadow: i <= count ? `0 0 4px ${color}` : 'none',
+          }}
+        />
       ))}
     </div>
   );
 }
 
+function LivePrice({ pair, price, change }: { pair: string; price: number; change?: number }) {
+  const dec = PRICE_DEC[pair] ?? 4;
+  const isUp = (change ?? 0) >= 0;
+  const formatted = price >= 1000 ? price.toLocaleString('en-US', { maximumFractionDigits: dec })
+    : price.toFixed(dec);
+
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-white font-mono font-bold text-sm tabular-nums">{formatted}</span>
+      {change !== undefined && (
+        <span
+          className="text-[10px] font-bold tabular-nums flex items-center gap-0.5"
+          style={{ color: isUp ? '#34d399' : '#f87171' }}
+        >
+          {isUp ? '▲' : '▼'} {Math.abs(change).toFixed(2)}%
+        </span>
+      )}
+    </div>
+  );
+}
+
+function VolBadge({ risk }: { risk: 'low' | 'medium' | 'high' }) {
+  if (risk === 'low') return null;
+  return (
+    <span
+      className="text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wide"
+      style={risk === 'high'
+        ? { background: 'rgba(248,113,113,0.15)', color: '#fca5a5', border: '1px solid rgba(248,113,113,0.3)' }
+        : { background: 'rgba(251,191,36,0.12)', color: '#fde68a', border: '1px solid rgba(251,191,36,0.28)' }
+      }
+    >
+      {risk === 'high' ? '⚡ HIGH VOL' : '~ MED VOL'}
+    </span>
+  );
+}
+
+// ─── TF Strip ─────────────────────────────────────────────────────────────────
+function TFStrip({ timeframes }: { timeframes: TFBias[] }) {
+  return (
+    <div className="grid grid-cols-5 gap-1 mt-3">
+      {timeframes.map(tf => {
+        const cfg = BIAS_CFG[tf.bias];
+        return (
+          <div
+            key={tf.tf}
+            className="flex flex-col items-center gap-1 py-1.5 rounded-lg"
+            style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
+          >
+            <span className="text-[9px] font-black text-gray-500 tracking-wide">{tf.label}</span>
+            <BiasIcon bias={tf.bias} size={13} />
+            <div className="w-full px-1.5">
+              <StrengthBar value={tf.strength} color={cfg.barColor} height={2} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Pair Card ────────────────────────────────────────────────────────────────
-function PairCard({ p }: { p: PairAnalysis }) {
+function PairCard({ p, livePrice, liveChange }: { p: PairAnalysis; livePrice?: number; liveChange?: number }) {
   const [expanded, setExpanded] = useState(false);
-  const bs = BIAS_STYLE[p.overallBias];
-  const rs = REC_STYLE[p.recommendation];
+  const bs = BIAS_CFG[p.overallBias];
+  const rs = REC_CFG[p.recommendation];
+  const price = livePrice || PRICE_BASES[p.pair] || 0;
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-xl border ${bs.border} bg-[#0b0b0b] overflow-hidden`}
+      className="rounded-2xl overflow-hidden"
+      style={{
+        background: 'linear-gradient(145deg, rgba(8,10,24,0.97) 0%, rgba(5,7,18,0.98) 100%)',
+        border: `1px solid ${expanded ? bs.border : 'rgba(255,255,255,0.07)'}`,
+        boxShadow: expanded ? `0 4px 24px ${bs.color}12` : '0 2px 12px rgba(0,0,0,0.4)',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
+      }}
     >
-      {/* Header — always visible */}
-      <div className={`p-4 cursor-pointer select-none ${bs.bg}`} onClick={() => setExpanded(x => !x)}>
-        <div className="flex items-start justify-between gap-2">
-          {/* Left */}
-          <div className="flex flex-col gap-1.5 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xl font-black text-white tracking-wider">{p.pair}</span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${rs.bg} ${rs.border} ${rs.color}`}>
-                {rs.label}
-              </span>
+      {/* Top accent line */}
+      <div className="h-[1.5px] w-full" style={{
+        background: `linear-gradient(90deg, transparent 0%, ${bs.color}70 40%, ${bs.color}70 60%, transparent 100%)`
+      }} />
+
+      {/* Card Header */}
+      <div
+        className="p-4 cursor-pointer select-none"
+        onClick={() => setExpanded(x => !x)}
+      >
+        {/* Row 1: pair + price + rec badge */}
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
+              <span className="text-lg font-black text-white tracking-widest leading-none">{p.pair}</span>
+              <LivePrice pair={p.pair} price={price} change={liveChange} />
+              <VolBadge risk={p.volatilityRisk} />
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className={`flex items-center gap-1 text-xs font-bold ${bs.color}`}>
-                <BiasIcon bias={p.overallBias} size={13} />
-                {bs.text}
+            {/* Bias + strength dots */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <BiasIcon bias={p.overallBias} size={14} />
+                <span className="text-xs font-black tracking-widest" style={{ color: bs.color }}>{bs.label}</span>
               </div>
-              <Stars count={p.biasStrength} />
-              {p.volatilityRisk !== 'low' && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${p.volatilityRisk === 'high' ? 'bg-rose-500/20 text-rose-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
-                  {p.volatilityRisk === 'high' ? '⚡ HIGH VOL' : '~ MED VOL'}
-                </span>
-              )}
+              <BiasStrengthDots count={p.biasStrength} color={bs.color} />
             </div>
           </div>
 
-          {/* Right */}
-          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-            <div className="flex gap-1.5">
-              <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded ${BIAS_STYLE[p.intradayBias].bg} ${BIAS_STYLE[p.intradayBias].color}`}>
-                <BiasIcon bias={p.intradayBias} size={10} />
-                <span>Intraday</span>
-              </div>
-              <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded ${BIAS_STYLE[p.swingBias].bg} ${BIAS_STYLE[p.swingBias].color}`}>
-                <BiasIcon bias={p.swingBias} size={10} />
-                <span>Swing</span>
-              </div>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {/* Recommendation */}
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wider"
+              style={{ background: rs.bg, border: `1px solid ${rs.border}`, color: rs.color }}
+            >
+              <div className="w-1.5 h-1.5 rounded-full" style={{ background: rs.dot, boxShadow: `0 0 4px ${rs.dot}` }} />
+              {rs.label}
             </div>
-            <span className="text-gray-700">
-              {expanded ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}
-            </span>
+            {/* Intraday + Swing */}
+            <div className="flex gap-1">
+              {([['I', p.intradayBias], ['S', p.swingBias]] as const).map(([label, bias]) => {
+                const c = BIAS_CFG[bias];
+                return (
+                  <div
+                    key={label}
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold"
+                    style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.color }}
+                  >
+                    {label}<BiasIcon bias={bias} size={9} />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {/* TF strip */}
-        <div className="mt-3 grid grid-cols-5 gap-0.5 sm:gap-1">
-          {p.timeframes.map(tf => {
-            const tbs = BIAS_STYLE[tf.bias];
-            return (
-              <div key={tf.tf} className={`rounded p-1.5 text-center border ${tbs.border} ${tbs.bg}`}>
-                <div className="text-[9px] font-bold text-gray-500 mb-0.5">{tf.tf}</div>
-                <div className="flex justify-center"><BiasIcon bias={tf.bias} size={12} /></div>
-              </div>
-            );
-          })}
+        <TFStrip timeframes={p.timeframes} />
+
+        {/* Expand toggle */}
+        <div className="flex items-center justify-center mt-3">
+          <div
+            className="flex items-center gap-1 text-[10px] text-gray-700 hover:text-gray-500 transition-colors"
+          >
+            {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </div>
         </div>
       </div>
 
@@ -395,30 +579,47 @@ function PairCard({ p }: { p: PairAnalysis }) {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div className="p-4 space-y-4 border-t border-gray-800/50">
+            <div
+              className="p-4 space-y-5"
+              style={{ borderTop: `1px solid ${bs.border}` }}
+            >
               {/* Reasoning */}
-              <p className="text-xs text-gray-300 bg-gray-900/50 rounded-lg p-3 border border-gray-800/40 leading-relaxed">
+              <div
+                className="rounded-xl p-3.5 text-xs leading-relaxed"
+                style={{ background: `${bs.color}06`, border: `1px solid ${bs.border}`, color: '#d1d5db' }}
+              >
                 {p.reasoning}
-              </p>
+              </div>
 
-              {/* Timeframe table */}
+              {/* MTF Breakdown */}
               <div>
-                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-2">Multi-Timeframe Breakdown</div>
+                <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2.5">
+                  Multi-Timeframe Breakdown
+                </div>
                 <div className="space-y-1.5">
                   {p.timeframes.map(tf => {
-                    const tbs = BIAS_STYLE[tf.bias];
+                    const cfg = BIAS_CFG[tf.bias];
                     return (
-                      <div key={tf.tf} className={`grid items-center gap-2 rounded-lg px-2.5 py-2 border ${tbs.border} ${tbs.bg}`}
-                        style={{ gridTemplateColumns: '40px 72px 1fr' }}>
-                        <span className="text-[10px] font-black text-gray-400">{tf.tf}</span>
-                        <div className={`flex items-center gap-1 text-[10px] font-bold ${tbs.color}`}>
+                      <div
+                        key={tf.tf}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg"
+                        style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
+                      >
+                        <span className="text-[10px] font-black w-8 shrink-0" style={{ color: cfg.color }}>{tf.tf}</span>
+                        <div className="flex items-center gap-1 w-14 shrink-0">
                           <BiasIcon bias={tf.bias} size={11} />
-                          {tbs.text}
+                          <span className="text-[10px] font-bold" style={{ color: cfg.color }}>{cfg.label}</span>
                         </div>
-                        <span className="text-[10px] text-gray-400 truncate">{tf.note}</span>
+                        <StrengthBar value={tf.strength} color={cfg.barColor} height={3} />
+                        <span className="text-[9px] font-mono w-7 shrink-0 text-right" style={{ color: cfg.color }}>
+                          {tf.strength.toFixed(0)}
+                        </span>
+                        <span className="text-[10px] text-gray-500 truncate hidden sm:block flex-1 min-w-0">
+                          {tf.note}
+                        </span>
                       </div>
                     );
                   })}
@@ -428,33 +629,47 @@ function PairCard({ p }: { p: PairAnalysis }) {
               {/* Sessions + Levels */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-2">Session Bias</div>
+                  <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2.5">
+                    Session Bias
+                  </div>
                   <div className="space-y-1.5">
-                    {([['asia','Tokyo'], ['london','London'], ['ny','New York']] as const).map(([k, name]) => {
-                      const sb = BIAS_STYLE[p.sessions[k]];
+                    {([['asia', '🇯🇵 Tokyo'], ['london', '🇬🇧 London'], ['ny', '🇺🇸 New York']] as const).map(([k, name]) => {
+                      const cfg = BIAS_CFG[p.sessions[k]];
                       return (
-                        <div key={k} className={`flex items-center justify-between rounded px-2 py-1.5 border ${sb.border} ${sb.bg}`}>
-                          <span className="text-[10px] text-gray-500">{name}</span>
-                          <div className={`flex items-center gap-1 text-[10px] font-bold ${sb.color}`}>
-                            <BiasIcon bias={p.sessions[k]} size={10} />{sb.text}
+                        <div
+                          key={k}
+                          className="flex items-center justify-between px-2.5 py-1.5 rounded-lg"
+                          style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
+                        >
+                          <span className="text-[10px] text-gray-400">{name}</span>
+                          <div className="flex items-center gap-1">
+                            <BiasIcon bias={p.sessions[k]} size={10} />
+                            <span className="text-[9px] font-black" style={{ color: cfg.color }}>{cfg.label}</span>
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
+
                 <div>
-                  <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-2">Key Levels</div>
+                  <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2.5">
+                    Key Levels
+                  </div>
                   <div className="space-y-1">
                     {[
-                      { label: 'R2', val: p.keyLevels.r2, cls: 'border-rose-500/25 text-rose-300'    },
-                      { label: 'R1', val: p.keyLevels.r1, cls: 'border-rose-500/15 text-rose-400/70'  },
-                      { label: 'S1', val: p.keyLevels.s1, cls: 'border-emerald-500/15 text-emerald-400/70' },
-                      { label: 'S2', val: p.keyLevels.s2, cls: 'border-emerald-500/25 text-emerald-300' },
-                    ].map(({ label, val, cls }) => (
-                      <div key={label} className={`flex justify-between px-2 py-1 rounded border ${cls} bg-black/20`}>
-                        <span className="text-[10px] text-gray-500">{label}</span>
-                        <span className={`text-[10px] font-mono font-bold ${cls.split(' ').find(c => c.startsWith('text-')) || ''}`}>{val}</span>
+                      { label: 'R2', val: p.keyLevels.r2, color: '#f87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.2)' },
+                      { label: 'R1', val: p.keyLevels.r1, color: '#fca5a5', bg: 'rgba(248,113,113,0.04)', border: 'rgba(248,113,113,0.12)' },
+                      { label: 'S1', val: p.keyLevels.s1, color: '#86efac', bg: 'rgba(52,211,153,0.04)',  border: 'rgba(52,211,153,0.12)' },
+                      { label: 'S2', val: p.keyLevels.s2, color: '#34d399', bg: 'rgba(52,211,153,0.08)',  border: 'rgba(52,211,153,0.2)'  },
+                    ].map(({ label, val, color, bg, border }) => (
+                      <div
+                        key={label}
+                        className="flex items-center justify-between px-2.5 py-1.5 rounded-lg"
+                        style={{ background: bg, border: `1px solid ${border}` }}
+                      >
+                        <span className="text-[10px] font-black text-gray-500">{label}</span>
+                        <span className="text-[11px] font-mono font-bold" style={{ color }}>{val}</span>
                       </div>
                     ))}
                   </div>
@@ -464,28 +679,44 @@ function PairCard({ p }: { p: PairAnalysis }) {
               {/* Setups + Events */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-2">Setups Available</div>
-                  <div className="flex flex-col gap-1">
+                  <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2.5">
+                    Setups
+                  </div>
+                  <div className="space-y-1">
                     {p.setups.map((setup, i) => (
-                      <span key={i} className={`text-[10px] font-semibold px-2 py-1 rounded border ${bs.border} ${bs.color} ${bs.bg}`}>
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold"
+                        style={{ background: bs.bg, border: `1px solid ${bs.border}`, color: bs.color }}
+                      >
+                        <div className="w-1 h-1 rounded-full shrink-0" style={{ background: bs.color }} />
                         {setup}
-                      </span>
+                      </div>
                     ))}
                   </div>
                 </div>
+
                 {p.events.length > 0 && (
                   <div>
-                    <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-2">Events Today</div>
+                    <div className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2.5">
+                      Events Today
+                    </div>
                     <div className="space-y-1">
                       {p.events.map((ev, i) => {
                         const imp = (ev.impact || '').toLowerCase();
+                        const [color, bg, border] = imp === 'high'
+                          ? ['#fca5a5', 'rgba(248,113,113,0.1)', 'rgba(248,113,113,0.28)']
+                          : imp === 'medium'
+                          ? ['#fde68a', 'rgba(251,191,36,0.1)', 'rgba(251,191,36,0.25)']
+                          : ['#9ca3af', 'rgba(255,255,255,0.04)', 'rgba(255,255,255,0.08)'];
                         return (
-                          <div key={i} className={`text-[10px] rounded px-2 py-1 border ${
-                            imp === 'high' ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                            : imp === 'medium' ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
-                            : 'bg-gray-800/30 border-gray-700/30 text-gray-400'}`}>
-                            {imp === 'high' ? '🔴' : imp === 'medium' ? '🟡' : '🟢'}{' '}
-                            {(ev.title || ev.event || '').slice(0, 30)}
+                          <div
+                            key={i}
+                            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[10px]"
+                            style={{ background: bg, border: `1px solid ${border}`, color }}
+                          >
+                            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+                            <span className="truncate">{(ev.title || ev.event || '').slice(0, 28)}</span>
                           </div>
                         );
                       })}
@@ -501,32 +732,100 @@ function PairCard({ p }: { p: PairAnalysis }) {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-const CAT_LABELS: Record<Category, string> = {
-  majors: 'Forex Majors', minors: 'Forex Minors', exotics: 'Exotic Pairs', crypto: 'Crypto',
-};
-const CAT_ICONS: Record<Category, string> = {
-  majors: '💱', minors: '🔗', exotics: '🌐', crypto: '₿',
+// ─── Fear & Greed Gauge ───────────────────────────────────────────────────────
+function FearGauge({ value }: { value: number }) {
+  const label = value >= 75 ? { text: 'Extreme Greed', color: '#f87171' }
+    : value >= 55 ? { text: 'Greed',         color: '#fb923c' }
+    : value >= 45 ? { text: 'Neutral',        color: '#9ca3af' }
+    : value >= 25 ? { text: 'Fear',           color: '#60a5fa' }
+    : { text: 'Extreme Fear', color: '#34d399' };
+
+  const angle = (value / 100) * 180 - 90;
+
+  return (
+    <div
+      className="flex items-center gap-3 px-3 py-2 rounded-xl"
+      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+    >
+      <div className="relative w-10 h-5 shrink-0">
+        <svg viewBox="0 0 40 20" className="w-full h-full">
+          <path d="M2 20 A18 18 0 0 1 38 20" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" strokeLinecap="round" />
+          <path d="M2 20 A18 18 0 0 1 38 20" fill="none" stroke="url(#fg)" strokeWidth="3" strokeLinecap="round"
+            strokeDasharray="56.5" strokeDashoffset={56.5 - (value / 100) * 56.5} />
+          <defs>
+            <linearGradient id="fg" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#34d399" />
+              <stop offset="50%" stopColor="#fbbf24" />
+              <stop offset="100%" stopColor="#f87171" />
+            </linearGradient>
+          </defs>
+          <line
+            x1="20" y1="20"
+            x2={20 + 14 * Math.cos((angle * Math.PI) / 180)}
+            y2={20 + 14 * Math.sin((angle * Math.PI) / 180)}
+            stroke="white" strokeWidth="1.5" strokeLinecap="round"
+          />
+        </svg>
+      </div>
+      <div>
+        <div className="text-[9px] text-gray-600 uppercase tracking-widest">Fear & Greed</div>
+        <div className="text-xs font-black" style={{ color: label.color }}>
+          {value} · {label.text}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── UTC Clock ────────────────────────────────────────────────────────────────
+function UTCClock() {
+  const [time, setTime] = useState('');
+  useEffect(() => {
+    const tick = () => setTime(new Date().toUTCString().slice(17, 25));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] font-mono text-gray-500">
+      <Clock size={10} className="text-gray-600" />
+      <span>{time} UTC</span>
+    </div>
+  );
+}
+
+// ─── Category config ──────────────────────────────────────────────────────────
+const CAT_CFG: Record<Category, { label: string; icon: string; accent: string }> = {
+  majors:  { label: 'Majors',  icon: '💱', accent: '#f59e0b' },
+  minors:  { label: 'Minors',  icon: '🔗', accent: '#a78bfa' },
+  exotics: { label: 'Exotics', icon: '🌐', accent: '#38bdf8' },
+  crypto:  { label: 'Crypto',  icon: '₿',  accent: '#fb923c' },
 };
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
+const PAGE_SIZE = 4;
+
 export default function DailyBiasPage() {
-  const [ffEvents, setFfEvents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [ffEvents, setFfEvents]   = useState<any[]>([]);
+  const [liveData, setLiveData]   = useState<LivePrices>({ prices: { ...PRICE_BASES }, changes: {} });
+  const [loading, setLoading]     = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [activeCategory, setActiveCategory] = useState<Category>('majors');
   const [filterRec, setFilterRec] = useState<Rec | 'all'>('all');
   const [fearIndex, setFearIndex] = useState<number | null>(null);
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 4;
+  const [page, setPage]           = useState(0);
   const session = getSession();
+  const nextSess = getNextSession();
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [newsRes, fearRes] = await Promise.allSettled([
+      const [newsRes, fearRes, priceData] = await Promise.allSettled([
         fetch('/api/news?limit=100'),
         fetch('https://api.alternative.me/fng/?limit=1'),
+        fetchLivePrices(),
       ]);
+
       if (newsRes.status === 'fulfilled' && newsRes.value.ok) {
         const d = await newsRes.value.json();
         setFfEvents(d.items || []);
@@ -535,15 +834,19 @@ export default function DailyBiasPage() {
         const fd = await fearRes.value.json();
         if (fd.data?.[0]?.value) setFearIndex(parseInt(fd.data[0].value));
       }
+      if (priceData.status === 'fulfilled') {
+        setLiveData(priceData.value);
+      }
       setLastUpdated(new Date());
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { setPage(0); }, [activeCategory, filterRec]);
 
-  const allPairs  = useMemo(() => analyzeAll(ffEvents), [ffEvents]);
+  const allPairs  = useMemo(() => analyzeAll(ffEvents, liveData.prices), [ffEvents, liveData]);
   const catPairs  = useMemo(() => allPairs.filter(p => p.category === activeCategory), [allPairs, activeCategory]);
   const displayed = useMemo(() =>
     filterRec === 'all' ? catPairs : catPairs.filter(p => p.recommendation === filterRec),
@@ -552,253 +855,361 @@ export default function DailyBiasPage() {
   const totalPages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE));
   const paginated  = displayed.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
-  // Reset page when category or filter changes
-  useEffect(() => { setPage(0); }, [activeCategory, filterRec]);
-
   const bullCount = catPairs.filter(p => p.overallBias === 'bullish').length;
   const bearCount = catPairs.filter(p => p.overallBias === 'bearish').length;
   const neutCount = catPairs.filter(p => p.overallBias === 'neutral').length;
-
-  const fearLabel = fearIndex !== null
-    ? fearIndex >= 75 ? { text: 'Extreme Greed', color: 'text-rose-400' }
-    : fearIndex >= 55 ? { text: 'Greed',         color: 'text-orange-400' }
-    : fearIndex >= 45 ? { text: 'Neutral',        color: 'text-gray-400'  }
-    : fearIndex >= 25 ? { text: 'Fear',           color: 'text-blue-400'  }
-    : { text: 'Extreme Fear', color: 'text-emerald-400' }
-    : null;
+  const catCfg = CAT_CFG[activeCategory];
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
-
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-[#050505]/95 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-5 py-3.5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/app" className="p-1.5 hover:bg-white/5 rounded-lg transition-colors">
-              <ArrowLeft size={18} className="text-gray-400" />
-            </Link>
-            <div>
-              <h1 className="text-lg font-black tracking-tight bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-400 bg-clip-text text-transparent">
-                Daily Market Bias
-              </h1>
-              <div className="flex items-center gap-3 mt-0.5">
-                <span className="text-[10px] text-gray-500">
-                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                </span>
-                {lastUpdated && (
-                  <span className="text-[10px] text-gray-600">
-                    · refreshed {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className={`hidden sm:flex items-center gap-2 text-[10px] font-bold px-3 py-1.5 rounded-lg border ${session.bg}`}>
-              <Activity size={11} className={session.color} />
-              <span className={session.color}>{session.name}</span>
-            </div>
-            {fearLabel && (
-              <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-gray-700/40 bg-gray-800/20">
-                <span className="text-gray-600">F&G</span>
-                <span className={fearLabel.color}>{fearIndex} · {fearLabel.text}</span>
-              </div>
-            )}
-            <button onClick={loadData} disabled={loading}
-              className="p-1.5 hover:bg-white/5 rounded-lg transition-colors text-gray-500 hover:text-white">
-              <RefreshCw size={16} className={loading ? 'animate-spin text-orange-400' : ''} />
-            </button>
-          </div>
-        </div>
+    <div
+      className="h-full overflow-y-auto pb-16 md:pb-0 text-white"
+      style={{ background: 'linear-gradient(160deg, #020308 0%, #03040f 50%, #020308 100%)' }}
+    >
+      {/* Ambient glows */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.04) 0%, transparent 65%)' }} />
+        <div className="absolute top-1/2 right-0 w-96 h-96 rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(251,146,60,0.03) 0%, transparent 65%)' }} />
+        <div className="absolute inset-0"
+          style={{
+            backgroundImage: 'linear-gradient(rgba(245,158,11,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(245,158,11,0.015) 1px, transparent 1px)',
+            backgroundSize: '72px 72px',
+          }}
+        />
       </div>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-5 py-4 sm:py-6 space-y-4 sm:space-y-5">
+      {/* Sticky Header */}
+      <div
+        className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 h-14"
+        style={{ background: 'rgba(2,3,8,0.94)', borderBottom: '1px solid rgba(245,158,11,0.1)', backdropFilter: 'blur(24px)' }}
+      >
+        <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-3">
+          <Link
+            href="/app"
+            className="w-8 h-8 rounded-xl flex items-center justify-center transition-all hover:bg-amber-500/10"
+            style={{ border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b' }}
+          >
+            <ArrowLeft size={15} />
+          </Link>
+          <div className="w-px h-5" style={{ background: 'rgba(245,158,11,0.2)' }} />
+          <div>
+            <h1
+              className="text-sm font-black tracking-tight leading-none"
+              style={{
+                background: 'linear-gradient(90deg, #f59e0b, #fb923c)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+              }}
+            >
+              Daily Market Bias
+            </h1>
+            <UTCClock />
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2">
+          {/* Session chip */}
+          <div
+            className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold"
+            style={{ background: session.bg, border: `1px solid ${session.border}`, color: session.color }}
+          >
+            <span>{session.flag}</span>
+            <span>{session.name}</span>
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: session.color }} />
+          </div>
+
+          {lastUpdated && (
+            <span className="hidden sm:block text-[10px] text-gray-600">
+              {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+
+          <button
+            onClick={loadData} disabled={loading}
+            className="w-8 h-8 rounded-xl flex items-center justify-center transition-all hover:bg-amber-500/10"
+            style={{ border: '1px solid rgba(245,158,11,0.15)', color: loading ? '#f59e0b' : '#6b7280' }}
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </motion.div>
+      </div>
+
+      <div className="relative max-w-6xl mx-auto px-3 sm:px-5 py-5 sm:py-7 space-y-5">
 
         {/* Session Banner */}
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-          className={`rounded-xl border p-4 ${session.bg}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-2 h-2 rounded-full ${session.color.replace('text-','bg-')} animate-pulse`} />
-            <span className={`font-black text-sm tracking-widest ${session.color}`}>{session.name}</span>
-            <span className="text-gray-400 text-xs">{session.desc}</span>
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl overflow-hidden"
+          style={{ background: session.bg, border: `1px solid ${session.border}` }}
+        >
+          <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0 justify-between">
+            <div className="flex items-center gap-4">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
+                style={{ background: `${session.color}18`, border: `1px solid ${session.color}30` }}
+              >
+                {session.flag}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: session.color }} />
+                  <span className="text-sm font-black tracking-widest" style={{ color: session.color }}>
+                    {session.name} SESSION
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400">{session.desc}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 sm:flex-col sm:items-end">
+              {fearIndex !== null && <FearGauge value={fearIndex} />}
+              <div
+                className="flex items-center gap-1.5 text-[10px] text-gray-500"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '4px 8px' }}
+              >
+                <Clock size={10} />
+                Next: {nextSess.session.flag} {nextSess.session.name} in {nextSess.minsLeft}m
+              </div>
+            </div>
           </div>
         </motion.div>
 
         {/* Category Tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {(Object.keys(CAT_LABELS) as Category[]).map(cat => (
-            <motion.button key={cat} whileTap={{ scale: 0.96 }}
-              onClick={() => { setActiveCategory(cat); setFilterRec('all'); }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all border ${
-                activeCategory === cat
-                  ? 'bg-orange-500/20 border-orange-500/50 text-orange-300'
-                  : 'bg-white/3 border-white/5 text-gray-500 hover:text-gray-300 hover:border-gray-700/50'
-              }`}>
-              {CAT_ICONS[cat]} {CAT_LABELS[cat]}
-            </motion.button>
-          ))}
+        <div
+          className="flex gap-1 p-1 rounded-2xl"
+          style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}
+        >
+          {(Object.keys(CAT_CFG) as Category[]).map(cat => {
+            const cfg = CAT_CFG[cat];
+            const active = activeCategory === cat;
+            const count = allPairs.filter(p => p.category === cat).length;
+            return (
+              <motion.button
+                key={cat}
+                onClick={() => { setActiveCategory(cat); setFilterRec('all'); }}
+                className="relative flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap"
+                style={{ color: active ? cfg.accent : '#4b5563' }}
+              >
+                {active && (
+                  <motion.div
+                    layoutId="catBg"
+                    className="absolute inset-0 rounded-xl"
+                    style={{ background: `${cfg.accent}12`, border: `1px solid ${cfg.accent}30` }}
+                    transition={{ type: 'spring', damping: 30, stiffness: 380 }}
+                  />
+                )}
+                <span className="relative">{cfg.icon}</span>
+                <span className="relative">{cfg.label}</span>
+                <span
+                  className="relative text-[9px] px-1.5 py-0.5 rounded-full font-black"
+                  style={active
+                    ? { background: `${cfg.accent}20`, color: cfg.accent }
+                    : { background: 'rgba(255,255,255,0.05)', color: '#4b5563' }
+                  }
+                >{count}</span>
+              </motion.button>
+            );
+          })}
         </div>
 
         {/* Summary Stats */}
-        <motion.div key={activeCategory} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          className="grid grid-cols-3 gap-2 sm:gap-3">
-          {[
-            { label: 'Bullish', count: bullCount, color: 'text-emerald-400', bg: 'bg-emerald-500/8 border-emerald-500/25', Icon: TrendingUp },
-            { label: 'Neutral', count: neutCount, color: 'text-gray-400',    bg: 'bg-gray-800/30 border-gray-700/30',      Icon: Minus       },
-            { label: 'Bearish', count: bearCount, color: 'text-rose-400',    bg: 'bg-rose-500/8 border-rose-500/25',        Icon: TrendingDown },
-          ].map(({ label, count, color, bg, Icon }) => (
-            <div key={label} className={`rounded-xl border p-3 sm:p-4 ${bg}`}>
-              <div className="flex items-center gap-1.5 mb-1">
-                <Icon size={12} className={color} />
-                <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</span>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeCategory}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="grid grid-cols-3 gap-2 sm:gap-3"
+          >
+            {[
+              { label: 'Bullish', count: bullCount, ...BIAS_CFG.bullish },
+              { label: 'Neutral', count: neutCount, ...BIAS_CFG.neutral },
+              { label: 'Bearish', count: bearCount, ...BIAS_CFG.bearish },
+            ].map(({ label, count, color, bg, border, icon: Icon, barColor }) => (
+              <div
+                key={label}
+                className="rounded-2xl p-4"
+                style={{ background: bg, border: `1px solid ${border}` }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[9px] font-black uppercase tracking-widest" style={{ color }}>
+                    {label}
+                  </span>
+                  <Icon size={12} style={{ color }} />
+                </div>
+                <div className="text-3xl font-black leading-none mb-2" style={{ color }}>{count}</div>
+                <StrengthBar
+                  value={catPairs.length > 0 ? (count / catPairs.length) * 100 : 0}
+                  color={barColor}
+                  height={3}
+                />
               </div>
-              <div className={`text-2xl sm:text-3xl font-black ${color}`}>{count}</div>
-              <div className="text-[9px] sm:text-[10px] text-gray-600 mt-1 truncate">{CAT_LABELS[activeCategory]}</div>
-            </div>
-          ))}
-        </motion.div>
+            ))}
+          </motion.div>
+        </AnimatePresence>
 
         {/* Filter Row */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Show:</span>
-          {(['all', 'trade', 'watch', 'avoid'] as const).map(r => (
-            <button key={r} onClick={() => setFilterRec(r)}
-              className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all ${
-                filterRec === r
-                  ? r === 'trade' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
-                    : r === 'watch' ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-300'
-                    : r === 'avoid' ? 'bg-rose-500/20 border-rose-500/50 text-rose-300'
-                    : 'bg-orange-500/20 border-orange-500/50 text-orange-300'
-                  : 'bg-white/3 border-white/5 text-gray-500 hover:text-gray-300'
-              }`}>
-              {r === 'all' ? 'All Pairs' : r === 'trade' ? '✓ Trade' : r === 'watch' ? '◎ Watch' : '✗ Avoid'}
-            </button>
-          ))}
-          <span className="ml-auto text-[10px] text-gray-600">{displayed.length} pairs — tap to expand</span>
+          <span className="text-[9px] font-black text-gray-700 uppercase tracking-widest">Filter:</span>
+          {(['all', 'trade', 'watch', 'avoid'] as const).map(r => {
+            const active = filterRec === r;
+            const cfg = r !== 'all' ? REC_CFG[r] : null;
+            return (
+              <button
+                key={r}
+                onClick={() => setFilterRec(r)}
+                className="text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all"
+                style={active && cfg
+                  ? { background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color }
+                  : active
+                  ? { background: `${catCfg.accent}15`, border: `1px solid ${catCfg.accent}35`, color: catCfg.accent }
+                  : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#6b7280' }
+                }
+              >
+                {r === 'all' ? 'All Pairs'
+                  : r === 'trade' ? '● Trade'
+                  : r === 'watch' ? '● Watch'
+                  : '● Avoid'}
+              </button>
+            );
+          })}
+          <span className="ml-auto text-[10px] text-gray-700">{displayed.length} pairs</span>
         </div>
 
-        {/* Pairs Grid + Pagination */}
+        {/* Pairs Grid */}
         {loading ? (
-          <div className="text-center py-16">
-            <div className="w-10 h-10 border-2 border-orange-400 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-gray-500 mt-4 text-sm">Analyzing market structure…</p>
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)' }}
+            >
+              <RefreshCw size={20} className="animate-spin text-amber-400" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-bold text-white mb-1">Fetching live data…</p>
+              <p className="text-xs text-gray-600">Connecting to market feeds</p>
+            </div>
           </div>
         ) : (
           <>
             <AnimatePresence mode="wait">
               <motion.div
                 key={`${activeCategory}-${filterRec}-${page}`}
-                initial={{ opacity: 0, x: 20 }}
+                initial={{ opacity: 0, x: 16 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
+                exit={{ opacity: 0, x: -16 }}
                 transition={{ duration: 0.18 }}
-                className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2"
+                className="grid gap-3 sm:grid-cols-2"
               >
-                {paginated.map((p, i) => (
-                  <motion.div key={p.pair} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}>
-                    <PairCard p={p} />
-                  </motion.div>
-                ))}
+                {paginated.length === 0 ? (
+                  <div className="col-span-2 text-center py-16 text-gray-600">
+                    <p className="text-sm">No pairs match this filter</p>
+                  </div>
+                ) : (
+                  paginated.map((p, i) => (
+                    <motion.div key={p.pair} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
+                      <PairCard
+                        p={p}
+                        livePrice={liveData.prices[p.pair]}
+                        liveChange={liveData.changes[p.pair]}
+                      />
+                    </motion.div>
+                  ))
+                )}
               </motion.div>
             </AnimatePresence>
 
-            {/* Pagination Controls */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-1">
-                {/* Prev */}
+              <div className="flex items-center justify-between">
                 <button
                   onClick={() => setPage(p => Math.max(0, p - 1))}
                   disabled={page === 0}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all ${
-                    page === 0
-                      ? 'border-white/5 text-gray-700 cursor-not-allowed'
-                      : 'border-orange-500/30 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20'
-                  }`}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-25"
+                  style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', color: '#f59e0b' }}
                 >
-                  <ChevronLeft size={16} /> Prev
+                  <ChevronLeft size={15} /> Prev
                 </button>
-
-                {/* Page dots */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   {Array.from({ length: totalPages }).map((_, i) => (
                     <button
                       key={i}
                       onClick={() => setPage(i)}
-                      className={`rounded-full transition-all ${
-                        i === page
-                          ? 'w-6 h-2 bg-orange-400'
-                          : 'w-2 h-2 bg-gray-700 hover:bg-gray-500'
-                      }`}
+                      className="rounded-full transition-all"
+                      style={i === page
+                        ? { width: 24, height: 6, background: '#f59e0b', boxShadow: '0 0 8px rgba(245,158,11,0.5)' }
+                        : { width: 6, height: 6, background: '#374151' }
+                      }
                     />
                   ))}
                 </div>
-
-                {/* Next */}
                 <button
                   onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                   disabled={page === totalPages - 1}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all ${
-                    page === totalPages - 1
-                      ? 'border-white/5 text-gray-700 cursor-not-allowed'
-                      : 'border-orange-500/30 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20'
-                  }`}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-25"
+                  style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', color: '#f59e0b' }}
                 >
-                  Next <ChevronRight size={16} />
+                  Next <ChevronRight size={15} />
                 </button>
               </div>
             )}
 
-            {/* Page counter */}
             <div className="text-center text-[10px] text-gray-700">
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, displayed.length)} of {displayed.length} pairs
+              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, displayed.length)} of {displayed.length} pairs · click card to expand
             </div>
           </>
         )}
 
         {/* TF Guide */}
-        <div className="rounded-xl border border-white/5 bg-white/2 p-5">
+        <div
+          className="rounded-2xl p-5"
+          style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}
+        >
           <div className="flex items-center gap-2 mb-4">
-            <BarChart2 size={15} className="text-orange-400" />
-            <h3 className="font-bold text-sm text-white">Timeframe Trading Guide</h3>
+            <BarChart2 size={14} className="text-amber-400" />
+            <h3 className="text-sm font-black text-white">Timeframe Trading Guide</h3>
           </div>
           <div className="grid gap-2 sm:grid-cols-5">
             {[
-              { tf: 'M15', use: 'Scalping',       hold: '15–60 min', best: 'London & NY overlap', color: 'text-blue-400'    },
-              { tf: 'H1',  use: 'Intraday',        hold: '1–4 hours', best: 'Active sessions',     color: 'text-cyan-400'   },
-              { tf: 'H4',  use: 'Intraday/Swing',  hold: '4–12 hrs',  best: 'Post-London / NY',    color: 'text-emerald-400'},
-              { tf: 'D1',  use: 'Swing',           hold: '1–5 days',  best: 'Daily close review',  color: 'text-amber-400'  },
-              { tf: 'W1',  use: 'Position',        hold: 'Weeks+',    best: 'Weekend analysis',    color: 'text-orange-400' },
-            ].map(({ tf, use, hold, best, color }) => (
-              <div key={tf} className="rounded-lg bg-gray-900/50 border border-gray-800/50 p-3">
-                <div className={`text-xs font-black ${color} mb-1`}>{tf}</div>
+              { tf: 'M15', use: 'Scalping',      hold: '15–60m',   color: '#60a5fa' },
+              { tf: 'H1',  use: 'Intraday',       hold: '1–4h',     color: '#22d3ee' },
+              { tf: 'H4',  use: 'Swing / Intra',  hold: '4–12h',    color: '#34d399' },
+              { tf: 'D1',  use: 'Swing',          hold: '1–5 days', color: '#fbbf24' },
+              { tf: 'W1',  use: 'Position',       hold: 'Weeks+',   color: '#f59e0b' },
+            ].map(({ tf, use, hold, color }) => (
+              <div
+                key={tf}
+                className="rounded-xl p-3"
+                style={{ background: `${color}08`, border: `1px solid ${color}20` }}
+              >
+                <div className="text-xs font-black mb-1" style={{ color }}>{tf}</div>
                 <div className="text-[10px] font-bold text-gray-300">{use}</div>
-                <div className="text-[10px] text-gray-500 mt-0.5">Hold: {hold}</div>
-                <div className="text-[10px] text-gray-600">{best}</div>
+                <div className="text-[9px] text-gray-600 mt-0.5">{hold}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Rules */}
-        <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-5">
+        <div
+          className="rounded-2xl p-5"
+          style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.14)' }}
+        >
           <div className="flex items-center gap-2 mb-4">
-            <Shield size={15} className="text-amber-400" />
-            <h3 className="font-bold text-sm text-amber-300">Daily Trading Rules</h3>
+            <Shield size={14} className="text-amber-400" />
+            <h3 className="text-sm font-black text-amber-300">Daily Trading Rules</h3>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2.5 sm:grid-cols-2">
             {[
               { icon: '⏱', text: 'Enter 30–60 min AFTER high-impact news — avoid the spike chaos' },
               { icon: '📐', text: 'Align at least 3 timeframes before any entry' },
               { icon: '💰', text: 'Risk max 1–2% per trade — let compounding work' },
               { icon: '🔄', text: 'Trade WITH the H4/D1 bias — counter-trend for experts only' },
-              { icon: '🌍', text: 'London open (08:00 UTC) & NY overlap (13:00–17:00 UTC) = best setups' },
+              { icon: '🌍', text: 'London (08:00 UTC) & NY Overlap (13:00–17:00 UTC) = best setups' },
               { icon: '🚫', text: 'Avoid marked pairs — slippage + spread will eat your edge' },
             ].map(({ icon, text }, i) => (
-              <div key={i} className="flex gap-3 text-xs text-gray-300">
-                <span className="text-base flex-shrink-0">{icon}</span>
-                <span>{text}</span>
+              <div key={i} className="flex gap-3 items-start">
+                <span className="text-base shrink-0">{icon}</span>
+                <span className="text-xs text-gray-400 leading-relaxed">{text}</span>
               </div>
             ))}
           </div>

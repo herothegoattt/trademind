@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '003_add_trades'
-down_revision = '002_add_trades_accounts_community'
+down_revision = "002"
 branch_labels = None
 depends_on = None
 
