@@ -502,7 +502,7 @@ export default function AnalyticsLabPage() {
       </div>
 
       {/* ── Content ──────────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-14 md:pb-0">
       <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
 
         {/* ══════════════════════════════════════════════════════════════════════

@@ -424,3 +424,31 @@ a:hover { color: #67e8f9; }
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 640px) { body { font-size: 14px; } }
 @media print { body::before, body::after { display: none; } }
+
+/* ── Mobile optimizations ───────────────────────────────────── */
+
+/* Dynamic viewport height — fixes iOS Safari address bar cut-off */
+@supports (height: 100dvh) {
+  html, body { height: 100dvh; max-height: 100dvh; }
+}
+
+/* Prevent iOS auto-zoom on focused inputs (requires font-size >= 16px) */
+@media (max-width: 767px) {
+  input, textarea, select { font-size: 16px !important; }
+
+  /* Safe-area-aware bottom for app content (iPhone X+ home indicator) */
+  @supports (padding: env(safe-area-inset-bottom)) {
+    .app-content { bottom: calc(3.5rem + env(safe-area-inset-bottom)) !important; }
+  }
+}
+
+/* Desktop: override safe-area — content goes to screen bottom */
+@media (min-width: 768px) {
+  .app-content { bottom: 0 !important; }
+}
+
+/* Remove tap-highlight flash on interactive elements */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* Eliminate 300 ms tap delay */
+button, a, [role="button"], input, textarea, select { touch-action: manipulation; }

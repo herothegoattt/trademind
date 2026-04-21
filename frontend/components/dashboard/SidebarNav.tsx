@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useDashboardStore } from "../../lib/store";
 import { useT } from "../../lib/i18n";
 import { Section } from "../../lib/types";
@@ -11,6 +11,7 @@ import { cn } from "../../lib/utils";
 import {
   BookOpen, Settings, Activity, Globe, FileText,
   Compass, User, TrendingUp, AlertTriangle, FlaskConical,
+  MoreHorizontal, X,
 } from "lucide-react";
 
 /* ── Per-item color config ────────────────────────────────────── */
@@ -61,6 +62,14 @@ const mobileItems = [
   { section: "Markets",    path: "/markets",    Icon: Globe,    labelKey: "section_markets"    },
   { section: "News",       path: "/news",       Icon: FileText, labelKey: "section_news"       },
   { section: "Daily Bias", path: "/daily-bias", Icon: Compass,  labelKey: "section_daily_bias" },
+];
+
+const moreItems = [
+  { section: "Community Edge",  path: "/community-edge",  Icon: Activity,      labelKey: "section_community_edge" },
+  { section: "Trader DNA",      path: "/trader-dna",      Icon: User,          labelKey: "section_trader_dna"     },
+  { section: "Investing",       path: "/investing",        Icon: TrendingUp,    labelKey: "section_investing"      },
+  { section: "Analytics Lab",   path: "/analytics-lab",    Icon: FlaskConical,  labelKey: "section_analytics_lab"  },
+  { section: "Decision Errors", path: "/decision-errors",  Icon: AlertTriangle, labelKey: "decision_errors"        },
 ];
 
 /* Icon with animated neon glow when active */
@@ -131,11 +140,15 @@ export function SidebarNav() {
   const selectSection = useDashboardStore((s: any) => s.selectSection);
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     useDashboardStore.getState().initDashboard();
   }, []);
+
+  // Close "More" drawer on route change
+  useEffect(() => { setMoreOpen(false); }, [pathname]);
 
   if (!mounted) return null;
 
@@ -268,7 +281,7 @@ export function SidebarNav() {
         </div>
       </nav>
 
-      {/* ── Mobile ──────────────────────────────────────────── */}
+      {/* ── Mobile bottom nav ───────────────────────────────── */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex"
         style={{
@@ -325,7 +338,110 @@ export function SidebarNav() {
             </Link>
           );
         })}
+
+        {/* "More" button — reveals hidden sections */}
+        <button
+          onClick={() => setMoreOpen(true)}
+          className="flex-1 flex flex-col items-center justify-center py-3 gap-1 min-h-[56px]"
+        >
+          <MoreHorizontal size={17} strokeWidth={1.7} style={{ color: "rgba(56,70,92,0.9)" }} />
+          <span className="text-[10px] font-medium" style={{ color: "rgba(56,70,92,0.9)" }}>More</span>
+        </button>
       </nav>
+
+      {/* ── More drawer (mobile only) ────────────────────────── */}
+      <AnimatePresence>
+        {moreOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="md:hidden fixed inset-0 z-[60]"
+              style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+              onClick={() => setMoreOpen(false)}
+            />
+
+            {/* Sheet */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 420, damping: 38 }}
+              className="md:hidden fixed left-0 right-0 z-[70] rounded-t-3xl"
+              style={{
+                bottom: 0,
+                background: "rgba(6,8,16,0.99)",
+                borderTop: "1px solid rgba(255,255,255,0.085)",
+                paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))",
+              }}
+            >
+              {/* Drag handle */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }} />
+              </div>
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: "rgba(100,116,139,0.55)" }}>
+                  All Sections
+                </p>
+                <button
+                  onClick={() => setMoreOpen(false)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg"
+                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(100,116,139,0.7)" }}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+
+              {/* Grid of section items */}
+              <div className="grid grid-cols-3 gap-2.5 px-4 pb-2">
+                {moreItems.map(({ section, path, Icon, labelKey }) => {
+                  const active = pathname === path;
+                  const clr = COLOR[path] ?? { icon: "#94a3b8", active: "rgba(255,255,255,0.06)", bar: "#94a3b8", glow: "148,163,184" };
+                  return (
+                    <Link
+                      key={section}
+                      href={path}
+                      onClick={() => {
+                        if (section !== "Decision Errors") selectSection(section as Section);
+                        setMoreOpen(false);
+                      }}
+                      className="flex flex-col items-center gap-2 py-4 px-2 rounded-2xl transition-all"
+                      style={{
+                        background: active ? clr.active : "rgba(255,255,255,0.03)",
+                        border: active ? `1px solid rgba(${clr.glow},0.22)` : "1px solid rgba(255,255,255,0.065)",
+                      }}
+                    >
+                      <motion.span
+                        animate={active ? {
+                          filter: [
+                            `drop-shadow(0 0 2px rgba(${clr.glow},0.7))`,
+                            `drop-shadow(0 0 6px rgba(${clr.glow},1))`,
+                            `drop-shadow(0 0 2px rgba(${clr.glow},0.7))`,
+                          ],
+                          color: clr.icon,
+                        } : { filter: "none", color: "rgba(71,85,105,0.7)" }}
+                        transition={active ? { filter: { duration: 3, repeat: Infinity, ease: "easeInOut" }, color: { duration: 0.2 } } : { duration: 0.2 }}
+                      >
+                        <Icon size={20} strokeWidth={active ? 2 : 1.6} />
+                      </motion.span>
+                      <span
+                        className="text-[10px] font-medium text-center leading-tight"
+                        style={{ color: active ? clr.icon : "rgba(71,85,105,0.8)" }}
+                      >
+                        {t(labelKey)}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 }

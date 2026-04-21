@@ -345,7 +345,7 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
             </motion.p>
 
             {/* Suggestion cards — 2×2 grid */}
-            <div className="grid grid-cols-2 gap-2 w-full max-w-[300px]">
+            <div className="grid grid-cols-2 gap-2 w-full max-w-[320px] px-1">
               {SUGGESTIONS.map((s, i) => (
                 <motion.button
                   key={s.label}
@@ -676,7 +676,7 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
         </div>
 
         <p
-          className="text-[10px] text-center mt-2"
+          className="hidden sm:block text-[10px] text-center mt-2"
           style={{ color: "rgba(56,70,92,0.8)" }}
         >
           Enter to send · Shift+Enter for new line
