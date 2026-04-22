@@ -54,6 +54,7 @@ orjson==3.11.7
 ormsgpack==1.12.2
 packaging==26.0
 passlib==1.7.4
+psycopg2-binary==2.9.10
 pluggy==1.6.0
 proto-plus==1.27.1
 protobuf==5.29.6

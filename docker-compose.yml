@@ -32,7 +32,7 @@ services:
     restart: always
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-trademind}:${POSTGRES_PASSWORD:-trademind}@postgres:5432/${POSTGRES_DB:-trademind}
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trademind}:${POSTGRES_PASSWORD:-trademind}@postgres:5432/${POSTGRES_DB:-trademind}
       CORS_ORIGINS: https://trademindtech.com,https://www.trademindtech.com
     depends_on:
       postgres:
@@ -49,6 +49,11 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ""
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+        NEXT_PUBLIC_POSTHOG_TOKEN: ${NEXT_PUBLIC_POSTHOG_TOKEN:-}
+        NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
     restart: always
     environment:
       NEXT_PUBLIC_API_URL: ""
