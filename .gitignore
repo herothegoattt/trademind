@@ -36,6 +36,8 @@ ENV/
 .env
 .env.local
 .env.production
+# Allow frontend public env for Next.js build (only public NEXT_PUBLIC_* vars, no secrets)
+!frontend/.env.production
 
 # Logs
 *.log
