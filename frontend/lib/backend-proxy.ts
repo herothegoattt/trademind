@@ -54,10 +54,12 @@ export async function proxyToBackend(
   } catch (err: any) {
     clearTimeout(timer);
     if (err?.name === "AbortError") {
-      throw new Error("Backend request timed out. Check that BACKEND_INTERNAL_URL is set correctly.");
+      console.error(`[backend-proxy] Timeout reaching ${getBackendUrl()}${path}`);
+      throw new Error("Service is temporarily slow. Please try again in a moment.");
     }
     if (err?.cause?.code === "ECONNREFUSED") {
-      throw new Error(`Cannot connect to backend at ${getBackendUrl()}. Is it running?`);
+      console.error(`[backend-proxy] ECONNREFUSED reaching ${getBackendUrl()}${path} — BACKEND_INTERNAL_URL=${process.env.BACKEND_INTERNAL_URL ?? "(unset)"}`);
+      throw new Error("Service temporarily unavailable. Please try again later.");
     }
     throw err;
   }
