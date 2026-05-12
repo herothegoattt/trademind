@@ -3,8 +3,9 @@
  * Use only in Next.js API routes (Node.js runtime).
  */
 
-export const BACKEND_URL =
-  process.env.BACKEND_INTERNAL_URL || "http://localhost:8000";
+function getBackendUrl(): string {
+  return process.env.BACKEND_INTERNAL_URL || "http://localhost:8000";
+}
 
 /** Validate a Bearer token by calling /api/v1/auth/me on the backend. */
 export async function getUserFromBackendToken(
@@ -12,9 +13,13 @@ export async function getUserFromBackendToken(
 ): Promise<Record<string, unknown> | null> {
   if (!authHeader?.startsWith("Bearer ")) return null;
   try {
-    const res = await fetch(`${BACKEND_URL}/api/v1/auth/me`, {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(`${getBackendUrl()}/api/v1/auth/me`, {
       headers: { Authorization: authHeader },
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -34,9 +39,26 @@ export async function proxyToBackend(
   };
   if (authHeader) headers["Authorization"] = authHeader;
 
-  return fetch(`${BACKEND_URL}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const res = await fetch(`${getBackendUrl()}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    return res;
+  } catch (err: any) {
+    clearTimeout(timer);
+    if (err?.name === "AbortError") {
+      throw new Error("Backend request timed out. Check that BACKEND_INTERNAL_URL is set correctly.");
+    }
+    if (err?.cause?.code === "ECONNREFUSED") {
+      throw new Error(`Cannot connect to backend at ${getBackendUrl()}. Is it running?`);
+    }
+    throw err;
+  }
 }

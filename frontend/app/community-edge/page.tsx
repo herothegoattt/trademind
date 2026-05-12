@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import CommunityEdge from "../../components/dashboard/CommunityEdge";
 import Link from "next/link";
-import { ArrowLeft, Zap } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
 import { useT } from "../../lib/i18n";
 
@@ -65,21 +65,6 @@ export default function CommunityEdgePage() {
           <span className="text-sm font-semibold text-gray-500">{t("ce_back")}</span>
         </motion.div>
 
-        {/* Live indicator */}
-        <motion.div
-          initial={{ opacity: 0, x: 16 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl"
-          style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.12)" }}
-        >
-          <div className="relative">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ boxShadow: "0 0 6px rgba(52,211,153,0.8)" }} />
-            <div className="absolute inset-0 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping opacity-50" />
-          </div>
-          <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Live</span>
-          <Zap size={10} className="text-cyan-500/60" />
-          <span className="text-[10px] text-gray-600">847 online</span>
-        </motion.div>
       </div>
 
       {/* Content */}

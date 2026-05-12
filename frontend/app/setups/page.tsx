@@ -3,26 +3,33 @@ export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, X, AlertTriangle, Star, TrendingUp, TrendingDown, BarChart2, Target, Shield, CheckCircle, XCircle, Clock, Layers } from 'lucide-react';
+import {
+  ArrowLeft, X, AlertTriangle, Star, TrendingUp, TrendingDown,
+  BarChart2, Target, Shield, CheckCircle, XCircle, Clock,
+  Layers, BookOpen, Zap, ChevronRight, Activity,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface Candle { o: number; h: number; l: number; c: number; v: number; }
-interface HLine { y: number; label: string; color: string; }
-interface Zone { y1: number; y2: number; label?: string; color: string; }
-interface TLine { x1: number; y1: number; x2: number; y2: number; color?: string; }
+interface HLine  { y: number; label: string; color: string; }
+interface Zone   { y1: number; y2: number; label?: string; color: string; }
+interface TLine  { x1: number; y1: number; x2: number; y2: number; color?: string; }
 
 interface Setup {
   id: string;
-  level: 'beginner' | 'amateur' | 'professional';
+  level: 'beginner' | 'intermediate' | 'professional';
   title: string;
   type: string;
+  symbol: string;
   timeframe: string;
   direction: 'Long' | 'Short' | 'Both';
   marketCondition: 'Trending' | 'Ranging' | 'Both';
   rr: string;
+  rrNum: number;
   winRateRange: string;
   difficulty: number;
+  badge?: 'popular' | 'high-rr' | 'advanced';
   description: string;
   concept: string;
   candles: Candle[];
@@ -38,17 +45,17 @@ interface Setup {
   commonMistakes: string[];
 }
 
-// ─── Candle Chart (SVG) ──────────────────────────────────────────────────────
+// ─── Enhanced Candle Chart ───────────────────────────────────────────────────
 function CandleChart({
   candles, hlines = [], zones = [], trendlines = [],
-  entryCandle, slPrice, tpPrice,
-  vw = 300, vh = 180, labels = true,
+  entryCandle, slPrice, tpPrice, symbol,
+  vw = 340, vh = 200, labels = true,
 }: {
   candles: Candle[]; hlines?: HLine[]; zones?: Zone[]; trendlines?: TLine[];
-  entryCandle?: number; slPrice?: number; tpPrice?: number;
+  entryCandle?: number; slPrice?: number; tpPrice?: number; symbol?: string;
   vw?: number; vh?: number; labels?: boolean;
 }) {
-  const PL = 8, PR = 48, PT = 10, PB = 4, VOLH = 20, GAP = 3;
+  const PL = 6, PR = 44, PT = 14, PB = 4, VOLH = 22, GAP = 4;
   const PH = vh - PT - PB - VOLH - GAP;
   const CW = vw - PL - PR;
 
@@ -60,148 +67,168 @@ function CandleChart({
 
   const rawMax = Math.max(...allP);
   const rawMin = Math.min(...allP);
-  const rng = rawMax === rawMin ? 0.001 : rawMax - rawMin;
-  const maxP = rawMax + rng * 0.1;
-  const minP = rawMin - rng * 0.1;
-  const pRng = maxP - minP;
+  const rng    = rawMax === rawMin ? 0.001 : rawMax - rawMin;
+  const maxP   = rawMax + rng * 0.08;
+  const minP   = rawMin - rng * 0.08;
+  const pRng   = maxP - minP;
 
   const py = (p: number) => PT + ((maxP - p) / pRng) * PH;
   const volBase = PT + PH + GAP + VOLH;
-  const maxVol = Math.max(...candles.map(c => c.v));
+  const maxVol  = Math.max(...candles.map(c => c.v));
   const vy = (v: number) => volBase - (v / maxVol) * VOLH;
 
-  const n = candles.length;
+  const n    = candles.length;
   const step = CW / n;
-  const bw = Math.max(step * 0.56, 3);
-  const cx = (i: number) => PL + (i + 0.5) * step;
+  const bw   = Math.max(step * 0.58, 3);
+  const cx   = (i: number) => PL + (i + 0.5) * step;
 
-  // Y-axis price labels
-  const yAxisPrices = [
-    { p: maxP - pRng * 0.05, y: PT + PH * 0.05 },
-    { p: maxP - pRng * 0.5,  y: PT + PH * 0.5 },
-    { p: minP + pRng * 0.05, y: PT + PH * 0.95 },
-  ];
-
-  const fmtP = (p: number) => p.toFixed(4);
+  const fmtP = (p: number) =>
+    p > 999 ? p.toFixed(1) : p > 9 ? p.toFixed(2) : p.toFixed(4);
 
   return (
     <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" preserveAspectRatio="none">
       {/* Background */}
-      <rect width={vw} height={vh} fill="#06090f" />
-      <rect width={vw} height={vh} fill="rgba(34,211,238,0.02)" />
+      <rect width={vw} height={vh} fill="#060a12" />
 
-      {/* Horizontal grid lines */}
-      {[0.25, 0.5, 0.75, 1.0].map((f, i) => (
-        <line key={`hg${i}`}
-          x1={PL} y1={PT + f * PH}
-          x2={vw - PR} y2={PT + f * PH}
-          stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+      {/* Subtle grid */}
+      {[0.2, 0.4, 0.6, 0.8].map((f, i) => (
+        <line key={i} x1={PL} y1={PT + f * PH} x2={vw - PR} y2={PT + f * PH}
+          stroke="rgba(255,255,255,0.04)" strokeWidth="0.8" />
+      ))}
+      {[0.25, 0.5, 0.75].map((f, i) => (
+        <line key={i} x1={PL + f * CW} y1={PT} x2={PL + f * CW} y2={PT + PH}
+          stroke="rgba(255,255,255,0.025)" strokeWidth="0.8" />
       ))}
 
-      {/* Vertical right-edge separator */}
+      {/* Right separator */}
       <line x1={vw - PR} y1={PT} x2={vw - PR} y2={PT + PH + GAP + VOLH}
-        stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+        stroke="rgba(255,255,255,0.07)" strokeWidth="0.8" />
 
       {/* Volume separator */}
       <line x1={PL} y1={PT + PH + GAP} x2={vw - PR} y2={PT + PH + GAP}
-        stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+        stroke="rgba(255,255,255,0.04)" strokeWidth="0.8" />
 
       {/* Zones */}
       {zones.map((z, i) => {
         const y = Math.min(py(z.y1), py(z.y2));
         const h = Math.max(Math.abs(py(z.y1) - py(z.y2)), 2);
-        return <rect key={`z${i}`} x={PL} y={y} width={CW} height={h}
-          fill={z.color.replace(/[\d.]+\)$/, '0.12)')} />;
+        return <rect key={i} x={PL} y={y} width={CW} height={h}
+          fill={z.color.replace(/[\d.]+\)$/, '0.14)')} />;
       })}
 
       {/* HLines */}
       {hlines.map((h, i) => (
-        <g key={`hl${i}`}>
+        <g key={i}>
           <line x1={PL} y1={py(h.y)} x2={vw - PR} y2={py(h.y)}
-            stroke={h.color} strokeWidth="1" strokeDasharray="4,3" opacity="0.75" />
-          {labels && h.label && (
+            stroke={h.color} strokeWidth="1" strokeDasharray="4,3" opacity="0.7" />
+          {labels && (
             <text x={vw - PR + 3} y={py(h.y) + 2.5}
-              fill={h.color} fontSize="5.5" fontFamily="monospace" opacity="0.75">{h.label}</text>
+              fill={h.color} fontSize="5.5" fontFamily="monospace" opacity="0.7">{h.label}</text>
           )}
         </g>
       ))}
 
-      {/* TP dashed line + right label pill */}
+      {/* TP line */}
       {tpPrice != null && (
         <g>
           <line x1={PL} y1={py(tpPrice)} x2={vw - PR} y2={py(tpPrice)}
-            stroke="#34d399" strokeWidth="1.5" strokeDasharray="6,3" />
-          <rect x={vw - PR + 1} y={py(tpPrice) - 5} width={PR - 2} height={10}
-            fill="rgba(52,211,153,0.15)" rx="2" />
-          <text x={vw - PR + (PR - 2) / 2 + 1} y={py(tpPrice) + 3}
+            stroke="#34d399" strokeWidth="1.5" strokeDasharray="6,3" opacity="0.9" />
+          <rect x={vw - PR + 1} y={py(tpPrice) - 5.5} width={PR - 2} height={11}
+            fill="rgba(52,211,153,0.18)" rx="2" />
+          <text x={vw - PR + (PR - 2) / 2 + 1} y={py(tpPrice) + 3.5}
             fill="#34d399" fontSize="6.5" fontFamily="monospace" textAnchor="middle" fontWeight="bold">TP</text>
         </g>
       )}
 
-      {/* SL dashed line + right label pill */}
+      {/* SL line */}
       {slPrice != null && (
         <g>
           <line x1={PL} y1={py(slPrice)} x2={vw - PR} y2={py(slPrice)}
-            stroke="#f87171" strokeWidth="1.5" strokeDasharray="6,3" />
-          <rect x={vw - PR + 1} y={py(slPrice) - 5} width={PR - 2} height={10}
-            fill="rgba(248,113,113,0.15)" rx="2" />
-          <text x={vw - PR + (PR - 2) / 2 + 1} y={py(slPrice) + 3}
+            stroke="#f87171" strokeWidth="1.5" strokeDasharray="6,3" opacity="0.9" />
+          <rect x={vw - PR + 1} y={py(slPrice) - 5.5} width={PR - 2} height={11}
+            fill="rgba(248,113,113,0.18)" rx="2" />
+          <text x={vw - PR + (PR - 2) / 2 + 1} y={py(slPrice) + 3.5}
             fill="#f87171" fontSize="6.5" fontFamily="monospace" textAnchor="middle" fontWeight="bold">SL</text>
         </g>
       )}
 
       {/* Trendlines */}
       {trendlines.map((tl, i) => (
-        <line key={`tl${i}`}
+        <line key={i}
           x1={cx(tl.x1)} y1={py(tl.y1)} x2={cx(tl.x2)} y2={py(tl.y2)}
-          stroke="#60a5fa" strokeWidth="1.5" opacity="0.7" strokeLinecap="round" />
+          stroke={tl.color || '#60a5fa'} strokeWidth="1.5" opacity="0.65" strokeLinecap="round" />
       ))}
 
       {/* Volume bars */}
       {candles.map((c, i) => (
-        <rect key={`v${i}`}
+        <rect key={i}
           x={cx(i) - bw / 2} y={vy(c.v)} width={bw} height={volBase - vy(c.v)}
-          fill={c.c >= c.o ? 'rgba(34,211,238,0.15)' : 'rgba(248,113,113,0.15)'} rx="1" />
+          fill={c.c >= c.o ? 'rgba(52,211,153,0.18)' : 'rgba(248,113,113,0.18)'} rx="1" />
       ))}
+
+      {/* Entry highlight column */}
+      {entryCandle != null && (
+        <rect x={cx(entryCandle) - step / 2} y={PT} width={step} height={PH}
+          fill="rgba(245,158,11,0.05)" />
+      )}
 
       {/* Candles */}
       {candles.map((c, i) => {
         const isUp = c.c >= c.o;
-        const isE = i === entryCandle;
-        let col: string;
-        if (isE) col = '#f59e0b';
-        else if (isUp) col = '#22d3ee';
-        else col = '#f87171';
-
-        const by = py(Math.max(c.o, c.c));
-        const bh = Math.max(py(Math.min(c.o, c.c)) - by, 1.5);
-        const bodyFill = isE ? '#f59e0b' : isUp ? '#22d3ee' : 'transparent';
+        const isE  = i === entryCandle;
+        const col  = isE ? '#f59e0b' : isUp ? '#34d399' : '#f87171';
+        const by   = py(Math.max(c.o, c.c));
+        const bh   = Math.max(py(Math.min(c.o, c.c)) - by, 1.5);
+        const fill = isE ? '#f59e0b' : isUp ? '#34d399' : 'transparent';
         return (
-          <g key={`c${i}`}>
-            {/* Wick */}
+          <g key={i}>
             <line x1={cx(i)} y1={py(c.h)} x2={cx(i)} y2={py(c.l)}
               stroke={col} strokeWidth="1.2" />
-            {/* Body */}
             <rect x={cx(i) - bw / 2} y={by} width={bw} height={bh}
-              fill={bodyFill} stroke={col} strokeWidth={isE ? 2.5 : 1.5} rx="1" />
+              fill={fill} stroke={col} strokeWidth={isE ? 2 : 1.2}
+              fillOpacity={isUp && !isE ? 0.5 : 1} rx="0.8" />
           </g>
         );
       })}
 
-      {/* Entry arrow: small amber triangle below the entry candle wick */}
+      {/* Entry arrow */}
       {entryCandle != null && (
-        <polygon
-          points={`${cx(entryCandle)},${py(candles[entryCandle].l) + 12} ${cx(entryCandle) - 4},${py(candles[entryCandle].l) + 19} ${cx(entryCandle) + 4},${py(candles[entryCandle].l) + 19}`}
-          fill="#f59e0b" opacity="0.9"
-        />
+        <g>
+          <polygon
+            points={`${cx(entryCandle)},${py(candles[entryCandle].l) + 10} ${cx(entryCandle) - 5},${py(candles[entryCandle].l) + 18} ${cx(entryCandle) + 5},${py(candles[entryCandle].l) + 18}`}
+            fill="#f59e0b" opacity="0.95"
+          />
+          <text x={cx(entryCandle)} y={py(candles[entryCandle].l) + 27}
+            fill="#f59e0b" fontSize="6" fontFamily="monospace" textAnchor="middle" fontWeight="bold" opacity="0.8">
+            ENTRY
+          </text>
+        </g>
       )}
 
-      {/* Y-axis price labels on right */}
-      {labels && yAxisPrices.map((item, i) => (
-        <text key={`ya${i}`}
-          x={vw - PR + 3} y={item.y + 2}
-          fill="rgba(148,163,184,0.45)" fontSize="6.5" fontFamily="monospace">{fmtP(item.p)}</text>
+      {/* Y-axis price labels */}
+      {labels && [0.1, 0.5, 0.9].map((f, i) => (
+        <text key={i} x={vw - PR + 3} y={PT + f * PH + 2}
+          fill="rgba(148,163,184,0.4)" fontSize="5.5" fontFamily="monospace">
+          {fmtP(maxP - f * pRng)}
+        </text>
       ))}
+
+      {/* Symbol label top-left */}
+      {symbol && (
+        <g>
+          <rect x={PL + 2} y={PT - 1} width={symbol.length * 4.8 + 8} height={11} rx="2"
+            fill="rgba(0,0,0,0.55)" />
+          <text x={PL + 6} y={PT + 7.5}
+            fill="rgba(226,232,240,0.7)" fontSize="6.5" fontFamily="monospace" fontWeight="bold">
+            {symbol}
+          </text>
+        </g>
+      )}
+
+      {/* "EDUCATIONAL" watermark */}
+      <text x={PL + CW / 2} y={PT + PH / 2 + 4}
+        fill="rgba(255,255,255,0.03)" fontSize="18" fontFamily="monospace"
+        fontWeight="bold" textAnchor="middle">EDUCATIONAL</text>
     </svg>
   );
 }
@@ -209,36 +236,45 @@ function CandleChart({
 // ─── Setup Data ──────────────────────────────────────────────────────────────
 const SETUPS: Setup[] = [
   {
-    id: 'b-trend',
+    id: 'trend-pullback',
     level: 'beginner',
-    title: 'Market Structure Trend',
+    title: 'Trend Pullback (HH/HL)',
     type: 'Smart Money',
+    symbol: 'EURUSD',
     timeframe: '1H / 4H',
-    direction: 'Both',
+    direction: 'Long',
     marketCondition: 'Trending',
-    rr: '1:2',
+    rr: '1:2', rrNum: 2,
     winRateRange: '45–55%',
     difficulty: 1,
-    description: 'Trade pullbacks in a clear uptrend or downtrend using Higher Highs / Higher Lows structure.',
+    badge: 'popular',
+    description: 'Trade pullbacks in a clear uptrend using Higher Highs / Higher Lows structure.',
     concept: 'Price moves in waves. An uptrend creates Higher Highs (HH) and Higher Lows (HL). When price pulls back to an HL zone and shows bullish rejection, that\'s a high-probability long entry with the trend. The opposite applies for downtrends.',
     candles: [
-      { o: 1.1008, h: 1.1055, l: 1.1000, c: 1.1048, v: 80 },
-      { o: 1.1048, h: 1.1098, l: 1.1042, c: 1.1090, v: 100 },
-      { o: 1.1090, h: 1.1102, l: 1.1060, c: 1.1066, v: 65 },
-      { o: 1.1066, h: 1.1074, l: 1.1038, c: 1.1044, v: 72 },
-      { o: 1.1044, h: 1.1082, l: 1.1036, c: 1.1077, v: 132 },
-      { o: 1.1077, h: 1.1122, l: 1.1070, c: 1.1115, v: 148 },
-      { o: 1.1115, h: 1.1152, l: 1.1108, c: 1.1145, v: 135 },
+      { o:1.0940,h:1.0975,l:1.0930,c:1.0965, v:75 },
+      { o:1.0965,h:1.1005,l:1.0958,c:1.0998, v:95 },
+      { o:1.0998,h:1.1018,l:1.0980,c:1.0985, v:60 },
+      { o:1.0985,h:1.0992,l:1.0952,c:1.0960, v:68 },
+      { o:1.0960,h:1.0968,l:1.0935,c:1.0942, v:55 },
+      { o:1.0942,h:1.0988,l:1.0937,c:1.0982, v:125 },
+      { o:1.0982,h:1.1022,l:1.0975,c:1.1015, v:142 },
+      { o:1.1015,h:1.1048,l:1.1008,c:1.1040, v:128 },
+      { o:1.1040,h:1.1058,l:1.1012,c:1.1018, v:72 },
+      { o:1.1018,h:1.1025,l:1.0985,c:1.0990, v:65 },
+      { o:1.0990,h:1.1032,l:1.0985,c:1.1028, v:138 },
+      { o:1.1028,h:1.1062,l:1.1022,c:1.1055, v:148 },
+      { o:1.1055,h:1.1088,l:1.1048,c:1.1082, v:132 },
+      { o:1.1082,h:1.1105,l:1.1075,c:1.1098, v:118 },
     ],
-    entryCandle: 4,
-    slPrice: 1.1026,
-    tpPrice: 1.1142,
+    entryCandle: 5,
+    slPrice: 1.0918,
+    tpPrice: 1.1066,
     hlines: [
-      { y: 1.1098, label: 'HH', color: '#60a5fa' },
-      { y: 1.1038, label: 'HL', color: '#60a5fa' },
+      { y:1.1048, label:'HH', color:'#60a5fa' },
+      { y:1.0935, label:'HL', color:'#60a5fa' },
     ],
     zones: [],
-    trendlines: [{ x1: 0, y1: 1.1000, x2: 3, y2: 1.1038, color: '#60a5fa' }],
+    trendlines: [{ x1:0, y1:1.0930, x2:4, y2:1.0935 }],
     steps: [
       'On 4H chart confirm uptrend: at least 2 HH and 2 HL visible',
       'Draw a trendline connecting the last 2 swing lows (Higher Lows)',
@@ -252,7 +288,7 @@ const SETUPS: Setup[] = [
       'Trend direction aligned across 4H and Daily',
       'Volume increases on the bounce candle',
       'RSI not overbought (below 70) at entry',
-      'Entry zone near round number (1.1000, 1.1050)',
+      'Entry zone near round number (1.1000, 1.0950)',
     ],
     exitStrategy: [
       'Close 50% at 1:1 R:R, move SL to breakeven',
@@ -268,40 +304,44 @@ const SETUPS: Setup[] = [
   },
 
   {
-    id: 'b-sr',
+    id: 'sr-bounce',
     level: 'beginner',
     title: 'Support / Resistance Bounce',
     type: 'Technical Analysis',
+    symbol: 'GBPUSD',
     timeframe: '4H / Daily',
     direction: 'Both',
     marketCondition: 'Both',
-    rr: '1:2',
+    rr: '1:2', rrNum: 2,
     winRateRange: '40–52%',
     difficulty: 1,
     description: 'Enter when price bounces from a clear horizontal support or resistance level on 4H or Daily.',
     concept: 'Institutional buyers/sellers cluster orders at previously significant price levels. When price returns to these areas, a reaction (bounce) is expected. The more times a level has been tested, the more significant it is.',
     candles: [
-      { o: 1.1150, h: 1.1162, l: 1.1128, c: 1.1133, v: 92 },
-      { o: 1.1133, h: 1.1140, l: 1.1098, c: 1.1104, v: 112 },
-      { o: 1.1104, h: 1.1110, l: 1.1068, c: 1.1073, v: 102 },
-      { o: 1.1073, h: 1.1082, l: 1.1060, c: 1.1078, v: 70 },
-      { o: 1.1078, h: 1.1120, l: 1.1072, c: 1.1115, v: 158 },
-      { o: 1.1115, h: 1.1148, l: 1.1108, c: 1.1142, v: 132 },
-      { o: 1.1142, h: 1.1168, l: 1.1135, c: 1.1162, v: 122 },
+      { o:1.2680,h:1.2712,l:1.2655,c:1.2665, v:88 },
+      { o:1.2665,h:1.2678,l:1.2632,c:1.2640, v:105 },
+      { o:1.2640,h:1.2650,l:1.2602,c:1.2612, v:98 },
+      { o:1.2612,h:1.2625,l:1.2580,c:1.2592, v:92 },
+      { o:1.2592,h:1.2605,l:1.2568,c:1.2580, v:85 },
+      { o:1.2580,h:1.2590,l:1.2552,c:1.2570, v:72 },
+      { o:1.2570,h:1.2615,l:1.2562,c:1.2608, v:155 },
+      { o:1.2608,h:1.2645,l:1.2600,c:1.2638, v:138 },
+      { o:1.2638,h:1.2672,l:1.2630,c:1.2665, v:122 },
+      { o:1.2665,h:1.2698,l:1.2658,c:1.2690, v:118 },
+      { o:1.2690,h:1.2720,l:1.2682,c:1.2712, v:108 },
+      { o:1.2712,h:1.2748,l:1.2705,c:1.2740, v:128 },
     ],
-    entryCandle: 4,
-    slPrice: 1.1052,
-    tpPrice: 1.1158,
+    entryCandle: 6,
+    slPrice: 1.2540,
+    tpPrice: 1.2715,
     hlines: [
-      { y: 1.1065, label: 'SUPPORT', color: '#10b981' },
-      { y: 1.1160, label: 'RESISTANCE', color: '#ef4444' },
+      { y:1.2560, label:'SUPPORT', color:'#34d399' },
+      { y:1.2720, label:'RESIST', color:'#f87171' },
     ],
-    zones: [
-      { y1: 1.1072, y2: 1.1060, color: '#10b98115', label: 'Support Zone' },
-    ],
+    zones: [{ y1:1.2572, y2:1.2552, color:'#34d39915' }],
     trendlines: [],
     steps: [
-      'On Daily chart, identify a price level that was touched at least 2–3 times before',
+      'On Daily chart, identify a price level touched at least 2–3 times',
       'Mark the support zone (±5–10 pips around the key level)',
       'Wait for price to fall INTO the support zone — be patient',
       'On 4H, look for a bullish rejection: long lower wick or 2 green candles',
@@ -318,50 +358,53 @@ const SETUPS: Setup[] = [
     exitStrategy: [
       'Exit 50% at midpoint between support and resistance',
       'Exit remaining at resistance level',
-      'If price closes BELOW support on 4H → support broken, exit all',
+      'If price closes BELOW support on 4H → exit all',
     ],
     commonMistakes: [
       'Entering before price actually reaches support (anticipating)',
-      'Trading a support level that was already broken and retested',
+      'Trading a support level that was already broken',
       'Ignoring Daily trend — counter-trend bounces have low success rate',
       'Holding through news events near the level',
     ],
   },
 
   {
-    id: 'a-sweep',
-    level: 'amateur',
+    id: 'liquidity-sweep',
+    level: 'intermediate',
     title: 'Liquidity Sweep Reversal',
     type: 'Smart Money',
+    symbol: 'EURUSD',
     timeframe: '15m / 1H',
-    direction: 'Both',
+    direction: 'Short',
     marketCondition: 'Both',
-    rr: '1:3',
+    rr: '1:3', rrNum: 3,
     winRateRange: '48–58%',
     difficulty: 2,
+    badge: 'high-rr',
     description: 'Smart money engineers a false breakout above/below a key level to grab liquidity, then reverses sharply.',
-    concept: 'Retail traders place stop losses just above swing highs or below swing lows. Smart money (banks, institutions) deliberately push price through these levels to fill their orders — this is called a "liquidity sweep". After the sweep, price rapidly reverses. Trading the reversal gives you an asymmetric opportunity.',
+    concept: 'Retail traders place stop losses just above swing highs or below swing lows. Smart money deliberately pushes price through these levels to fill their own orders — called a "liquidity sweep". After the sweep, price rapidly reverses. Trading the reversal gives you an asymmetric opportunity.',
     candles: [
-      { o: 1.1068, h: 1.1085, l: 1.1060, c: 1.1080, v: 68 },
-      { o: 1.1080, h: 1.1090, l: 1.1072, c: 1.1075, v: 62 },
-      { o: 1.1075, h: 1.1118, l: 1.1071, c: 1.1112, v: 165 },
-      { o: 1.1112, h: 1.1115, l: 1.1065, c: 1.1068, v: 188 },
-      { o: 1.1068, h: 1.1072, l: 1.1035, c: 1.1038, v: 152 },
-      { o: 1.1038, h: 1.1045, l: 1.1005, c: 1.1010, v: 132 },
-      { o: 1.1010, h: 1.1016, l: 1.0985, c: 1.0990, v: 118 },
+      { o:1.1065,h:1.1080,l:1.1055,c:1.1075, v:62 },
+      { o:1.1075,h:1.1088,l:1.1068,c:1.1082, v:58 },
+      { o:1.1082,h:1.1092,l:1.1072,c:1.1085, v:65 },
+      { o:1.1085,h:1.1095,l:1.1075,c:1.1088, v:55 },
+      { o:1.1088,h:1.1092,l:1.1078,c:1.1082, v:50 },
+      { o:1.1082,h:1.1115,l:1.1078,c:1.1108, v:162 },
+      { o:1.1108,h:1.1118,l:1.1065,c:1.1068, v:185 },
+      { o:1.1068,h:1.1072,l:1.1038,c:1.1042, v:148 },
+      { o:1.1042,h:1.1048,l:1.1010,c:1.1015, v:132 },
+      { o:1.1015,h:1.1022,l:1.0988,c:1.0992, v:118 },
+      { o:1.0992,h:1.1000,l:1.0965,c:1.0968, v:108 },
+      { o:1.0968,h:1.0975,l:1.0945,c:1.0948, v:98 },
     ],
-    entryCandle: 4,
+    entryCandle: 7,
     slPrice: 1.1125,
     tpPrice: 1.0998,
-    hlines: [
-      { y: 1.1090, label: 'LIQUIDITY', color: '#f59e0b' },
-    ],
-    zones: [
-      { y1: 1.1095, y2: 1.1085, color: '#f59e0b18', label: 'Liquidity Zone' },
-    ],
+    hlines: [{ y:1.1090, label:'LIQUIDITY', color:'#f59e0b' }],
+    zones: [{ y1:1.1098, y2:1.1082, color:'#f59e0b18' }],
     trendlines: [],
     steps: [
-      'Identify a clear swing high with multiple wicks (retail stop cluster above it)',
+      'Identify a clear swing high with multiple wicks (retail stop cluster above)',
       'Mark the liquidity zone: 5 pips above/below the swing high/low',
       'Watch on 1H for a breakout candle that closes back INSIDE the range',
       'A long bearish wick above the sweep level = confirmation of fake breakout',
@@ -390,37 +433,41 @@ const SETUPS: Setup[] = [
   },
 
   {
-    id: 'a-ob',
-    level: 'amateur',
+    id: 'order-block',
+    level: 'intermediate',
     title: 'Order Block Reversal',
     type: 'Smart Money',
+    symbol: 'XAUUSD',
     timeframe: '4H / Daily',
-    direction: 'Both',
+    direction: 'Long',
     marketCondition: 'Trending',
-    rr: '1:3',
+    rr: '1:3', rrNum: 3,
     winRateRange: '48–60%',
     difficulty: 3,
-    description: 'The last bearish candle before a strong bullish impulse becomes a support zone. When price returns to it, expect a bounce.',
-    concept: 'An Order Block is the last opposing candle before a strong directional move. Banks and institutions place large limit orders in this zone. When price returns to these levels months or weeks later, those pending orders activate — creating a powerful rejection. This is one of the core Smart Money Concepts (SMC).',
+    description: 'The last bearish candle before a strong bullish impulse becomes a support zone on retrace.',
+    concept: 'An Order Block is the last opposing candle before a strong directional move. Banks and institutions place large limit orders in this zone. When price returns to these levels months or weeks later, those pending orders activate — creating a powerful rejection.',
     candles: [
-      { o: 1.1072, h: 1.1080, l: 1.1048, c: 1.1052, v: 102 },
-      { o: 1.1052, h: 1.1122, l: 1.1048, c: 1.1115, v: 185 },
-      { o: 1.1115, h: 1.1152, l: 1.1108, c: 1.1145, v: 168 },
-      { o: 1.1145, h: 1.1152, l: 1.1072, c: 1.1080, v: 125 },
-      { o: 1.1080, h: 1.1118, l: 1.1068, c: 1.1112, v: 178 },
-      { o: 1.1112, h: 1.1145, l: 1.1105, c: 1.1140, v: 158 },
-      { o: 1.1140, h: 1.1170, l: 1.1132, c: 1.1165, v: 142 },
+      { o:2318,h:2325,l:2310,c:2312, v:95 },
+      { o:2312,h:2318,l:2295,c:2298, v:105 },
+      { o:2298,h:2305,l:2280,c:2282, v:98 },
+      { o:2282,h:2295,l:2275,c:2290, v:88 },
+      { o:2290,h:2322,l:2285,c:2318, v:185 },
+      { o:2318,h:2348,l:2312,c:2342, v:168 },
+      { o:2342,h:2362,l:2335,c:2355, v:152 },
+      { o:2355,h:2365,l:2322,c:2328, v:128 },
+      { o:2328,h:2345,l:2318,c:2340, v:175 },
+      { o:2340,h:2358,l:2332,c:2352, v:158 },
+      { o:2352,h:2372,l:2345,c:2368, v:142 },
+      { o:2368,h:2385,l:2360,c:2380, v:135 },
     ],
-    entryCandle: 4,
-    slPrice: 1.1038,
-    tpPrice: 1.1158,
+    entryCandle: 8,
+    slPrice: 2268,
+    tpPrice: 2375,
     hlines: [
-      { y: 1.1080, label: 'OB HIGH', color: '#a855f7' },
-      { y: 1.1048, label: 'OB LOW', color: '#a855f7' },
+      { y:2295, label:'OB HIGH', color:'#a855f7' },
+      { y:2275, label:'OB LOW', color:'#a855f7' },
     ],
-    zones: [
-      { y1: 1.1080, y2: 1.1048, color: '#a855f720', label: 'Order Block' },
-    ],
+    zones: [{ y1:2295, y2:2275, color:'#a855f720' }],
     trendlines: [],
     steps: [
       'Identify a strong bullish impulse on 4H — at least 3–4 large bullish candles',
@@ -429,12 +476,11 @@ const SETUPS: Setup[] = [
       'Wait for price to retrace back DOWN into this OB zone',
       'On 1H, look for bullish rejection inside the zone (long wick or 2 green candles)',
       'Enter LONG at the midpoint of the OB zone',
-      'SL: 10 pips below the OB LOW',
-      'TP: Previous structure high (where the impulse started)',
+      'SL: 10 pips below the OB LOW; TP: previous structure high',
     ],
     confluence: [
       'OB aligns with a Daily support or Fibonacci 61.8% retracement',
-      'RSI below 40 when price enters OB (oversold)',
+      'RSI below 40 when price enters OB (oversold condition)',
       'Volume drops during pullback (weak selling pressure)',
       'Multiple OB tests without breaking → stronger zone',
     ],
@@ -452,37 +498,42 @@ const SETUPS: Setup[] = [
   },
 
   {
-    id: 'p-fvg',
+    id: 'fvg',
     level: 'professional',
-    title: 'Fair Value Gap Mitigation',
+    title: 'Fair Value Gap (FVG)',
     type: 'Smart Money',
+    symbol: 'NAS100',
     timeframe: '15m / 1H',
-    direction: 'Both',
+    direction: 'Short',
     marketCondition: 'Trending',
-    rr: '1:4',
+    rr: '1:4', rrNum: 4,
     winRateRange: '52–65%',
     difficulty: 4,
-    description: 'A 3-candle imbalance (FVG) forms during a fast move. Price returns to fill the gap — entry at the rejection.',
-    concept: 'A Fair Value Gap (FVG) is a 3-candle pattern where price moves so fast that a gap forms between Candle 1\'s low and Candle 3\'s high (for a bearish FVG). This "imbalance" acts like a magnet — price is attracted back to fill it. Smart money uses these zones as entry points after the fill.',
+    badge: 'high-rr',
+    description: 'A 3-candle imbalance forms during a fast move. Price returns to fill the gap — entry on rejection.',
+    concept: 'A Fair Value Gap (FVG) is a 3-candle pattern where price moves so fast that a gap forms between Candle 1\'s low and Candle 3\'s high. This "imbalance" acts like a magnet — price is attracted back to fill it. Smart money uses these zones as entry points after the fill.',
     candles: [
-      { o: 1.1148, h: 1.1158, l: 1.1118, c: 1.1122, v: 102 },
-      { o: 1.1122, h: 1.1125, l: 1.1058, c: 1.1062, v: 205 },
-      { o: 1.1062, h: 1.1092, l: 1.1055, c: 1.1088, v: 88 },
-      { o: 1.1088, h: 1.1122, l: 1.1082, c: 1.1118, v: 125 },
-      { o: 1.1118, h: 1.1122, l: 1.1080, c: 1.1084, v: 162 },
-      { o: 1.1084, h: 1.1090, l: 1.1048, c: 1.1052, v: 142 },
-      { o: 1.1052, h: 1.1058, l: 1.1020, c: 1.1025, v: 128 },
+      { o:19850,h:19885,l:19830,c:19842, v:95 },
+      { o:19842,h:19855,l:19805,c:19818, v:102 },
+      { o:19818,h:19822,l:19760,c:19768, v:198 },
+      { o:19768,h:19810,l:19762,c:19805, v:88 },
+      { o:19805,h:19848,l:19798,c:19840, v:125 },
+      { o:19840,h:19845,l:19795,c:19800, v:158 },
+      { o:19800,h:19808,l:19755,c:19762, v:142 },
+      { o:19762,h:19770,l:19718,c:19725, v:132 },
+      { o:19725,h:19735,l:19692,c:19698, v:122 },
+      { o:19698,h:19708,l:19668,c:19672, v:115 },
+      { o:19672,h:19682,l:19642,c:19648, v:108 },
+      { o:19648,h:19658,l:19615,c:19620, v:102 },
     ],
-    entryCandle: 4,
-    slPrice: 1.1132,
-    tpPrice: 1.1032,
+    entryCandle: 6,
+    slPrice: 19860,
+    tpPrice: 19622,
     hlines: [
-      { y: 1.1118, label: 'FVG HIGH', color: '#06b6d4' },
-      { y: 1.1092, label: 'FVG LOW', color: '#06b6d4' },
+      { y:19822, label:'FVG HIGH', color:'#06b6d4' },
+      { y:19805, label:'FVG LOW', color:'#06b6d4' },
     ],
-    zones: [
-      { y1: 1.1118, y2: 1.1092, color: '#06b6d420', label: 'Fair Value Gap' },
-    ],
+    zones: [{ y1:19822, y2:19805, color:'#06b6d420' }],
     trendlines: [],
     steps: [
       'Spot a 3-candle sequence where Candle 2 is a large fast candle (engine)',
@@ -491,8 +542,7 @@ const SETUPS: Setup[] = [
       'Wait for price to retrace INTO the FVG zone',
       'Look for rejection candle inside the FVG (long wick + close back outside)',
       'Combine with an Order Block inside the FVG for higher probability',
-      'Enter SHORT at top of FVG on rejection; SL above FVG HIGH + 5 pips',
-      'TP: Previous structure low or 1:4 R:R target',
+      'Enter SHORT at top of FVG on rejection; SL above FVG HIGH + buffer',
     ],
     confluence: [
       'FVG aligns with a higher timeframe Order Block',
@@ -507,49 +557,53 @@ const SETUPS: Setup[] = [
     ],
     commonMistakes: [
       'Entering the FVG without a rejection candle (price may pass through)',
-      'Trading FVGs against the major trend (counter-trend FVGs fail more often)',
+      'Trading FVGs against the major trend',
       'Not accounting for spread — especially important on 15m entries',
       'Exiting too early inside the FVG before price shows rejection',
     ],
   },
 
   {
-    id: 'p-breaker',
+    id: 'breaker-block',
     level: 'professional',
-    title: 'Breaker Block + Structure Shift',
+    title: 'Breaker Block + CHoCH',
     type: 'Smart Money',
+    symbol: 'EURUSD',
     timeframe: 'Daily / Weekly',
-    direction: 'Both',
+    direction: 'Long',
     marketCondition: 'Trending',
-    rr: '1:5',
+    rr: '1:5', rrNum: 5,
     winRateRange: '50–62%',
     difficulty: 5,
-    description: 'A failed Order Block becomes a Breaker Block. When price returns to the broken zone, it acts as strong support/resistance.',
-    concept: 'When price breaks THROUGH an Order Block (instead of respecting it), that OB becomes a "Breaker Block". The failure reveals a shift in market structure. When price later returns to this zone for a retest, it provides an extremely high-conviction entry. Used by professional traders to catch high R:R macro moves.',
+    badge: 'advanced',
+    description: 'A failed Order Block becomes a Breaker Block. Price returns to the broken zone for a high-conviction entry.',
+    concept: 'When price breaks THROUGH an Order Block (instead of respecting it), that OB becomes a "Breaker Block". The failure reveals a shift in market structure (CHoCH). When price later returns to this zone for a retest, it provides an extremely high-conviction entry with outsized R:R potential.',
     candles: [
-      { o: 1.1118, h: 1.1128, l: 1.1090, c: 1.1095, v: 112 },
-      { o: 1.1095, h: 1.1100, l: 1.1062, c: 1.1068, v: 92 },
-      { o: 1.1068, h: 1.1142, l: 1.1062, c: 1.1138, v: 202 },
-      { o: 1.1138, h: 1.1152, l: 1.1092, c: 1.1098, v: 132 },
-      { o: 1.1098, h: 1.1140, l: 1.1090, c: 1.1135, v: 178 },
-      { o: 1.1135, h: 1.1165, l: 1.1128, c: 1.1160, v: 158 },
-      { o: 1.1160, h: 1.1190, l: 1.1152, c: 1.1185, v: 145 },
+      { o:1.0820,h:1.0838,l:1.0795,c:1.0802, v:108 },
+      { o:1.0802,h:1.0812,l:1.0778,c:1.0785, v:92 },
+      { o:1.0785,h:1.0850,l:1.0780,c:1.0845, v:195 },
+      { o:1.0845,h:1.0858,l:1.0802,c:1.0808, v:128 },
+      { o:1.0808,h:1.0845,l:1.0800,c:1.0840, v:172 },
+      { o:1.0840,h:1.0862,l:1.0832,c:1.0855, v:152 },
+      { o:1.0855,h:1.0878,l:1.0848,c:1.0872, v:142 },
+      { o:1.0872,h:1.0895,l:1.0865,c:1.0890, v:135 },
+      { o:1.0890,h:1.0912,l:1.0882,c:1.0908, v:128 },
+      { o:1.0908,h:1.0932,l:1.0900,c:1.0928, v:122 },
+      { o:1.0928,h:1.0952,l:1.0920,c:1.0948, v:115 },
+      { o:1.0948,h:1.0975,l:1.0940,c:1.0970, v:108 },
     ],
     entryCandle: 4,
-    slPrice: 1.1078,
-    tpPrice: 1.1178,
+    slPrice: 1.0772,
+    tpPrice: 1.0960,
     hlines: [
-      { y: 1.1128, label: 'BB HIGH', color: '#ec4899' },
-      { y: 1.1090, label: 'BB LOW', color: '#ec4899' },
+      { y:1.0838, label:'BB HIGH', color:'#ec4899' },
+      { y:1.0795, label:'BB LOW', color:'#ec4899' },
     ],
-    zones: [
-      { y1: 1.1128, y2: 1.1090, color: '#ec489920', label: 'Breaker Block' },
-    ],
+    zones: [{ y1:1.0838, y2:1.0795, color:'#ec489920' }],
     trendlines: [],
     steps: [
       'On Weekly/Daily, find a bearish OB that price has now broken THROUGH to the upside',
-      'That former bearish OB is now a BULLISH Breaker Block',
-      'Mark the Breaker Block zone (same high/low as the original OB)',
+      'That former bearish OB is now a BULLISH Breaker Block — mark it',
       'Wait for price to retrace back DOWN into this zone (can take days/weeks)',
       'On 4H, confirm multiple rejections of the BB LOW (at least 2–3 wicks)',
       'Enter LONG at BB LOW area with tight SL just below the zone',
@@ -575,95 +629,39 @@ const SETUPS: Setup[] = [
   },
 
   {
-    id: 'p-profile',
+    id: 'hidden-div',
     level: 'professional',
-    title: 'Market Profile + Value Area',
-    type: 'Market Profile',
-    timeframe: 'All Timeframes',
-    direction: 'Both',
-    marketCondition: 'Both',
-    rr: '1:3',
-    winRateRange: '55–65%',
-    difficulty: 5,
-    description: 'Trade breakouts from Value Area using volume distribution — where price spends most time vs. where it rejects.',
-    concept: 'Market Profile maps price against time and volume. The Value Area (VA) is the range where 70% of volume traded. The Point of Control (POC) is the single price with most volume. When price breaks out of the VA with increasing volume, it signals a strong directional move. Trading VA extremes gives clear, defined risk.',
-    candles: [
-      { o: 1.1075, h: 1.1092, l: 1.1068, c: 1.1087, v: 142 },
-      { o: 1.1087, h: 1.1094, l: 1.1072, c: 1.1076, v: 122 },
-      { o: 1.1076, h: 1.1085, l: 1.1065, c: 1.1080, v: 132 },
-      { o: 1.1080, h: 1.1112, l: 1.1075, c: 1.1108, v: 195 },
-      { o: 1.1108, h: 1.1140, l: 1.1102, c: 1.1135, v: 215 },
-      { o: 1.1135, h: 1.1162, l: 1.1128, c: 1.1158, v: 188 },
-      { o: 1.1158, h: 1.1180, l: 1.1150, c: 1.1175, v: 168 },
-    ],
-    entryCandle: 4,
-    slPrice: 1.1086,
-    tpPrice: 1.1165,
-    hlines: [
-      { y: 1.1094, label: 'VA HIGH', color: '#0ea5e9' },
-      { y: 1.1082, label: 'POC', color: '#f59e0b' },
-      { y: 1.1065, label: 'VA LOW', color: '#0ea5e9' },
-    ],
-    zones: [
-      { y1: 1.1094, y2: 1.1065, color: '#0ea5e915', label: 'Value Area' },
-    ],
-    trendlines: [],
-    steps: [
-      'Load Market Profile or Volume Profile indicator on your platform',
-      'Identify the Value Area High (VAH), Value Area Low (VAL), and POC for the current session',
-      'When price is inside the VA, it tends to oscillate — WAIT at extremes',
-      'When price breaks ABOVE VAH with high volume → enter LONG',
-      'When price breaks BELOW VAL with high volume → enter SHORT',
-      'SL: just inside the Value Area (if price returns, the breakout failed)',
-      'TP: 1:3 to next session\'s expected Value Area or key structure',
-    ],
-    confluence: [
-      'Breakout happens at session open (London/NY — highest volume)',
-      'Volume is 150%+ above average during breakout candle',
-      'Previous day profile supports direction (trending vs. balanced)',
-      'Overnight inventory positioning confirms direction',
-    ],
-    exitStrategy: [
-      'Exit at next Value Area high from previous sessions',
-      'Trail using VWAP as dynamic support/resistance',
-      'Exit if price re-enters Value Area — breakout failed',
-    ],
-    commonMistakes: [
-      'Trading volume profile without proper software/data (fake profiles)',
-      'Entering breakout without volume confirmation (false breakout risk)',
-      'Confusing Value Area from different timeframes',
-      'Not adjusting for gap opens in futures/indices',
-    ],
-  },
-
-  {
-    id: 'p-div',
-    level: 'professional',
-    title: 'Hidden Divergence + Momentum',
+    title: 'Hidden Divergence',
     type: 'Technical Analysis',
-    timeframe: 'Multi-Timeframe',
-    direction: 'Both',
+    symbol: 'GBPJPY',
+    timeframe: '1H / 4H',
+    direction: 'Short',
     marketCondition: 'Trending',
-    rr: '1:3',
+    rr: '1:3', rrNum: 3,
     winRateRange: '50–60%',
     difficulty: 4,
-    description: 'Hidden divergence between price and RSI signals trend continuation — a powerful low-risk entry in the direction of the trend.',
-    concept: 'Hidden Divergence occurs when price makes a Higher Low but RSI makes a Lower Low (bullish hidden div — continuation up), or price makes a Lower High while RSI makes a Higher High (bearish hidden div — continuation down). Unlike regular divergence which signals reversals, hidden divergence signals CONTINUATION of the existing trend.',
+    description: 'Hidden RSI divergence signals trend continuation — powerful low-risk entry in the direction of the trend.',
+    concept: 'Hidden Divergence occurs when price makes a Higher Low but RSI makes a Lower Low (bullish continuation), or price makes a Lower High while RSI makes a Higher High (bearish continuation). Unlike regular divergence which signals reversals, hidden divergence signals CONTINUATION of the existing trend.',
     candles: [
-      { o: 1.1058, h: 1.1082, l: 1.1050, c: 1.1078, v: 80 },
-      { o: 1.1078, h: 1.1090, l: 1.1060, c: 1.1064, v: 72 },
-      { o: 1.1064, h: 1.1072, l: 1.1042, c: 1.1048, v: 88 },
-      { o: 1.1048, h: 1.1098, l: 1.1044, c: 1.1092, v: 112 },
-      { o: 1.1092, h: 1.1102, l: 1.1068, c: 1.1072, v: 148 },
-      { o: 1.1072, h: 1.1078, l: 1.1038, c: 1.1042, v: 132 },
-      { o: 1.1042, h: 1.1048, l: 1.1012, c: 1.1018, v: 118 },
+      { o:198.20,h:199.05,l:197.85,c:198.92, v:78 },
+      { o:198.92,h:199.60,l:198.70,c:198.80, v:70 },
+      { o:198.80,h:199.00,l:197.60,c:197.75, v:85 },
+      { o:197.75,h:198.80,l:197.50,c:198.65, v:110 },
+      { o:198.65,h:199.80,l:198.55,c:199.70, v:125 },
+      { o:199.70,h:199.85,l:198.80,c:198.90, v:142 },
+      { o:198.90,h:199.20,l:197.40,c:197.55, v:128 },
+      { o:197.55,h:197.80,l:196.30,c:196.45, v:118 },
+      { o:196.45,h:196.70,l:195.20,c:195.35, v:108 },
+      { o:195.35,h:195.60,l:194.20,c:194.32, v:98 },
+      { o:194.32,h:194.55,l:193.20,c:193.35, v:92 },
+      { o:193.35,h:193.60,l:192.40,c:192.52, v:88 },
     ],
-    entryCandle: 4,
-    slPrice: 1.1110,
-    tpPrice: 1.1020,
+    entryCandle: 6,
+    slPrice: 200.05,
+    tpPrice: 195.20,
     hlines: [
-      { y: 1.1082, label: 'PREV HIGH', color: '#60a5fa' },
-      { y: 1.1098, label: 'NEW HH (Price)', color: '#60a5fa' },
+      { y:199.05, label:'PREV HIGH', color:'#60a5fa' },
+      { y:199.80, label:'NEW LH', color:'#f87171' },
     ],
     zones: [],
     trendlines: [],
@@ -674,7 +672,7 @@ const SETUPS: Setup[] = [
       'This mismatch (price LH, RSI HH) = Bearish Hidden Divergence',
       'Enter SHORT at the new Lower High with volume declining on the rally',
       'SL: 10–15 pips above the new Lower High (divergence candle)',
-      'Scale exits: 1/3 at 1:1, 1/3 at 1:2, let final 1/3 run with trailing SL',
+      'Scale exits: 1/3 at 1:1, 1/3 at 1:2, trail final 1/3',
     ],
     confluence: [
       'Hidden divergence visible on BOTH RSI and Stochastic',
@@ -690,8 +688,74 @@ const SETUPS: Setup[] = [
     commonMistakes: [
       'Confusing Hidden Divergence with Regular Divergence (opposite signals)',
       'Trading hidden div against the major trend — it only works WITH trend',
-      'Not waiting for 2+ oscillators to confirm (single RSI can be misleading)',
+      'Not waiting for 2+ oscillators to confirm',
       'Entering on divergence that formed during a news spike',
+    ],
+  },
+
+  {
+    id: 'ict-killzone',
+    level: 'professional',
+    title: 'ICT Kill Zone Entry',
+    type: 'Smart Money',
+    symbol: 'EURUSD',
+    timeframe: '5m / 15m',
+    direction: 'Both',
+    marketCondition: 'Trending',
+    rr: '1:4', rrNum: 4,
+    winRateRange: '55–68%',
+    difficulty: 5,
+    badge: 'advanced',
+    description: 'Time-based entry during London or NY open kill zones using overnight consolidation and displacement.',
+    concept: 'ICT Kill Zones are time windows (London Open: 02:00–05:00 ET, NY Open: 07:00–10:00 ET) when institutional order flow is highest. Price typically sweeps overnight liquidity during these windows and then makes a strong directional move. Combining time, liquidity sweeps and FVGs gives maximum probability.',
+    candles: [
+      { o:1.0882,h:1.0888,l:1.0875,c:1.0880, v:40 },
+      { o:1.0880,h:1.0885,l:1.0872,c:1.0875, v:35 },
+      { o:1.0875,h:1.0880,l:1.0868,c:1.0872, v:38 },
+      { o:1.0872,h:1.0875,l:1.0862,c:1.0865, v:32 },
+      { o:1.0865,h:1.0905,l:1.0858,c:1.0898, v:185 },
+      { o:1.0898,h:1.0920,l:1.0892,c:1.0915, v:168 },
+      { o:1.0915,h:1.0938,l:1.0908,c:1.0932, v:155 },
+      { o:1.0932,h:1.0955,l:1.0925,c:1.0950, v:142 },
+      { o:1.0950,h:1.0972,l:1.0942,c:1.0968, v:132 },
+      { o:1.0968,h:1.0988,l:1.0960,c:1.0982, v:122 },
+      { o:1.0982,h:1.1002,l:1.0975,c:1.0998, v:115 },
+      { o:1.0998,h:1.1018,l:1.0990,c:1.1012, v:108 },
+    ],
+    entryCandle: 5,
+    slPrice: 1.0848,
+    tpPrice: 1.1012,
+    hlines: [
+      { y:1.0862, label:'ASIA LOW', color:'#f59e0b' },
+      { y:1.0888, label:'ASIA HIGH', color:'#f59e0b' },
+    ],
+    zones: [{ y1:1.0888, y2:1.0862, color:'#f59e0b10' }],
+    trendlines: [],
+    steps: [
+      'Identify the overnight/Asian session high and low (consolidation range)',
+      'At London Open (02:00–05:00 ET), watch for a sweep of the Asia low/high',
+      'The sweep creates displacement — a strong directional FVG or BOS',
+      'Enter in the direction of the displacement at the first FVG formed',
+      'SL: below the sweep candle low (Asia range + buffer)',
+      'TP: Previous swing high or 1:4 R:R from entry',
+      'Only trade during defined Kill Zone windows — no other times',
+    ],
+    confluence: [
+      'Daily bias confirmed on the previous trading day',
+      'Kill Zone timing: London (02–05 ET) or NY (07–10 ET) only',
+      'Clear sweep of overnight liquidity before entry',
+      'FVG or OB aligns with the entry direction',
+    ],
+    exitStrategy: [
+      'Exit 50% at previous session high/low',
+      'Trail remaining with SL to swing lows',
+      'Hard exit at end of kill zone window if TP not hit',
+    ],
+    commonMistakes: [
+      'Trading outside of Kill Zone windows — probability drops significantly',
+      'Not waiting for the sweep before entry (entering into consolidation)',
+      'Forgetting to account for DST changes in ET kill zone times',
+      'Over-trading — one entry per Kill Zone maximum',
     ],
   },
 ];
@@ -700,45 +764,86 @@ const SETUPS: Setup[] = [
 const LEVEL_CFG = {
   beginner: {
     label: 'Beginner',
+    icon: '●',
     color: '#34d399',
-    colorClass: 'text-emerald-400',
-    accentFrom: '#34d399',
-    accentTo: 'transparent',
+    glow: 'rgba(52,211,153,0.15)',
     badgeBg: 'rgba(52,211,153,0.1)',
     badgeBorder: 'rgba(52,211,153,0.3)',
     badgeText: '#6ee7b7',
     grad: 'from-emerald-500 to-teal-500',
+    bar: 'bg-emerald-500',
   },
-  amateur: {
+  intermediate: {
     label: 'Intermediate',
+    icon: '◆',
     color: '#60a5fa',
-    colorClass: 'text-blue-400',
-    accentFrom: '#60a5fa',
-    accentTo: 'transparent',
+    glow: 'rgba(96,165,250,0.15)',
     badgeBg: 'rgba(96,165,250,0.1)',
     badgeBorder: 'rgba(96,165,250,0.3)',
     badgeText: '#93c5fd',
     grad: 'from-blue-500 to-cyan-500',
+    bar: 'bg-blue-500',
   },
   professional: {
     label: 'Professional',
+    icon: '▲',
     color: '#a78bfa',
-    colorClass: 'text-purple-400',
-    accentFrom: '#a78bfa',
-    accentTo: 'transparent',
+    glow: 'rgba(167,139,250,0.15)',
     badgeBg: 'rgba(167,139,250,0.1)',
     badgeBorder: 'rgba(167,139,250,0.3)',
     badgeText: '#c4b5fd',
     grad: 'from-purple-500 to-pink-500',
+    bar: 'bg-purple-500',
   },
 };
 
-function DifficultyStars({ n }: { n: number }) {
+const BADGE_CFG = {
+  popular:  { label: '🔥 Popular',  bg: 'rgba(251,146,60,0.15)',  border: 'rgba(251,146,60,0.35)',  text: '#fdba74' },
+  'high-rr':{ label: '⚡ High R:R', bg: 'rgba(34,211,238,0.12)',  border: 'rgba(34,211,238,0.35)',  text: '#67e8f9' },
+  advanced: { label: '💎 Advanced', bg: 'rgba(192,132,252,0.12)', border: 'rgba(192,132,252,0.35)', text: '#d8b4fe' },
+};
+
+function RRBar({ rrNum }: { rrNum: number }) {
+  const max = 5;
+  const pct = Math.min(rrNum / max, 1) * 100;
   return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map(i => (
-        <Star key={i} className={`w-3 h-3 ${i <= n ? 'text-yellow-400 fill-yellow-400' : 'text-gray-700'}`} />
-      ))}
+    <div style={{ width: '100%' }}>
+      <div className="flex justify-between mb-1">
+        <span style={{ fontSize: 10, color: 'rgba(148,163,184,0.5)' }}>R:R</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#22d3ee', fontFamily: 'monospace' }}>1:{rrNum}</span>
+      </div>
+      <div style={{ height: 3, borderRadius: 99, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+        <motion.div
+          initial={{ width: 0 }}
+          whileInView={{ width: `${pct}%` }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
+          style={{ height: '100%', borderRadius: 99, background: 'linear-gradient(to right, #22d3ee, #60a5fa)' }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DifficultyBar({ n }: { n: number }) {
+  const colors = ['#34d399', '#22d3ee', '#60a5fa', '#a78bfa', '#ec4899'];
+  return (
+    <div style={{ width: '100%' }}>
+      <div className="flex justify-between mb-1">
+        <span style={{ fontSize: 10, color: 'rgba(148,163,184,0.5)' }}>Difficulty</span>
+        <span style={{ fontSize: 10, color: colors[n - 1], fontWeight: 600 }}>
+          {['Very Easy','Easy','Medium','Hard','Expert'][n - 1]}
+        </span>
+      </div>
+      <div className="flex gap-0.5">
+        {[1,2,3,4,5].map(i => (
+          <motion.div key={i}
+            initial={{ opacity: 0.1, scaleY: 0.3 }}
+            whileInView={{ opacity: i <= n ? 1 : 0.12, scaleY: 1 }}
+            transition={{ delay: i * 0.06, duration: 0.3 }}
+            style={{ flex: 1, height: 4, borderRadius: 2, background: i <= n ? colors[n - 1] : 'rgba(255,255,255,0.08)' }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -746,29 +851,41 @@ function DifficultyStars({ n }: { n: number }) {
 // ─── Setup Card ───────────────────────────────────────────────────────────────
 function SetupCard({ setup, onClick }: { setup: Setup; onClick: () => void }) {
   const cfg = LEVEL_CFG[setup.level];
+  const bcfg = setup.badge ? BADGE_CFG[setup.badge] : null;
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      whileHover={{ y: -3, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', borderColor: 'rgba(255,255,255,0.15)' }}
+      viewport={{ once: true, margin: '-40px' }}
+      whileHover={{ y: -4, transition: { duration: 0.2 } }}
       onClick={onClick}
       style={{
-        background: 'rgba(7,10,20,0.85)',
-        border: '1px solid rgba(255,255,255,0.07)',
-        borderRadius: '1rem',
+        background: 'linear-gradient(135deg, rgba(13,17,28,0.95) 0%, rgba(8,12,22,0.98) 100%)',
+        border: `1px solid rgba(255,255,255,0.08)`,
+        borderRadius: '1.25rem',
         overflow: 'hidden',
         cursor: 'pointer',
+        position: 'relative',
+        transition: 'box-shadow 0.2s, border-color 0.2s',
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 40px ${cfg.glow}, 0 0 0 1px ${cfg.color}25`;
+        (e.currentTarget as HTMLElement).style.borderColor = `${cfg.color}35`;
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)';
       }}
     >
-      {/* Top accent bar */}
+      {/* Gradient accent top */}
       <div style={{
         height: 2,
-        background: `linear-gradient(to right, ${cfg.accentFrom}, ${cfg.accentTo})`,
+        background: `linear-gradient(to right, ${cfg.color}, transparent 70%)`,
       }} />
 
       {/* Chart area */}
-      <div className="relative w-full" style={{ height: 160, background: '#06090f' }}>
+      <div style={{ height: 210, position: 'relative', background: '#060a12' }}>
         <CandleChart
           candles={setup.candles}
           hlines={setup.hlines}
@@ -777,108 +894,104 @@ function SetupCard({ setup, onClick }: { setup: Setup; onClick: () => void }) {
           entryCandle={setup.entryCandle}
           slPrice={setup.slPrice}
           tpPrice={setup.tpPrice}
-          vw={300} vh={160} labels={true}
+          symbol={setup.symbol}
+          vw={340} vh={210} labels={true}
         />
-        {/* Direction badge — overlay top-right */}
+
+        {/* Bottom fade */}
         <div style={{
-          position: 'absolute',
-          top: 8,
-          right: 8,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          padding: '2px 8px',
-          borderRadius: 6,
-          fontSize: 11,
-          fontWeight: 700,
-          background: 'rgba(7,10,20,0.82)',
+          position: 'absolute', bottom: 0, left: 0, right: 0, height: 40,
+          background: 'linear-gradient(to top, rgba(8,12,22,0.9), transparent)',
+          pointerEvents: 'none',
+        }} />
+
+        {/* Direction badge */}
+        <div style={{
+          position: 'absolute', top: 10, right: 10,
+          display: 'flex', alignItems: 'center', gap: 4,
+          padding: '3px 8px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+          background: 'rgba(6,10,18,0.85)',
           border: `1px solid ${cfg.badgeBorder}`,
           color: cfg.badgeText,
-          backdropFilter: 'blur(4px)',
+          backdropFilter: 'blur(6px)',
         }}>
           {setup.direction === 'Long'
-            ? <TrendingUp style={{ width: 11, height: 11 }} />
+            ? <TrendingUp style={{ width: 10, height: 10 }} />
             : setup.direction === 'Short'
-              ? <TrendingDown style={{ width: 11, height: 11 }} />
-              : <Layers style={{ width: 11, height: 11 }} />}
+              ? <TrendingDown style={{ width: 10, height: 10 }} />
+              : <Layers style={{ width: 10, height: 10 }} />}
           {setup.direction}
         </div>
+
+        {/* Achievement badge */}
+        {bcfg && (
+          <div style={{
+            position: 'absolute', top: 10, left: 10,
+            padding: '3px 8px', borderRadius: 8, fontSize: 10, fontWeight: 700,
+            background: bcfg.bg, border: `1px solid ${bcfg.border}`, color: bcfg.text,
+            backdropFilter: 'blur(6px)',
+          }}>
+            {bcfg.label}
+          </div>
+        )}
       </div>
 
       {/* Card body */}
-      <div style={{ padding: 16 }}>
-        {/* Row 1: level badge + type tag */}
-        <div className="flex items-center gap-2 mb-2">
+      <div style={{ padding: '14px 16px 16px' }}>
+        {/* Level + type */}
+        <div className="flex items-center gap-2 mb-2.5">
           <span style={{
-            fontSize: 10,
-            fontWeight: 600,
-            padding: '2px 8px',
-            borderRadius: 99,
-            background: cfg.badgeBg,
-            border: `1px solid ${cfg.badgeBorder}`,
-            color: cfg.badgeText,
-          }}>{cfg.label}</span>
+            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+            background: cfg.badgeBg, border: `1px solid ${cfg.badgeBorder}`, color: cfg.badgeText,
+          }}>{cfg.icon} {cfg.label}</span>
           <span style={{
-            fontSize: 10,
-            padding: '2px 8px',
-            borderRadius: 99,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            color: 'rgba(148,163,184,0.7)',
+            fontSize: 10, padding: '2px 8px', borderRadius: 99,
+            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+            color: 'rgba(148,163,184,0.55)',
           }}>{setup.type}</span>
+          <span className="flex items-center gap-1 ml-auto" style={{
+            fontSize: 10, color: 'rgba(148,163,184,0.4)', fontFamily: 'monospace',
+          }}>
+            <Clock style={{ width: 9, height: 9 }} />{setup.timeframe}
+          </span>
         </div>
 
         {/* Title */}
-        <h3 style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', marginBottom: 6, lineHeight: 1.3 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 800, color: '#f1f5f9', marginBottom: 6, lineHeight: 1.3 }}>
           {setup.title}
         </h3>
 
         {/* Description */}
         <p style={{
-          fontSize: 12,
-          color: 'rgba(148,163,184,0.65)',
-          marginBottom: 10,
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical' as const,
-          overflow: 'hidden',
-          lineHeight: 1.5,
+          fontSize: 11.5, color: 'rgba(148,163,184,0.6)', marginBottom: 14,
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+          overflow: 'hidden', lineHeight: 1.55,
         }}>
           {setup.description}
         </p>
 
-        {/* Timeframe tag */}
-        <div className="flex items-center gap-1.5 mb-10px" style={{ marginBottom: 12 }}>
-          <span style={{
-            fontSize: 11,
-            fontFamily: 'monospace',
-            padding: '2px 8px',
-            borderRadius: 6,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            color: 'rgba(148,163,184,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-          }}>
-            <Clock style={{ width: 10, height: 10 }} />
-            {setup.timeframe}
-          </span>
-        </div>
+        {/* Metrics */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <RRBar rrNum={setup.rrNum} />
+          <DifficultyBar n={setup.difficulty} />
 
-        {/* Metrics row */}
-        <div className="flex items-center justify-between" style={{ marginTop: 12 }}>
-          <div>
-            <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.45)', marginBottom: 2 }}>R:R</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#22d3ee' }}>{setup.rr}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.45)', marginBottom: 2 }}>Win Rate</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>{setup.winRateRange}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.45)', marginBottom: 2 }}>Difficulty</div>
-            <DifficultyStars n={setup.difficulty} />
+          <div className="flex items-center justify-between pt-1">
+            <div>
+              <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.4)', marginBottom: 1 }}>Win Rate</div>
+              <div style={{
+                fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
+                color: setup.rrNum >= 3 ? '#34d399' : '#f59e0b',
+              }}>{setup.winRateRange}</div>
+            </div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '5px 10px', borderRadius: 8,
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              fontSize: 11, color: 'rgba(148,163,184,0.5)',
+            }}>
+              View Setup <ChevronRight style={{ width: 12, height: 12 }} />
+            </div>
           </div>
         </div>
       </div>
@@ -886,9 +999,14 @@ function SetupCard({ setup, onClick }: { setup: Setup; onClick: () => void }) {
   );
 }
 
-// ─── Setup Modal ──────────────────────────────────────────────────────────────
+// ─── Modal Tabs ───────────────────────────────────────────────────────────────
+type ModalTab = 'overview' | 'rules' | 'mistakes';
+
 function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
   const cfg = LEVEL_CFG[setup.level];
+  const [tab, setTab] = useState<ModalTab>('overview');
+  const bcfg = setup.badge ? BADGE_CFG[setup.badge] : null;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -897,262 +1015,323 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
       style={{
         position: 'fixed', inset: 0, zIndex: 50,
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-        padding: 16,
-        background: 'rgba(0,0,0,0.85)',
-        backdropFilter: 'blur(8px)',
+        padding: '16px',
+        background: 'rgba(0,0,0,0.88)',
+        backdropFilter: 'blur(12px)',
         overflowY: 'auto',
       }}
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.96, opacity: 0, y: 20 }}
+        initial={{ scale: 0.95, opacity: 0, y: 24 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.96, opacity: 0, y: 20 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+        exit={{ scale: 0.95, opacity: 0, y: 24 }}
+        transition={{ type: 'spring', damping: 30, stiffness: 350 }}
         style={{
-          position: 'relative',
-          width: '100%',
-          maxWidth: 768,
-          margin: '16px 0',
-          borderRadius: '1rem',
-          background: '#070a14',
-          border: '1px solid rgba(255,255,255,0.09)',
+          position: 'relative', width: '100%', maxWidth: 860,
+          margin: '16px 0', borderRadius: '1.25rem',
+          background: 'linear-gradient(135deg, #070b15 0%, #060910 100%)',
+          border: '1px solid rgba(255,255,255,0.1)',
           overflow: 'hidden',
+          boxShadow: `0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px ${cfg.color}20`,
         }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Gradient top bar */}
+        {/* Top bar */}
         <div style={{
-          height: 2,
-          background: `linear-gradient(to right, ${cfg.accentFrom}, ${cfg.accentTo})`,
+          height: 3,
+          background: `linear-gradient(to right, ${cfg.color}, ${cfg.color}40, transparent)`,
         }} />
 
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute', top: 16, right: 16, zIndex: 10,
-            padding: '6px',
-            borderRadius: 8,
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            cursor: 'pointer',
-            transition: 'background 0.15s',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
-        >
-          <X style={{ width: 18, height: 18, color: 'rgba(148,163,184,0.8)' }} />
-        </button>
-
         {/* Header */}
-        <div style={{ padding: '24px 24px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <span style={{
-              fontSize: 11, fontWeight: 600,
-              padding: '3px 10px', borderRadius: 99,
-              background: cfg.badgeBg, border: `1px solid ${cfg.badgeBorder}`, color: cfg.badgeText,
-            }}>{cfg.label}</span>
-            <span style={{ fontSize: 12, color: 'rgba(148,163,184,0.5)' }}>{setup.type}</span>
-            <span className="flex items-center gap-1" style={{ fontSize: 12, color: 'rgba(148,163,184,0.5)' }}>
-              <Clock style={{ width: 12, height: 12 }} />{setup.timeframe}
-            </span>
-          </div>
-          <h2 className={`text-xl sm:text-2xl font-bold bg-gradient-to-r ${cfg.grad} bg-clip-text text-transparent`}>
-            {setup.title}
-          </h2>
-          <p style={{ fontSize: 13, color: 'rgba(148,163,184,0.65)', marginTop: 6, lineHeight: 1.6 }}>
-            {setup.description}
-          </p>
-        </div>
-
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Chart section */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <BarChart2 style={{ width: 14, height: 14, color: 'rgba(148,163,184,0.5)' }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(148,163,184,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Pattern Visualization</span>
-              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'rgba(148,163,184,0.3)', fontStyle: 'italic' }}>Educational model — not real data</span>
+        <div style={{
+          padding: '20px 24px 0',
+          background: `linear-gradient(to bottom, ${cfg.glow}, transparent)`,
+        }}>
+          <div className="flex items-start gap-3">
+            <div style={{ flex: 1 }}>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99,
+                  background: cfg.badgeBg, border: `1px solid ${cfg.badgeBorder}`, color: cfg.badgeText,
+                }}>{cfg.icon} {cfg.label}</span>
+                <span style={{
+                  fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+                  color: 'rgba(148,163,184,0.6)',
+                }}>{setup.type}</span>
+                {bcfg && (
+                  <span style={{
+                    fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                    background: bcfg.bg, border: `1px solid ${bcfg.border}`, color: bcfg.text,
+                  }}>{bcfg.label}</span>
+                )}
+                <span className="flex items-center gap-1 ml-auto" style={{
+                  fontSize: 11, color: 'rgba(148,163,184,0.45)',
+                }}>
+                  <Clock style={{ width: 11, height: 11 }} />{setup.timeframe}
+                </span>
+              </div>
+              <h2 style={{
+                fontSize: 22, fontWeight: 800,
+                background: `linear-gradient(to right, ${cfg.color}, rgba(255,255,255,0.85))`,
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                lineHeight: 1.2,
+              }}>{setup.title}</h2>
+              <p style={{
+                fontSize: 13, color: 'rgba(148,163,184,0.6)', marginTop: 6, lineHeight: 1.65,
+              }}>{setup.description}</p>
             </div>
-            <div style={{
-              height: 240, borderRadius: 12,
-              border: '1px solid rgba(255,255,255,0.08)',
-              background: '#06090f',
-              overflow: 'hidden',
-            }}>
-              <CandleChart
-                candles={setup.candles}
-                hlines={setup.hlines}
-                zones={setup.zones}
-                trendlines={setup.trendlines}
-                entryCandle={setup.entryCandle}
-                slPrice={setup.slPrice}
-                tpPrice={setup.tpPrice}
-                vw={600} vh={240} labels={true}
-              />
-            </div>
-
-            {/* Chart legend */}
-            <div className="flex flex-wrap gap-4 mt-3 px-1">
-              {[
-                { line: true, color: '#34d399', dash: true, label: 'Take Profit (TP)' },
-                { line: true, color: '#f87171', dash: true, label: 'Stop Loss (SL)' },
-                { line: false, swatch: '#f59e0b', label: 'Entry Candle' },
-                { line: false, swatch: 'rgba(129,140,248,0.3)', label: 'Key Zone' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-1.5" style={{ fontSize: 11, color: 'rgba(148,163,184,0.55)' }}>
-                  {item.line ? (
-                    <svg width="22" height="8">
-                      <line x1="0" y1="4" x2="22" y2="4"
-                        stroke={item.color} strokeWidth="1.5"
-                        strokeDasharray={item.dash ? '5,3' : 'none'} />
-                    </svg>
-                  ) : (
-                    <div style={{ width: 12, height: 12, borderRadius: 3, background: item.swatch, border: `1.5px solid ${item.swatch}` }} />
-                  )}
-                  {item.label}
-                </div>
-              ))}
-            </div>
+            <button
+              onClick={onClose}
+              style={{
+                flexShrink: 0, padding: 8, borderRadius: 10,
+                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
+                cursor: 'pointer', transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+            >
+              <X style={{ width: 18, height: 18, color: 'rgba(148,163,184,0.7)' }} />
+            </button>
           </div>
 
-          {/* Metrics row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Metric pills */}
+          <div className="flex flex-wrap gap-2 mt-4 pb-4">
             {[
-              { label: 'Risk : Reward', value: setup.rr, icon: <Target style={{ width: 14, height: 14, color: '#22d3ee' }} />, col: '#22d3ee' },
-              { label: 'Est. Win Rate', value: setup.winRateRange, icon: <TrendingUp style={{ width: 14, height: 14, color: '#34d399' }} />, col: '#34d399' },
-              { label: 'Market Type', value: setup.marketCondition, icon: <BarChart2 style={{ width: 14, height: 14, color: '#60a5fa' }} />, col: '#60a5fa' },
+              { label: 'R:R', value: setup.rr, color: '#22d3ee', bg: 'rgba(34,211,238,0.08)', icon: <Target style={{ width: 12, height: 12 }} /> },
+              { label: 'Win Rate', value: setup.winRateRange, color: '#34d399', bg: 'rgba(52,211,153,0.08)', icon: <TrendingUp style={{ width: 12, height: 12 }} /> },
+              { label: 'Market', value: setup.marketCondition, color: '#60a5fa', bg: 'rgba(96,165,250,0.08)', icon: <Activity style={{ width: 12, height: 12 }} /> },
+              { label: 'Direction', value: setup.direction, color: setup.direction === 'Long' ? '#34d399' : setup.direction === 'Short' ? '#f87171' : '#94a3b8', bg: setup.direction === 'Long' ? 'rgba(52,211,153,0.08)' : setup.direction === 'Short' ? 'rgba(248,113,113,0.08)' : 'rgba(148,163,184,0.08)', icon: setup.direction === 'Long' ? <TrendingUp style={{ width: 12, height: 12 }} /> : setup.direction === 'Short' ? <TrendingDown style={{ width: 12, height: 12 }} /> : <Layers style={{ width: 12, height: 12 }} /> },
             ].map((m, i) => (
               <div key={i} style={{
-                borderRadius: 10, padding: '12px 14px',
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.07)',
-                display: 'flex', flexDirection: 'column', gap: 6,
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 12px', borderRadius: 10,
+                background: m.bg, border: `1px solid ${m.color}25`,
+                color: m.color,
               }}>
-                <div className="flex items-center gap-1.5">
-                  {m.icon}
-                  <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.55)' }}>{m.label}</span>
-                </div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: m.col }}>{m.value}</div>
+                {m.icon}
+                <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.5)', marginRight: 2 }}>{m.label}</span>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>{m.value}</span>
               </div>
             ))}
           </div>
 
-          {/* Concept block */}
-          <div style={{
-            borderRadius: 12, padding: 16,
-            background: 'rgba(245,158,11,0.06)',
-            border: '1px solid rgba(245,158,11,0.18)',
-          }}>
-            <div className="flex items-center gap-2 mb-2">
-              <Layers style={{ width: 14, height: 14, color: '#f59e0b' }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Core Concept</span>
-            </div>
-            <p style={{ fontSize: 13, color: 'rgba(226,232,240,0.8)', lineHeight: 1.7 }}>{setup.concept}</p>
+          {/* Tab bar */}
+          <div className="flex gap-1 -mx-1" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            {[
+              { id: 'overview' as ModalTab, label: 'Chart & Concept', icon: <BarChart2 style={{ width: 12, height: 12 }} /> },
+              { id: 'rules' as ModalTab, label: 'Entry Rules', icon: <Target style={{ width: 12, height: 12 }} /> },
+              { id: 'mistakes' as ModalTab, label: 'Risk & Mistakes', icon: <AlertTriangle style={{ width: 12, height: 12 }} /> },
+            ].map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '10px 14px', borderRadius: 0, fontSize: 12, fontWeight: 600,
+                  background: 'none', cursor: 'pointer', border: 'none',
+                  borderBottom: tab === t.id ? `2px solid ${cfg.color}` : '2px solid transparent',
+                  color: tab === t.id ? cfg.color : 'rgba(148,163,184,0.5)',
+                  transition: 'color 0.15s, border-color 0.15s',
+                  marginBottom: -1,
+                }}
+              >
+                {t.icon}{t.label}
+              </button>
+            ))}
           </div>
+        </div>
 
-          {/* Entry checklist + confluence/exit grid */}
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Entry checklist */}
-            <div style={{
-              borderRadius: 12, padding: 16,
-              background: 'rgba(34,211,238,0.05)',
-              border: '1px solid rgba(34,211,238,0.15)',
-            }}>
-              <div className="flex items-center gap-2 mb-3">
-                <Target style={{ width: 14, height: 14, color: '#22d3ee' }} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#67e8f9', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Entry Checklist</span>
-              </div>
-              <ol style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {setup.steps.map((s, i) => (
-                  <li key={i} className="flex gap-2.5" style={{ fontSize: 12, color: 'rgba(226,232,240,0.75)' }}>
+        {/* Tab content */}
+        <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <AnimatePresence mode="wait">
+            {tab === 'overview' && (
+              <motion.div key="overview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Chart */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <BarChart2 style={{ width: 13, height: 13, color: 'rgba(148,163,184,0.4)' }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(148,163,184,0.4)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                      Pattern Chart · {setup.symbol}
+                    </span>
+                    <span style={{ marginLeft: 'auto', fontSize: 10, color: 'rgba(148,163,184,0.25)', fontStyle: 'italic' }}>
+                      Educational model only
+                    </span>
+                  </div>
+                  <div style={{
+                    height: 280, borderRadius: 14,
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    background: '#060a12', overflow: 'hidden',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                  }}>
+                    <CandleChart
+                      candles={setup.candles}
+                      hlines={setup.hlines}
+                      zones={setup.zones}
+                      trendlines={setup.trendlines}
+                      entryCandle={setup.entryCandle}
+                      slPrice={setup.slPrice}
+                      tpPrice={setup.tpPrice}
+                      symbol={setup.symbol}
+                      vw={720} vh={280} labels={true}
+                    />
+                  </div>
+
+                  {/* Legend */}
+                  <div className="flex flex-wrap gap-4 mt-3 px-1">
+                    {[
+                      { line: true, color: '#34d399', dash: true, label: 'Take Profit (TP)' },
+                      { line: true, color: '#f87171', dash: true, label: 'Stop Loss (SL)' },
+                      { swatch: '#f59e0b', label: 'Entry Candle' },
+                      { swatch: 'rgba(129,140,248,0.35)', label: 'Key Zone' },
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center gap-1.5" style={{ fontSize: 11, color: 'rgba(148,163,184,0.45)' }}>
+                        {item.line ? (
+                          <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={item.color} strokeWidth="1.5" strokeDasharray="5,3" /></svg>
+                        ) : (
+                          <div style={{ width: 11, height: 11, borderRadius: 3, background: item.swatch, border: `1.5px solid ${item.swatch}` }} />
+                        )}
+                        {item.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Concept */}
+                <div style={{
+                  borderRadius: 14, padding: 18,
+                  background: `linear-gradient(135deg, ${cfg.glow}, rgba(245,158,11,0.04))`,
+                  border: `1px solid ${cfg.color}20`,
+                }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <BookOpen style={{ width: 14, height: 14, color: cfg.color }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Core Concept</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: 'rgba(226,232,240,0.82)', lineHeight: 1.75 }}>{setup.concept}</p>
+                </div>
+
+                {/* Confluence */}
+                <div style={{
+                  borderRadius: 14, padding: 18,
+                  background: 'rgba(129,140,248,0.05)',
+                  border: '1px solid rgba(129,140,248,0.15)',
+                }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Shield style={{ width: 14, height: 14, color: '#818cf8' }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Confluence Factors</span>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-2.5">
+                    {setup.confluence.map((c, i) => (
+                      <div key={i} className="flex gap-2.5 items-start" style={{ fontSize: 12, color: 'rgba(226,232,240,0.72)' }}>
+                        <CheckCircle style={{ width: 13, height: 13, color: '#818cf8', flexShrink: 0, marginTop: 1.5 }} />
+                        {c}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {tab === 'rules' && (
+              <motion.div key="rules" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Entry steps */}
+                <div style={{
+                  borderRadius: 14, padding: 20,
+                  background: 'rgba(34,211,238,0.04)',
+                  border: '1px solid rgba(34,211,238,0.15)',
+                }}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Target style={{ width: 14, height: 14, color: '#22d3ee' }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#67e8f9', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Entry Checklist</span>
                     <span style={{
-                      flexShrink: 0, width: 20, height: 20, borderRadius: '50%',
-                      background: 'rgba(34,211,238,0.15)', color: '#22d3ee',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 10, fontWeight: 700,
-                    }}>{i + 1}</span>
-                    <span style={{ paddingTop: 2, lineHeight: 1.6 }}>{s}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Confluence */}
-              <div style={{
-                borderRadius: 12, padding: 16,
-                background: 'rgba(129,140,248,0.05)',
-                border: '1px solid rgba(129,140,248,0.15)',
-              }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Shield style={{ width: 14, height: 14, color: '#818cf8' }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Confluence Factors</span>
+                      marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                      background: 'rgba(34,211,238,0.12)', color: '#22d3ee',
+                    }}>{setup.steps.length} steps</span>
+                  </div>
+                  <ol style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {setup.steps.map((s, i) => (
+                      <li key={i} className="flex gap-3" style={{ fontSize: 13, color: 'rgba(226,232,240,0.78)' }}>
+                        <span style={{
+                          flexShrink: 0, width: 22, height: 22, borderRadius: '50%',
+                          background: 'rgba(34,211,238,0.12)', color: '#22d3ee',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 10, fontWeight: 800, border: '1px solid rgba(34,211,238,0.2)',
+                        }}>{i + 1}</span>
+                        <span style={{ paddingTop: 2, lineHeight: 1.65 }}>{s}</span>
+                      </li>
+                    ))}
+                  </ol>
                 </div>
-                <ul style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {setup.confluence.map((c, i) => (
-                    <li key={i} className="flex gap-2" style={{ fontSize: 12, color: 'rgba(226,232,240,0.75)' }}>
-                      <CheckCircle style={{ width: 13, height: 13, color: '#818cf8', flexShrink: 0, marginTop: 1 }} />
-                      {c}
-                    </li>
-                  ))}
-                </ul>
-              </div>
 
-              {/* Exit strategy */}
-              <div style={{
-                borderRadius: 12, padding: 16,
-                background: 'rgba(52,211,153,0.05)',
-                border: '1px solid rgba(52,211,153,0.15)',
-              }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp style={{ width: 14, height: 14, color: '#34d399' }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#6ee7b7', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Exit Strategy</span>
+                {/* Exit strategy */}
+                <div style={{
+                  borderRadius: 14, padding: 20,
+                  background: 'rgba(52,211,153,0.04)',
+                  border: '1px solid rgba(52,211,153,0.15)',
+                }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingUp style={{ width: 14, height: 14, color: '#34d399' }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6ee7b7', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Exit Strategy</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {setup.exitStrategy.map((e, i) => (
+                      <div key={i} className="flex gap-3 items-start" style={{ fontSize: 13, color: 'rgba(226,232,240,0.75)' }}>
+                        <div style={{
+                          flexShrink: 0, width: 20, height: 20, borderRadius: 6,
+                          background: 'rgba(52,211,153,0.12)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <span style={{ fontSize: 10, color: '#34d399', fontWeight: 700 }}>→</span>
+                        </div>
+                        <span style={{ paddingTop: 1, lineHeight: 1.65 }}>{e}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <ul style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {setup.exitStrategy.map((e, i) => (
-                    <li key={i} className="flex gap-2" style={{ fontSize: 12, color: 'rgba(226,232,240,0.75)' }}>
-                      <span style={{ color: '#34d399', fontWeight: 700, flexShrink: 0 }}>→</span>
-                      {e}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
+              </motion.div>
+            )}
 
-          {/* Common mistakes */}
-          <div style={{
-            borderRadius: 12, padding: 16,
-            background: 'rgba(248,113,113,0.05)',
-            border: '1px solid rgba(248,113,113,0.15)',
-          }}>
-            <div className="flex items-center gap-2 mb-3">
-              <XCircle style={{ width: 14, height: 14, color: '#f87171' }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#fca5a5', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Common Mistakes to Avoid</span>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-2">
-              {setup.commonMistakes.map((m, i) => (
-                <div key={i} className="flex gap-2" style={{ fontSize: 12, color: 'rgba(148,163,184,0.65)' }}>
-                  <span style={{ color: '#f87171', fontWeight: 700, flexShrink: 0 }}>✕</span>
-                  {m}
+            {tab === 'mistakes' && (
+              <motion.div key="mistakes" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{
+                  borderRadius: 14, padding: 20,
+                  background: 'rgba(248,113,113,0.04)',
+                  border: '1px solid rgba(248,113,113,0.15)',
+                }}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <XCircle style={{ width: 14, height: 14, color: '#f87171' }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#fca5a5', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Common Mistakes to Avoid</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {setup.commonMistakes.map((m, i) => (
+                      <div key={i} className="flex gap-3 items-start" style={{
+                        padding: '10px 12px', borderRadius: 10,
+                        background: 'rgba(248,113,113,0.06)',
+                        border: '1px solid rgba(248,113,113,0.12)',
+                        fontSize: 13, color: 'rgba(226,232,240,0.72)',
+                      }}>
+                        <span style={{ color: '#f87171', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>✕</span>
+                        <span style={{ lineHeight: 1.6 }}>{m}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Disclaimer */}
-          <div className="flex gap-2" style={{
-            padding: 12, borderRadius: 10,
-            background: 'rgba(245,158,11,0.06)',
-            border: '1px solid rgba(245,158,11,0.2)',
-          }}>
-            <AlertTriangle style={{ width: 15, height: 15, color: '#f59e0b', flexShrink: 0, marginTop: 1 }} />
-            <p style={{ fontSize: 12, color: 'rgba(253,230,138,0.65)', lineHeight: 1.6 }}>
-              <strong style={{ color: 'rgba(253,230,138,0.85)' }}>Educational Model Only.</strong>{' '}
-              This is a pattern model for learning purposes, not a trading signal or financial advice. Always backtest on your own data and manage risk accordingly.
-            </p>
-          </div>
+                {/* Risk disclaimer */}
+                <div style={{
+                  display: 'flex', gap: 12, padding: 16, borderRadius: 12,
+                  background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.18)',
+                }}>
+                  <AlertTriangle style={{ width: 16, height: 16, color: '#f59e0b', flexShrink: 0, marginTop: 1 }} />
+                  <p style={{ fontSize: 12, color: 'rgba(253,230,138,0.6)', lineHeight: 1.7 }}>
+                    <strong style={{ color: 'rgba(253,230,138,0.85)' }}>Educational Model Only.</strong>{' '}
+                    This is a pattern model for learning purposes, not a trading signal or financial advice. Always backtest on your own data and manage risk independently.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.div>
     </motion.div>
@@ -1161,99 +1340,111 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function SetupsPage() {
-  const [filterLevel, setFilterLevel] = useState<'all' | 'beginner' | 'amateur' | 'professional'>('all');
+  const [filterLevel, setFilterLevel] = useState<'all' | 'beginner' | 'intermediate' | 'professional'>('all');
   const [selected, setSelected] = useState<Setup | null>(null);
 
   const filtered = filterLevel === 'all' ? SETUPS : SETUPS.filter(s => s.level === filterLevel);
-
   const groups = {
-    beginner: filtered.filter(s => s.level === 'beginner'),
-    amateur: filtered.filter(s => s.level === 'amateur'),
+    beginner:     filtered.filter(s => s.level === 'beginner'),
+    intermediate: filtered.filter(s => s.level === 'intermediate'),
     professional: filtered.filter(s => s.level === 'professional'),
   };
 
   const filterTabs = [
-    { key: 'all' as const, label: 'All', count: SETUPS.length },
-    { key: 'beginner' as const, label: 'Beginner', count: SETUPS.filter(s => s.level === 'beginner').length },
-    { key: 'amateur' as const, label: 'Intermediate', count: SETUPS.filter(s => s.level === 'amateur').length },
-    { key: 'professional' as const, label: 'Professional', count: SETUPS.filter(s => s.level === 'professional').length },
+    { key: 'all'          as const, label: 'All Setups',   count: SETUPS.length,                                    icon: <Layers style={{ width: 12, height: 12 }} /> },
+    { key: 'beginner'     as const, label: 'Beginner',     count: SETUPS.filter(s => s.level === 'beginner').length,     icon: <BookOpen style={{ width: 12, height: 12 }} /> },
+    { key: 'intermediate' as const, label: 'Intermediate', count: SETUPS.filter(s => s.level === 'intermediate').length, icon: <Activity style={{ width: 12, height: 12 }} /> },
+    { key: 'professional' as const, label: 'Professional', count: SETUPS.filter(s => s.level === 'professional').length, icon: <Zap style={{ width: 12, height: 12 }} /> },
   ];
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: '#070a12', color: '#fff', paddingBottom: 64 }}>
+    <div style={{ height: '100%', overflowY: 'auto', background: '#060910', color: '#fff', paddingBottom: 64 }}>
+
       {/* Header */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 30,
-        background: 'rgba(5,7,15,0.96)',
+        background: 'rgba(6,9,16,0.97)',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
-        backdropFilter: 'blur(16px)',
+        backdropFilter: 'blur(20px)',
       }}>
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center gap-4">
+          <Link href="/app" style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '7px 12px', borderRadius: 10,
+            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+            color: 'rgba(148,163,184,0.6)', fontSize: 13, textDecoration: 'none',
+            transition: 'background 0.15s',
+          }}>
+            <ArrowLeft size={14} />
+            <span className="hidden sm:inline">Dashboard</span>
+          </Link>
+
           <div>
             <h1 style={{
-              fontSize: 22, fontWeight: 800,
-              background: 'linear-gradient(to right, #a78bfa, #818cf8)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              fontSize: 20, fontWeight: 800, lineHeight: 1.1,
+              background: 'linear-gradient(to right, #a78bfa, #818cf8, rgba(255,255,255,0.7))',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             }}>
               Setups Library
             </h1>
-            <p style={{ fontSize: 11, color: 'rgba(148,163,184,0.45)', marginTop: 2 }}>
-              Pattern models with candlestick charts · Educational use only
+            <p style={{ fontSize: 11, color: 'rgba(148,163,184,0.4)', marginTop: 1 }}>
+              {SETUPS.length} pattern models with live charts · Educational use only
             </p>
           </div>
-          <Link href="/app" style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 12px', borderRadius: 8,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            color: 'rgba(148,163,184,0.7)', fontSize: 13,
-            textDecoration: 'none', transition: 'background 0.15s',
-          }}>
-            <ArrowLeft size={15} />
-            <span className="hidden sm:inline">Dashboard</span>
-          </Link>
+
+          {/* Stats pills */}
+          <div className="hidden md:flex items-center gap-2 ml-auto">
+            {[
+              { label: 'Beginner', count: 2, color: '#34d399' },
+              { label: 'Intermediate', count: 2, color: '#60a5fa' },
+              { label: 'Pro', count: 4, color: '#a78bfa' },
+            ].map(s => (
+              <div key={s.label} style={{
+                padding: '4px 10px', borderRadius: 8,
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+                fontSize: 11, color: 'rgba(148,163,184,0.5)',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
+                {s.count} {s.label}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-3 sm:px-6 pt-2">
-        <p style={{ fontSize: 11, color: 'rgba(148,163,184,0.3)' }}>
-          Not financial advice. Educational pattern models for learning purposes only.
-        </p>
-      </div>
-
-      {/* Filter Tabs */}
+      {/* Filter bar */}
       <div style={{
         position: 'sticky', top: 57, zIndex: 20,
-        background: 'rgba(5,7,15,0.94)',
+        background: 'rgba(6,9,16,0.96)',
         borderBottom: '1px solid rgba(255,255,255,0.05)',
         backdropFilter: 'blur(12px)',
       }}>
-        <div className="max-w-6xl mx-auto px-2 sm:px-6 py-3 flex items-center gap-2 sm:gap-3 overflow-x-auto">
+        <div className="max-w-6xl mx-auto px-2 sm:px-6 py-2.5 flex items-center gap-1.5 sm:gap-2 overflow-x-auto">
           {filterTabs.map(tab => {
             const active = filterLevel === tab.key;
+            const color = tab.key === 'beginner' ? '#34d399' : tab.key === 'intermediate' ? '#60a5fa' : tab.key === 'professional' ? '#a78bfa' : '#94a3b8';
             return (
               <motion.button
                 key={tab.key}
                 onClick={() => setFilterLevel(tab.key)}
                 whileTap={{ scale: 0.95 }}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '6px 14px', borderRadius: 8,
-                  fontSize: 12, fontWeight: 600,
-                  whiteSpace: 'nowrap',
-                  background: active ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.03)',
-                  border: active ? '1px solid rgba(129,140,248,0.3)' : '1px solid rgba(255,255,255,0.07)',
-                  color: active ? '#a5b4fc' : 'rgba(148,163,184,0.5)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '7px 14px', borderRadius: 10,
+                  fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+                  background: active ? `${color}15` : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${active ? `${color}40` : 'rgba(255,255,255,0.07)'}`,
+                  color: active ? color : 'rgba(148,163,184,0.5)',
+                  cursor: 'pointer', transition: 'all 0.15s',
                 }}
               >
+                {tab.icon}
                 {tab.label}
                 <span style={{
-                  padding: '1px 6px', borderRadius: 99, fontSize: 11, fontWeight: 700,
-                  background: active ? 'rgba(129,140,248,0.25)' : 'rgba(255,255,255,0.06)',
-                  color: active ? '#c7d2fe' : 'rgba(148,163,184,0.4)',
+                  padding: '1px 6px', borderRadius: 99, fontSize: 10, fontWeight: 700,
+                  background: active ? `${color}20` : 'rgba(255,255,255,0.06)',
+                  color: active ? color : 'rgba(148,163,184,0.4)',
                 }}>{tab.count}</span>
               </motion.button>
             );
@@ -1261,46 +1452,72 @@ export default function SetupsPage() {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-10" style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
-        {(['beginner', 'amateur', 'professional'] as const).map(level => {
-          const levelSetups = groups[level];
-          if (levelSetups.length === 0) return null;
+      {/* Sections */}
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-8" style={{ display: 'flex', flexDirection: 'column', gap: 48 }}>
+        {(['beginner', 'intermediate', 'professional'] as const).map(level => {
+          const ls = groups[level];
+          if (ls.length === 0) return null;
           const cfg = LEVEL_CFG[level];
 
           return (
-            <motion.section key={level} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+            <section key={level}>
               {/* Section header */}
-              <div className="flex items-end gap-4 mb-6" style={{ paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <motion.div
+                initial={{ opacity: 0, x: -12 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                className="flex items-end gap-4 mb-6"
+                style={{ paddingBottom: 16, borderBottom: `1px solid ${cfg.color}18` }}
+              >
+                <div style={{
+                  width: 3, height: 36, borderRadius: 99,
+                  background: `linear-gradient(to bottom, ${cfg.color}, ${cfg.color}30)`,
+                  flexShrink: 0,
+                }} />
                 <div>
-                  <h2 style={{
-                    fontSize: 18, fontWeight: 700,
-                    background: `linear-gradient(to right, ${cfg.color}, rgba(255,255,255,0.5))`,
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    marginBottom: 4,
-                  }}>
-                    {cfg.label} Setups
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, color: cfg.color,
+                    textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4,
+                  }}>{cfg.icon} {cfg.label}</div>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2 }}>
+                    {level === 'beginner'     && 'Foundation Setups'}
+                    {level === 'intermediate' && 'Intermediate Setups'}
+                    {level === 'professional' && 'Professional Setups'}
                   </h2>
-                  <p style={{ fontSize: 13, color: 'rgba(148,163,184,0.45)' }}>
-                    {level === 'beginner' && 'Foundation patterns — clear rules, simple execution'}
-                    {level === 'amateur' && 'Intermediate concepts — requires understanding of market structure'}
+                  <p style={{ fontSize: 12, color: 'rgba(148,163,184,0.45)', marginTop: 3 }}>
+                    {level === 'beginner'     && 'Clear rules, simple execution — perfect starting point'}
+                    {level === 'intermediate' && 'Requires understanding of market structure and order flow'}
                     {level === 'professional' && 'Advanced confluence strategies — multi-timeframe, high R:R'}
                   </p>
                 </div>
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'rgba(148,163,184,0.3)' }}>
-                  {levelSetups.length} {levelSetups.length === 1 ? 'setup' : 'setups'}
+                <span style={{
+                  marginLeft: 'auto', fontSize: 11, color: 'rgba(148,163,184,0.3)',
+                  background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                  padding: '3px 10px', borderRadius: 99,
+                }}>
+                  {ls.length} {ls.length === 1 ? 'setup' : 'setups'}
                 </span>
-              </div>
+              </motion.div>
 
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {levelSetups.map(setup => (
-                  <SetupCard key={setup.id} setup={setup} onClick={() => setSelected(setup)} />
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+                {ls.map(s => (
+                  <SetupCard key={s.id} setup={s} onClick={() => setSelected(s)} />
                 ))}
               </div>
-            </motion.section>
+            </section>
           );
         })}
+
+        {/* Bottom note */}
+        <div className="flex items-center gap-2 justify-center" style={{
+          padding: '12px 20px', borderRadius: 12,
+          background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)',
+        }}>
+          <AlertTriangle style={{ width: 13, height: 13, color: 'rgba(245,158,11,0.5)' }} />
+          <p style={{ fontSize: 11, color: 'rgba(148,163,184,0.35)', textAlign: 'center' }}>
+            All setups are educational models only. Not financial advice. Always backtest and manage your own risk.
+          </p>
+        </div>
       </div>
 
       {/* Modal */}

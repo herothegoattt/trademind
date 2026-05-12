@@ -135,30 +135,6 @@ function CyberpunkFrame() {
         style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(34,211,238,0.18) 30%, rgba(255,255,255,0.12) 50%, rgba(34,211,238,0.18) 70%, transparent)" }}
       />
 
-      {/* HUD label — top left */}
-      <motion.div
-        className="absolute top-[28px] left-[28px] flex items-center gap-1.5"
-        animate={{ opacity: [0.35, 0.65, 0.35] }}
-        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <div className="w-1 h-1 rounded-full" style={{ background: "#22d3ee", boxShadow: "0 0 4px #22d3ee" }} />
-        <span className="text-[8px] font-mono tracking-[0.2em] uppercase" style={{ color: "rgba(34,211,238,0.55)" }}>
-          AI · ONLINE
-        </span>
-      </motion.div>
-
-      {/* HUD label — top right */}
-      <motion.div
-        className="absolute top-[28px] right-[28px] flex items-center gap-1.5"
-        animate={{ opacity: [0.3, 0.6, 0.3] }}
-        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-      >
-        <span className="text-[8px] font-mono tracking-[0.2em] uppercase" style={{ color: "rgba(129,140,248,0.5)" }}>
-          TradeMind v1
-        </span>
-        <div className="w-1 h-1 rounded-full" style={{ background: "#818cf8", boxShadow: "0 0 4px #818cf8" }} />
-      </motion.div>
-
       {/* Bottom-right coordinate tag */}
       <motion.span
         className="absolute bottom-[10px] right-[28px] text-[7px] font-mono tracking-widest"

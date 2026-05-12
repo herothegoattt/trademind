@@ -83,12 +83,10 @@ function computeStats(positions: Position[]): PortfolioStats {
   const winners  = positions.filter(p => calcPnL(p) > 0);
   const winRate  = positions.length > 0 ? (winners.length / positions.length) * 100 : 0;
 
-  const best  = positions.length > 0
-    ? positions.reduce((b, p) => calcPnL(p) > calcPnL(b) ? p : b, positions[0])
-    : null;
-  const worst = positions.length > 0
-    ? positions.reduce((w, p) => calcPnL(p) < calcPnL(w) ? p : w, positions[0])
-    : null;
+  const sorted = [...positions].sort((a, b) => calcPnL(b) - calcPnL(a));
+  const best   = sorted.length > 0 ? sorted[0] : null;
+  // only show worst when it is a different position than best
+  const worst  = sorted.length >= 2 ? sorted[sorted.length - 1] : null;
 
   return {
     totalInvested, totalCurrentVal, unrealizedPnL, realizedPnL, totalPnL,

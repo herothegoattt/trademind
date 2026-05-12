@@ -94,29 +94,17 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Registration failed");
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.detail || "Registration failed");
           }
 
-          const userData = await response.json();
+          // The register route returns { ...user, access_token } in one shot
+          const { access_token, ...userData } = await response.json();
+          if (!access_token) throw new Error("No token returned from server");
 
-          // Auto-login after registration to get the token
-          const loginResponse = await fetch("/api/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
-          });
-
-          if (!loginResponse.ok) {
-            throw new Error("Auto-login failed after registration");
-          }
-
-          const { access_token } = await loginResponse.json();
-
-          // Set auth state only after both steps succeed
           get().setToken(access_token);
-          set({ user: userData, isAuthenticated: true, isLoading: false });
-          identifyUser(userData);
+          set({ user: userData as User, isAuthenticated: true, isLoading: false });
+          identifyUser(userData as User);
           posthog.capture("signed_up", { email: userData.email });
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : "Registration failed";
@@ -135,7 +123,7 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (!response.ok) {
-            const error = await response.json();
+            const error = await response.json().catch(() => ({}));
             throw new Error(error.detail || "Invalid email or password");
           }
 

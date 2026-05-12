@@ -8,8 +8,9 @@ export async function POST(req: NextRequest) {
     const res = await proxyToBackend("/api/v1/auth/google-access", "POST", body);
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
-  } catch (err) {
-    console.error("Google auth proxy error:", err);
-    return NextResponse.json({ detail: "Internal server error" }, { status: 500 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Google auth proxy error:", msg);
+    return NextResponse.json({ detail: msg }, { status: 502 });
   }
 }

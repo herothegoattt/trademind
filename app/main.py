@@ -19,6 +19,7 @@ from app.api.user_actions import router as user_actions_router
 from app.api.investing import router as investing_router
 from app.api.payments import router as payments_router
 from app.api.referrals import router as referrals_router
+from app.api.admin import router as admin_router
 
 _scheduler = None
 
@@ -99,6 +100,7 @@ app.include_router(user_actions_router)
 app.include_router(investing_router)
 app.include_router(payments_router)
 app.include_router(referrals_router)
+app.include_router(admin_router)
 
 
 @app.get("/")

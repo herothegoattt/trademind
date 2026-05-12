@@ -21,7 +21,12 @@ export default function PortfolioOverview() {
     );
   }
 
-  const fmt = (n: number) => Math.abs(n) >= 1000 ? `$${(n/1000).toFixed(1)}k` : `$${n.toFixed(0)}`;
+  // Produces '-$1.5k' / '-$500' / '+$1.5k' / '$500' — no sign = positive, no dollar-before-minus
+  const fmt = (n: number, sign = false): string => {
+    const abs = Math.abs(n);
+    const prefix = n < 0 ? '-' : sign ? '+' : '';
+    return abs >= 1000 ? `${prefix}$${(abs / 1000).toFixed(1)}k` : `${prefix}$${abs.toFixed(0)}`;
+  };
   const totalReturn  = stats.totalPnL;
   const returnPct    = stats.totalReturnPct;
   const openPositions = positions.filter(p => p.status === 'open');
@@ -56,7 +61,7 @@ export default function PortfolioOverview() {
             <div>
               <p className="text-slate-400 text-sm font-medium">Total Return</p>
               <p className={`text-3xl font-bold mt-2 ${totalReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {totalReturn >= 0 ? '+' : ''}{fmt(totalReturn)}
+                {fmt(totalReturn, true)}
               </p>
               <p className={`text-xs mt-1 ${returnPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                 {returnPct >= 0 ? '+' : ''}{returnPct.toFixed(1)}% overall
@@ -73,7 +78,7 @@ export default function PortfolioOverview() {
             <div>
               <p className="text-slate-400 text-sm font-medium">Unrealized P&L</p>
               <p className={`text-3xl font-bold mt-2 ${stats.unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {stats.unrealizedPnL >= 0 ? '+' : ''}{fmt(stats.unrealizedPnL)}
+                {fmt(stats.unrealizedPnL, true)}
               </p>
               <p className="text-slate-500 text-xs mt-1">Open positions</p>
             </div>
@@ -168,10 +173,10 @@ export default function PortfolioOverview() {
                 </div>
                 <div className="text-right">
                   <p className={`font-bold text-sm ${isGood ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {isGood ? '+' : ''}{fmt(pnl)}
+                    {fmt(pnl, true)}
                   </p>
                   <p className={`text-xs ${isGood ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    {isGood ? '+' : ''}{((pnl / posInvested(pos)) * 100).toFixed(1)}%
+                    {pnl >= 0 ? '+' : ''}{((pnl / posInvested(pos)) * 100).toFixed(1)}%
                   </p>
                 </div>
               </div>
@@ -183,30 +188,50 @@ export default function PortfolioOverview() {
       {/* Best / Worst */}
       {(stats.best || stats.worst) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {stats.best && (
-            <div className="bg-emerald-900/10 border border-emerald-700/30 rounded-xl p-5">
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-emerald-900/30 rounded-lg"><TrendingUp className="text-emerald-400" size={18} /></div>
-                <div>
-                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Best Position</p>
-                  <p className="text-xl font-black text-emerald-400 mt-1">{stats.best.symbol}</p>
-                  <p className="text-sm text-slate-300">+{fmt(calcPnL(stats.best))} ({((calcPnL(stats.best)/posInvested(stats.best))*100).toFixed(1)}%)</p>
+          {stats.best && (() => {
+            const pnl     = calcPnL(stats.best!);
+            const pct     = posInvested(stats.best!) > 0 ? (pnl / posInvested(stats.best!)) * 100 : 0;
+            const isPos   = pnl >= 0;
+            return (
+              <div className={`rounded-xl p-5 ${isPos ? 'bg-emerald-900/10 border border-emerald-700/30' : 'bg-slate-800/40 border border-slate-700/40'}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`p-2 rounded-lg ${isPos ? 'bg-emerald-900/30' : 'bg-slate-700/40'}`}>
+                    <TrendingUp className={isPos ? 'text-emerald-400' : 'text-slate-400'} size={18} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Best Position</p>
+                    <p className={`text-xl font-black mt-1 ${isPos ? 'text-emerald-400' : 'text-slate-300'}`}>{stats.best!.symbol}</p>
+                    <p className="text-sm text-slate-300">
+                      <span className={isPos ? 'text-emerald-400' : 'text-slate-300'}>{fmt(pnl, true)}</span>
+                      <span className="text-slate-500 ml-1">({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)</span>
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          {stats.worst && (
-            <div className="bg-rose-900/10 border border-rose-700/30 rounded-xl p-5">
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-rose-900/30 rounded-lg"><TrendingDown className="text-rose-400" size={18} /></div>
-                <div>
-                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Worst Position</p>
-                  <p className="text-xl font-black text-rose-400 mt-1">{stats.worst.symbol}</p>
-                  <p className="text-sm text-slate-300">{fmt(calcPnL(stats.worst))} ({((calcPnL(stats.worst)/posInvested(stats.worst))*100).toFixed(1)}%)</p>
+            );
+          })()}
+          {stats.worst && (() => {
+            const pnl     = calcPnL(stats.worst!);
+            const pct     = posInvested(stats.worst!) > 0 ? (pnl / posInvested(stats.worst!)) * 100 : 0;
+            const isNeg   = pnl < 0;
+            return (
+              <div className={`rounded-xl p-5 ${isNeg ? 'bg-rose-900/10 border border-rose-700/30' : 'bg-slate-800/40 border border-slate-700/40'}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`p-2 rounded-lg ${isNeg ? 'bg-rose-900/30' : 'bg-slate-700/40'}`}>
+                    <TrendingDown className={isNeg ? 'text-rose-400' : 'text-slate-400'} size={18} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Worst Position</p>
+                    <p className={`text-xl font-black mt-1 ${isNeg ? 'text-rose-400' : 'text-slate-300'}`}>{stats.worst!.symbol}</p>
+                    <p className="text-sm text-slate-300">
+                      <span className={isNeg ? 'text-rose-400' : 'text-slate-300'}>{fmt(pnl, true)}</span>
+                      <span className="text-slate-500 ml-1">({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)</span>
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
     </div>

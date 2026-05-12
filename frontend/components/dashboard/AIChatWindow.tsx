@@ -150,7 +150,7 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
         className="relative z-10 flex-shrink-0 flex items-center justify-between px-5 py-3.5"
         style={{
           borderBottom: "1px solid rgba(255,255,255,0.06)",
-          background: "rgba(7,10,18,0.7)",
+          background: "rgba(7,10,18,0.97)",
         }}
       >
         <div className="flex items-center gap-3">

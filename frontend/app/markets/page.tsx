@@ -91,7 +91,7 @@ export default function MarketsPage() {
       {/* ══════════════════════ DESKTOP SIDEBAR ══════════════════════ */}
       <aside
         className="hidden md:flex flex-shrink-0 flex-col"
-        style={{ width:200, background:"rgba(6,9,17,0.95)", borderRight:"1px solid rgba(255,255,255,0.05)" }}
+        style={{ width:224, background:"rgba(6,9,17,0.95)", borderRight:"1px solid rgba(255,255,255,0.05)" }}
       >
         {/* Header */}
         <div
@@ -125,7 +125,7 @@ export default function MarketsPage() {
             const active = category === cat;
             return (
               <button key={cat} onClick={() => pickCategory(cat)}
-                className="relative w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all"
+                className="relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-all"
                 style={{
                   background: active ? `rgba(${c.rgb},0.1)` : "transparent",
                   border:     active ? `1px solid rgba(${c.rgb},0.22)` : "1px solid transparent",
@@ -140,11 +140,11 @@ export default function MarketsPage() {
                     transition={{ type:"spring", stiffness:400, damping:30 }}
                   />
                 )}
-                <span className="text-sm leading-none">{c.icon}</span>
-                <span className="text-[12px] font-medium flex-1" style={{ color: active ? c.color : "rgba(100,116,139,0.8)" }}>
+                <span className="text-base leading-none">{c.icon}</span>
+                <span className="text-[13px] font-medium flex-1" style={{ color: active ? c.color : "rgba(100,116,139,0.8)" }}>
                   {cat}
                 </span>
-                <span className="text-[9px] font-mono" style={{ color:`rgba(${c.rgb},${active?0.7:0.3})` }}>
+                <span className="text-[10px] font-mono" style={{ color:`rgba(${c.rgb},${active?0.7:0.3})` }}>
                   {SYMBOLS[cat].length}
                 </span>
               </button>
