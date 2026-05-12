@@ -248,9 +248,12 @@ function CongratsOverlay({
   );
 }
 
+const ADMIN_EMAIL = "rem.vafin.08@gmail.com";
+
 export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: SubscriptionModalProps) {
   const t = useT();
-  const token = useAuthStore((s) => s.token);
+  const { token, user } = useAuthStore();
+  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
   const [selected, setSelected] = useState<Plan>(currentPlan);
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const [confirming, setConfirming] = useState(false);
@@ -276,6 +279,27 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
     const localToken = token || localStorage.getItem("access_token");
     if (!localToken) {
       setAuthOpen(true);
+      return;
+    }
+
+    // Admin bypass — set plan directly without Stripe
+    if (isAdmin && user) {
+      setConfirming(true);
+      try {
+        const res = await fetch(`/api/v1/admin/users/${user.id}/plan`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localToken}` },
+          body: JSON.stringify({ plan: selected }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Failed to set plan");
+        onUpgrade(selected);
+        const planDef = PLAN_DEFS.find(p => p.id === selected)!;
+        setCongratsPlan(planDef);
+      } catch (e: any) {
+        setError(e.message || "Failed to set plan");
+      } finally {
+        setConfirming(false);
+      }
       return;
     }
 

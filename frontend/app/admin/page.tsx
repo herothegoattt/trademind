@@ -54,6 +54,7 @@ export default function AdminPage() {
   const [search, setSearch]   = useState("");
   const [saving, setSaving]   = useState<Record<number, boolean>>({});
   const [saved, setSaved]     = useState<Record<number, boolean>>({});
+  const [saveErr, setSaveErr] = useState<Record<number, string>>({});
   const [pending, setPending] = useState<Record<number, Plan>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -114,21 +115,25 @@ export default function AdminPage() {
     const plan = pending[userId];
     if (!plan) return;
     setSaving(s => ({ ...s, [userId]: true }));
+    setSaveErr(e => { const n = { ...e }; delete n[userId]; return n; });
     try {
       const res = await fetch(`/api/v1/admin/users/${userId}/plan`, {
         method: "PATCH",
         headers: authHeaders(),
         body: JSON.stringify({ plan }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `HTTP ${res.status}`);
+      }
       const updated: UserRow = await res.json();
       setUsers(us => us.map(u => u.id === userId ? updated : u));
       setPending(p => { const n = { ...p }; delete n[userId]; return n; });
       setSaved(s => ({ ...s, [userId]: true }));
       setTimeout(() => setSaved(s => { const n = { ...s }; delete n[userId]; return n; }), 2000);
       loadStats();
-    } catch {
-      // keep pending so user can retry
+    } catch (e: any) {
+      setSaveErr(s => ({ ...s, [userId]: e?.message || "Save failed" }));
     } finally {
       setSaving(s => ({ ...s, [userId]: false }));
     }
@@ -265,7 +270,7 @@ export default function AdminPage() {
                     <span className="text-[11px] text-gray-500 hidden md:block">{fmtDate(u.created_at)}</span>
 
                     {/* Save button */}
-                    <div>
+                    <div className="flex flex-col gap-0.5">
                       {saved[u.id] ? (
                         <span className="flex items-center gap-1 text-[11px] text-emerald-400">
                           <Check className="w-3.5 h-3.5" /> Saved
@@ -282,6 +287,11 @@ export default function AdminPage() {
                         >
                           {saving[u.id] ? "…" : "Save"}
                         </button>
+                      )}
+                      {saveErr[u.id] && (
+                        <span className="text-[10px] text-red-400 max-w-[100px] truncate" title={saveErr[u.id]}>
+                          {saveErr[u.id]}
+                        </span>
                       )}
                     </div>
                   </div>

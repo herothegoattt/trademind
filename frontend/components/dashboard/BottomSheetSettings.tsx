@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Sun, Moon, Bell, BellOff, Download, LogOut,
   Settings2, AlertCircle, Key,
-  TrendingUp, ChevronRight, Send,
+  TrendingUp, ChevronRight, Send, PlayCircle,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useDashboardStore } from "../../lib/store";
@@ -538,6 +538,20 @@ export function BottomSheetSettings({ isOpen, onClose }: BottomSheetSettingsProp
                     )}
                   </AnimatePresence>
                 </div>
+              </div>
+
+              {/* Replay tour — hidden in footer area */}
+              <div className="px-6 pt-3 pb-1">
+                <button
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("restart-tour"));
+                    onClose();
+                  }}
+                  className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                >
+                  <PlayCircle className="w-3.5 h-3.5" />
+                  Replay product tour
+                </button>
               </div>
 
               {/* Footer */}
