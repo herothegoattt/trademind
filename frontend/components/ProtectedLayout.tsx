@@ -12,7 +12,12 @@ export function ProtectedLayout({ children }: ProtectedLayoutProps) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    fetchCurrentUser().finally(() => setChecking(false));
+    const timeout = setTimeout(() => setChecking(false), 8000);
+    fetchCurrentUser().finally(() => {
+      clearTimeout(timeout);
+      setChecking(false);
+    });
+    return () => clearTimeout(timeout);
   }, []);
 
   // Show loading screen while token is being verified

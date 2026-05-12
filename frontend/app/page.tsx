@@ -156,7 +156,7 @@ function SlideHero({ onLaunch, active }: { onLaunch: (plan?: string, billing?: s
           {/* CTAs */}
           <motion.div {...enter(.42)} style={{ display:"flex", gap:12, flexWrap:"wrap", justifyContent:"center", marginBottom:44 }}>
             <motion.button whileHover={{ scale:1.05, boxShadow:`0 0 52px ${VIO}52` }} whileTap={{ scale:.97 }}
-              onClick={onLaunch}
+              onClick={() => onLaunch()}
               style={{ height:52, padding:"0 36px", background:`linear-gradient(135deg,${VIO}48,${VIO}26)`, border:`1px solid ${VIO}68`, borderRadius:13, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:10, fontSize:".85rem", fontFamily:"monospace", letterSpacing:".17em", color:"#e9d5ff", fontWeight:700, boxShadow:`0 0 28px ${VIO}28`, transition:"box-shadow .25s" }}>
               {t("initialize_system")}
               <motion.svg animate={{ x:[0,4,0] }} transition={{ duration:1.4, repeat:Infinity }} width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -777,7 +777,7 @@ function SlideCTA({ active, onLaunch }: { active: boolean; onLaunch: (plan?: str
         <motion.div initial={{ opacity:0, y:16 }} animate={active?{ opacity:1, y:0 }:{}} transition={{ duration:.55, delay:.38 }}
           style={{ display:"flex", gap:12, flexWrap:"wrap", justifyContent:"center", marginBottom:32 }}>
           <motion.button whileHover={{ scale:1.05, boxShadow:`0 0 60px ${VIO}55` }} whileTap={{ scale:.97 }}
-            onClick={onLaunch}
+            onClick={() => onLaunch()}
             style={{ height:58, padding:"0 48px", background:`linear-gradient(135deg,${VIO}50,${VIO}2e)`, border:`1px solid ${VIO}72`, borderRadius:14, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:12, fontSize:".9rem", fontFamily:"monospace", letterSpacing:".2em", color:"#e9d5ff", fontWeight:700, boxShadow:`0 0 40px ${VIO}35`, transition:"box-shadow .25s" }}>
             {t("initialize_system")}
             <motion.svg animate={{ x:[0,4,0] }} transition={{ duration:1.5, repeat:Infinity }} width="15" height="15" viewBox="0 0 15 15" fill="none">
@@ -919,7 +919,7 @@ export default function HomePage() {
               style={{ fontSize:".78rem", color:"rgba(148,163,184,.45)", background:"none", border:"none", cursor:"pointer", transition:"color .2s", padding:0 }}
               onMouseEnter={e=>(e.currentTarget.style.color="#f1f5f9")} onMouseLeave={e=>(e.currentTarget.style.color="rgba(148,163,184,.45)")}>{t(k)}</button>
           ))}
-          <motion.button whileHover={{ scale:1.04 }} whileTap={{ scale:.97 }} onClick={launch}
+          <motion.button whileHover={{ scale:1.04 }} whileTap={{ scale:.97 }} onClick={() => launch()}
             style={{ height:34, padding:"0 16px", background:`${VIO}20`, border:`1px solid ${VIO}50`, borderRadius:8, cursor:"pointer", fontSize:".7rem", fontFamily:"monospace", letterSpacing:".13em", color:`${VIO}ee`, fontWeight:700 }}>
             {t("initialize_system")}
           </motion.button>
