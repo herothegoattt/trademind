@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import CommunityEdge from "../../components/dashboard/CommunityEdge";
+import { FeatureGate } from "../../components/FeatureGate";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
@@ -74,7 +75,9 @@ export default function CommunityEdgePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
         >
-          <CommunityEdge />
+          <FeatureGate feature="community_post">
+            <CommunityEdge />
+          </FeatureGate>
         </motion.div>
       </div>
     </div>

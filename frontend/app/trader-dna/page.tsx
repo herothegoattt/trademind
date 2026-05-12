@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import TraderDNA from "../../components/dashboard/TraderDNA";
+import { FeatureGate } from "../../components/FeatureGate";
 import { ArrowLeft, Brain } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
@@ -240,7 +241,9 @@ export default function TraderDNAPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <TraderDNA />
+            <FeatureGate feature="trader_dna_ai">
+              <TraderDNA />
+            </FeatureGate>
           </motion.div>
 
           {/* Real-data sidebar */}

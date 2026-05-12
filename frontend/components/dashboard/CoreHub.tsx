@@ -2,6 +2,7 @@
 import { motion } from "framer-motion";
 import { AICoreBg } from "./AICoreBg";
 import { AIChatWindow } from "./AIChatWindow";
+import { FeatureGate } from "../FeatureGate";
 
 /* ── Timing calibrated for ~1200 × 900 chat area ────────────────
    perimeter ≈ 4200 px, speed ≈ 700 px/s → full cycle ≈ 6 s      */
@@ -156,7 +157,9 @@ export function CoreHub() {
 
       {/* Chat content */}
       <div className="absolute inset-0 z-10">
-        <AIChatWindow isCompact={false} />
+        <FeatureGate feature="ai_chat">
+          <AIChatWindow isCompact={false} />
+        </FeatureGate>
       </div>
 
       {/* Cyberpunk frame sits above everything */}

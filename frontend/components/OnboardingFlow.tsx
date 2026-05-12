@@ -1,67 +1,76 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/auth-store";
-import { tradeAPI } from "@/lib/trade-api";
 import {
-  BookOpen, Brain, Users, MessageSquare, TrendingUp,
-  ChevronRight, Check, Sparkles, Zap,
+  BookOpen, Brain, Users, Settings, ChevronRight,
+  Check, Sparkles, X,
 } from "lucide-react";
 
 const ACCENT = "#7C6FE0";
+
 const MARKETS = ["Forex", "Crypto", "Stocks", "Futures", "Other"] as const;
 type Market = (typeof MARKETS)[number];
 
-// 0=welcome  1=features  2=market  3=congrats
-type Step = 0 | 1 | 2 | 3;
-
-const FEATURES = [
+// ── Tour steps ─────────────────────────────────────────────────────────────────
+const TOUR_STEPS = [
   {
-    icon: BookOpen,
+    path: "/journal",
+    navId: "journal",
     label: "Smart Journal",
-    desc: "Log every trade. Spot patterns automatically.",
+    headline: "Every trade, perfectly logged",
+    desc: "Log trades in seconds. The AI automatically detects your patterns, biases, and recurring mistakes — so you don't have to.",
     color: "#22d3ee",
-    glow: "rgba(34,211,238,0.15)",
-    from: { x: -60, y: 20, rotate: -6 },
+    glow: "34,211,238",
+    icon: BookOpen,
   },
   {
-    icon: Brain,
+    path: "/trader-dna",
+    navId: "trader-dna",
     label: "Trader DNA",
-    desc: "Your AI trading fingerprint — know your edge.",
+    headline: "Know your trading fingerprint",
+    desc: "A deep-dive into how YOU trade. Win rates, best sessions, worst pairs, psychological tendencies — your personal edge map.",
     color: "#a78bfa",
-    glow: "rgba(167,139,250,0.15)",
-    from: { x: 60, y: -20, rotate: 5 },
+    glow: "167,139,250",
+    icon: Brain,
   },
   {
-    icon: Users,
+    path: "/community-edge",
+    navId: "community-edge",
     label: "Community Edge",
-    desc: "Signals from verified pro traders. Stay ahead.",
+    headline: "Signals from verified pros",
+    desc: "Real-time setups and signals from vetted traders. See what works before you risk a cent.",
     color: "#34d399",
-    glow: "rgba(52,211,153,0.15)",
-    from: { x: -40, y: -30, rotate: -4 },
+    glow: "52,211,153",
+    icon: Users,
   },
   {
-    icon: MessageSquare,
-    label: "AI Mentor",
-    desc: "Ask anything. Instant market analysis.",
-    color: "#fb923c",
-    glow: "rgba(251,146,60,0.15)",
-    from: { x: 50, y: 30, rotate: 6 },
+    path: "/setups",
+    navId: "setups",
+    label: "Setups Library",
+    headline: "Battle-tested trading playbooks",
+    desc: "Explore, save and refine proven setups. Share your own with the community. Never enter a trade blind again.",
+    color: "#818cf8",
+    glow: "129,140,248",
+    icon: Settings,
   },
 ] as const;
 
-// ── Confetti particle ──────────────────────────────────────────────────────────
+// step index: -1=welcome  0..3=tour  4=market  5=congrats
+type StepIdx = -1 | 0 | 1 | 2 | 3 | 4 | 5;
+
+// ── Confetti ──────────────────────────────────────────────────────────────────
 function Confetti() {
   const items = useRef(
-    Array.from({ length: 28 }, (_, i) => ({
+    Array.from({ length: 24 }, (_, i) => ({
       id: i,
       x: Math.random() * 100,
-      delay: Math.random() * 0.6,
-      dur: 1.2 + Math.random() * 0.8,
+      delay: Math.random() * 0.5,
+      dur: 1.1 + Math.random() * 0.9,
       color: ["#22d3ee", "#a78bfa", "#34d399", "#fb923c", "#f472b6"][i % 5],
-      size: 4 + Math.random() * 5,
-      rotate: Math.random() * 360,
+      size: 4 + Math.random() * 4,
     }))
   );
   return (
@@ -69,440 +78,471 @@ function Confetti() {
       {items.current.map((p) => (
         <motion.div
           key={p.id}
-          initial={{ opacity: 0, y: -10, x: `${p.x}%`, rotate: p.rotate }}
-          animate={{ opacity: [0, 1, 1, 0], y: "110%", rotate: p.rotate + 180 }}
+          initial={{ opacity: 0, y: -8, x: `${p.x}%` }}
+          animate={{ opacity: [0, 1, 1, 0], y: "110%" }}
           transition={{ duration: p.dur, delay: p.delay, ease: "easeIn" }}
-          style={{
-            position: "absolute",
-            top: 0,
-            width: p.size,
-            height: p.size * 0.45,
-            borderRadius: 1,
-            background: p.color,
-          }}
+          style={{ position: "absolute", top: 0, width: p.size, height: p.size * 0.4, borderRadius: 1, background: p.color }}
         />
       ))}
     </div>
   );
 }
 
-// ── Feature card ───────────────────────────────────────────────────────────────
-function FeatureCard({
-  feature,
-  index,
-}: {
-  feature: (typeof FEATURES)[number];
-  index: number;
-}) {
-  const Icon = feature.icon;
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: feature.from.x, y: feature.from.y, rotate: feature.from.rotate, scale: 0.85 }}
-      animate={{ opacity: 1, x: 0, y: 0, rotate: 0, scale: 1 }}
-      transition={{ duration: 0.45, delay: index * 0.12, ease: [0.22, 1, 0.36, 1] }}
-      style={{
-        background: "rgba(255,255,255,0.03)",
-        border: `1px solid ${feature.color}28`,
-        borderRadius: 10,
-        padding: "12px 14px",
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        boxShadow: `0 0 20px ${feature.glow}`,
-      }}
-    >
-      <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 8,
-          background: `${feature.color}15`,
-          border: `1px solid ${feature.color}30`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        <Icon size={16} color={feature.color} />
-      </div>
-      <div>
-        <p style={{ margin: 0, fontSize: "0.82rem", fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.01em" }}>
-          {feature.label}
-        </p>
-        <p style={{ margin: 0, fontSize: "0.72rem", color: "rgba(100,116,139,0.7)", lineHeight: 1.4 }}>
-          {feature.desc}
-        </p>
-      </div>
-    </motion.div>
-  );
+// ── Spotlight overlay ─────────────────────────────────────────────────────────
+interface SpotlightRect { top: number; left: number; width: number; height: number }
+
+function useContentRect(): SpotlightRect | null {
+  const [rect, setRect] = useState<SpotlightRect | null>(null);
+  useLayoutEffect(() => {
+    function measure() {
+      const el = document.querySelector(".app-content") as HTMLElement | null;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  return rect;
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export function OnboardingFlow() {
   const { user, isAuthenticated, markOnboarded } = useAuthStore();
+  const router = useRouter();
 
-  const [step, setStep] = useState<Step>(0);
+  const [stepIdx, setStepIdx] = useState<StepIdx>(-1);
   const [visible, setVisible] = useState(false);
   const [selectedMarket, setMarket] = useState<Market | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [navReady, setNavReady] = useState(false);
   const markedRef = useRef(false);
+  const contentRect = useContentRect();
 
-  // Show for new users (is_onboarded === false) or on replay request
+  // Show for new users
   useEffect(() => {
-    if (isAuthenticated && user && user.is_onboarded === false) {
+    if (isAuthenticated && user && user.is_onboarded === false && !markedRef.current) {
+      setStepIdx(-1);
       setVisible(true);
-      if (!markedRef.current) {
-        markedRef.current = true;
-      }
     }
   }, [isAuthenticated, user]);
 
-  // Listen for replay event dispatched by BottomSheetSettings
+  // Replay event from settings
   useEffect(() => {
     const handler = () => {
-      setStep(0);
+      setStepIdx(-1);
       setMarket(null);
+      setNavReady(false);
       setVisible(true);
     };
     window.addEventListener("restart-tour", handler);
     return () => window.removeEventListener("restart-tour", handler);
   }, []);
 
+  // Escape key
   useEffect(() => {
-    const fn = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && visible) dismiss();
-    };
+    const fn = (e: KeyboardEvent) => { if (e.key === "Escape" && visible) handleSkip(); };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
   }, [visible]);
 
-  const dismiss = () => setVisible(false);
+  // Navigate when a tour step activates
+  useEffect(() => {
+    if (stepIdx >= 0 && stepIdx <= 3) {
+      setNavReady(false);
+      const step = TOUR_STEPS[stepIdx as 0 | 1 | 2 | 3];
+      router.push(`/app${step.path}`);
+      // Small delay to let the page transition start
+      const t = setTimeout(() => setNavReady(true), 420);
+      return () => clearTimeout(t);
+    }
+  }, [stepIdx]);
 
   const handleSkip = async () => {
-    await markOnboarded(selectedMarket ?? undefined);
-    setStep(3); // jump to congrats
+    if (!markedRef.current) {
+      markedRef.current = true;
+      await markOnboarded(selectedMarket ?? undefined);
+    }
+    setVisible(false);
   };
 
-  const handleMarketNext = async () => {
-    if (selectedMarket) await markOnboarded(selectedMarket);
-    setStep(3);
-  };
-
-  const handleFinish = () => {
-    dismiss();
+  const handleNext = () => {
+    if (stepIdx === -1) {
+      setStepIdx(0);
+    } else if (stepIdx >= 0 && stepIdx < 3) {
+      setStepIdx((stepIdx + 1) as StepIdx);
+    } else if (stepIdx === 3) {
+      setStepIdx(4);
+    } else if (stepIdx === 4) {
+      if (!markedRef.current) {
+        markedRef.current = true;
+        markOnboarded(selectedMarket ?? undefined);
+      }
+      setStepIdx(5);
+    } else if (stepIdx === 5) {
+      setVisible(false);
+    }
   };
 
   if (!visible) return null;
 
-  return (
-    <>
-      {/* Backdrop */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        style={{ position: "fixed", inset: 0, zIndex: 9990, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
-      />
+  const isTourStep = stepIdx >= 0 && stepIdx <= 3;
+  const currentTour = isTourStep ? TOUR_STEPS[stepIdx as 0 | 1 | 2 | 3] : null;
 
-      {/* Card container */}
-      <div style={{ position: "fixed", inset: 0, zIndex: 9991, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-        <AnimatePresence mode="wait">
+  // ── Welcome card (centered) ───────────────────────────────────────────────
+  if (stepIdx === -1) {
+    return (
+      <>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9990, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }} />
+        <div style={{ position: "fixed", inset: 0, zIndex: 9991, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <motion.div
-            key={step}
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+            initial={{ opacity: 0, y: 20, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -12, scale: 0.97 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             style={{
-              pointerEvents: "auto",
-              width: "min(420px, calc(100vw - 24px))",
+              width: "min(420px, calc(100vw - 28px))",
               background: "#080815",
-              border: "1px solid rgba(255,255,255,0.07)",
-              borderRadius: 16,
+              border: "1px solid rgba(124,111,224,0.2)",
+              borderRadius: 18,
               overflow: "hidden",
-              boxShadow: "0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(124,111,224,0.08)",
+              boxShadow: `0 40px 100px rgba(0,0,0,0.8), 0 0 0 1px rgba(124,111,224,0.08)`,
+              padding: "32px 28px 28px",
               position: "relative",
             }}
           >
-            {/* Ambient glow top */}
-            <div style={{ position: "absolute", top: -40, left: "30%", right: "30%", height: 80, background: `radial-gradient(ellipse, ${ACCENT}20, transparent 70%)`, pointerEvents: "none" }} />
+            {/* top glow */}
+            <div style={{ position: "absolute", top: -50, left: "20%", right: "20%", height: 100, background: `radial-gradient(ellipse, ${ACCENT}25, transparent 70%)`, pointerEvents: "none" }} />
 
-            {/* Header bar with progress */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-              {/* Step dots */}
-              <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                {([0, 1, 2, 3] as Step[]).map((s) => (
+            <button
+              onClick={handleSkip}
+              style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", cursor: "pointer", color: "rgba(100,116,139,0.4)", padding: 4, borderRadius: 6 }}
+            >
+              <X size={16} />
+            </button>
+
+            {/* Icon row */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
+              {TOUR_STEPS.map((s, i) => {
+                const Icon = s.icon;
+                return (
                   <motion.div
-                    key={s}
-                    animate={{
-                      width: s === step ? 18 : 5,
-                      background: s === step ? ACCENT : s < step ? `${ACCENT}55` : "rgba(255,255,255,0.08)",
-                    }}
-                    style={{ height: 4, borderRadius: 2 }}
-                    transition={{ duration: 0.25 }}
-                  />
-                ))}
-              </div>
-              {step < 3 && (
-                <button
-                  onClick={handleSkip}
-                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.7rem", color: "rgba(100,116,139,0.45)", fontFamily: "inherit", letterSpacing: "0.04em", padding: 0, lineHeight: 1 }}
-                  onMouseEnter={e => (e.currentTarget.style.color = "rgba(148,163,184,0.7)")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "rgba(100,116,139,0.45)")}
-                >
-                  skip all
-                </button>
-              )}
+                    key={s.navId}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: [0, -4, 0] }}
+                    transition={{ opacity: { duration: 0.3, delay: i * 0.08 }, y: { duration: 2.5 + i * 0.3, repeat: Infinity, ease: "easeInOut", delay: 0.6 + i * 0.15 } }}
+                    style={{ width: 44, height: 44, borderRadius: 12, background: `${s.color}12`, border: `1px solid ${s.color}28`, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Icon size={18} color={s.color} />
+                  </motion.div>
+                );
+              })}
             </div>
 
-            {/* Body */}
-            <div style={{ padding: "26px 22px 22px" }}>
+            <h2 style={{ margin: 0, fontSize: "1.4rem", fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.03em", lineHeight: 1.2 }}>
+              {user?.name ? `Welcome, ${user.name.split(" ")[0]}` : "Welcome to TradeMind"}
+            </h2>
+            <p style={{ margin: "10px 0 0", fontSize: "0.84rem", color: "rgba(100,116,139,0.75)", lineHeight: 1.65 }}>
+              A 30-second tour of what's inside — we'll navigate to each section together.
+            </p>
 
-              {/* ── Step 0: Welcome ── */}
-              {step === 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-                  {/* Floating icon cluster */}
-                  <div style={{ position: "relative", height: 68, overflow: "visible" }}>
-                    {[
-                      { icon: TrendingUp, color: "#22d3ee", top: 8,  left: 12,  size: 32, delay: 0 },
-                      { icon: Brain,      color: "#a78bfa", top: 4,  left: 120, size: 38, delay: 0.1 },
-                      { icon: Users,      color: "#34d399", top: 20, left: 220, size: 30, delay: 0.15 },
-                      { icon: Zap,        color: "#fb923c", top: 10, left: 310, size: 28, delay: 0.2 },
-                    ].map(({ icon: Icon, color, top, left, size, delay }, i) => (
-                      <motion.div
-                        key={i}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: [0, -4, 0] }}
-                        transition={{ duration: 0.4, delay, y: { duration: 2.5 + i * 0.4, repeat: Infinity, ease: "easeInOut", delay: delay + 0.5 } }}
-                        style={{ position: "absolute", top, left, width: size, height: size, borderRadius: 10, background: `${color}15`, border: `1px solid ${color}30`, display: "flex", alignItems: "center", justifyContent: "center" }}
-                      >
-                        <Icon size={size * 0.5} color={color} />
-                      </motion.div>
-                    ))}
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <h2 style={{ margin: 0, fontSize: "1.35rem", fontWeight: 600, color: "#f1f5f9", letterSpacing: "-0.025em", lineHeight: 1.25 }}>
-                      {user?.name ? `Hey ${user.name.split(" ")[0]}, welcome` : "Welcome to TradeMind"}
-                    </h2>
-                    <p style={{ margin: 0, fontSize: "0.82rem", color: "rgba(100,116,139,0.75)", lineHeight: 1.65 }}>
-                      A quick tour of what's inside — takes under 30 seconds.
-                      <br />Or jump straight in.
-                    </p>
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <motion.button
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => setStep(1)}
-                      style={{ height: 38, paddingInline: 22, borderRadius: 8, cursor: "pointer", background: `linear-gradient(135deg, ${ACCENT}, #5b8dff)`, border: "none", color: "#fff", fontSize: "0.82rem", fontFamily: "inherit", fontWeight: 600, letterSpacing: "0.01em", display: "flex", alignItems: "center", gap: 6 }}
-                    >
-                      Show me around <ChevronRight size={14} />
-                    </motion.button>
-                    <button
-                      onClick={dismiss}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.8rem", color: "rgba(100,116,139,0.5)", fontFamily: "inherit", padding: 0 }}
-                      onMouseEnter={e => (e.currentTarget.style.color = "rgba(148,163,184,0.7)")}
-                      onMouseLeave={e => (e.currentTarget.style.color = "rgba(100,116,139,0.5)")}
-                    >
-                      Skip setup
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Step 1: Feature showcase ── */}
-              {step === 1 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                  <div>
-                    <motion.p initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} style={{ margin: 0, fontSize: "0.72rem", letterSpacing: "0.1em", color: "rgba(124,111,224,0.7)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
-                      What's inside
-                    </motion.p>
-                    <motion.h2 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} style={{ margin: 0, fontSize: "1.2rem", fontWeight: 600, color: "#f1f5f9", letterSpacing: "-0.02em" }}>
-                      Your full trading stack
-                    </motion.h2>
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {FEATURES.map((f, i) => (
-                      <FeatureCard key={f.label} feature={f} index={i} />
-                    ))}
-                  </div>
-
-                  <motion.button
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.55 }}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => setStep(2)}
-                    style={{ alignSelf: "flex-start", height: 36, paddingInline: 20, borderRadius: 8, cursor: "pointer", background: ACCENT, border: "none", color: "#fff", fontSize: "0.8rem", fontFamily: "inherit", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}
-                  >
-                    Next <ChevronRight size={13} />
-                  </motion.button>
-                </div>
-              )}
-
-              {/* ── Step 2: Market selection ── */}
-              {step === 2 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-                  <div>
-                    <motion.p initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} style={{ margin: 0, fontSize: "0.72rem", letterSpacing: "0.1em", color: "rgba(124,111,224,0.7)", fontFamily: "monospace", textTransform: "uppercase", marginBottom: 6 }}>
-                      Personalise
-                    </motion.p>
-                    <motion.h2 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} style={{ margin: 0, fontSize: "1.2rem", fontWeight: 600, color: "#f1f5f9", letterSpacing: "-0.02em" }}>
-                      What do you mainly trade?
-                    </motion.h2>
-                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} style={{ margin: "6px 0 0", fontSize: "0.78rem", color: "rgba(100,116,139,0.6)" }}>
-                      Tailors your Trader DNA and AI suggestions.
-                    </motion.p>
-                  </div>
-
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.12 }}
-                    style={{ display: "flex", flexWrap: "wrap", gap: 7 }}
-                  >
-                    {MARKETS.map((m) => {
-                      const active = selectedMarket === m;
-                      return (
-                        <motion.button
-                          key={m}
-                          whileHover={{ scale: 1.04 }}
-                          whileTap={{ scale: 0.96 }}
-                          onClick={() => setMarket(m)}
-                          style={{
-                            padding: "8px 16px", borderRadius: 8, cursor: "pointer",
-                            fontSize: "0.82rem", fontFamily: "inherit", fontWeight: active ? 600 : 400,
-                            background: active ? `${ACCENT}18` : "transparent",
-                            border: `1px solid ${active ? ACCENT + "55" : "rgba(255,255,255,0.08)"}`,
-                            color: active ? "#b4aeff" : "rgba(148,163,184,0.55)",
-                            transition: "all 0.15s ease",
-                          }}
-                        >
-                          {m}
-                        </motion.button>
-                      );
-                    })}
-                  </motion.div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <motion.button
-                      whileHover={{ scale: selectedMarket ? 1.03 : 1 }}
-                      whileTap={{ scale: selectedMarket ? 0.97 : 1 }}
-                      onClick={handleMarketNext}
-                      disabled={!selectedMarket}
-                      style={{ height: 38, paddingInline: 22, borderRadius: 8, cursor: selectedMarket ? "pointer" : "default", background: `linear-gradient(135deg, ${ACCENT}, #5b8dff)`, border: "none", color: "#fff", fontSize: "0.82rem", fontFamily: "inherit", fontWeight: 600, opacity: selectedMarket ? 1 : 0.35, display: "flex", alignItems: "center", gap: 6 }}
-                    >
-                      Continue <ChevronRight size={14} />
-                    </motion.button>
-                    <button
-                      onClick={() => { markOnboarded(undefined); setStep(3); }}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.8rem", color: "rgba(100,116,139,0.5)", fontFamily: "inherit", padding: 0 }}
-                      onMouseEnter={e => (e.currentTarget.style.color = "rgba(148,163,184,0.7)")}
-                      onMouseLeave={e => (e.currentTarget.style.color = "rgba(100,116,139,0.5)")}
-                    >
-                      Skip for now
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Step 3: Congratulations ── */}
-              {step === 3 && (
-                <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 22, alignItems: "center", textAlign: "center", paddingBlock: 8 }}>
-                  <Confetti />
-
-                  <motion.div
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: "spring", stiffness: 280, damping: 18 }}
-                    style={{ width: 64, height: 64, borderRadius: "50%", background: `linear-gradient(135deg, ${ACCENT}30, #5b8dff20)`, border: `2px solid ${ACCENT}50`, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}
-                  >
-                    <motion.div
-                      animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] }}
-                      transition={{ duration: 0.6, delay: 0.3 }}
-                    >
-                      <Sparkles size={26} color={ACCENT} />
-                    </motion.div>
-                    {/* Rings */}
-                    {[1, 2].map(r => (
-                      <motion.div
-                        key={r}
-                        initial={{ scale: 1, opacity: 0.6 }}
-                        animate={{ scale: 1 + r * 0.5, opacity: 0 }}
-                        transition={{ duration: 1.2, delay: 0.2 + r * 0.15, repeat: Infinity }}
-                        style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `1px solid ${ACCENT}60` }}
-                      />
-                    ))}
-                  </motion.div>
-
-                  <div>
-                    <motion.h2
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.25 }}
-                      style={{ margin: 0, fontSize: "1.3rem", fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.025em" }}
-                    >
-                      You're all set!
-                    </motion.h2>
-                    <motion.p
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.35 }}
-                      style={{ margin: "8px 0 0", fontSize: "0.83rem", color: "rgba(100,116,139,0.7)", lineHeight: 1.6 }}
-                    >
-                      TradeMind is ready. Start logging trades to<br />activate your Trader DNA.
-                    </motion.p>
-                  </div>
-
-                  {/* Checklist */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.45 }}
-                    style={{ width: "100%", display: "flex", flexDirection: "column", gap: 6 }}
-                  >
-                    {[
-                      { label: "Journal ready", color: "#22d3ee" },
-                      { label: "Trader DNA unlocked after 5 trades", color: "#a78bfa" },
-                      { label: "AI Mentor available now", color: "#34d399" },
-                    ].map((item, i) => (
-                      <motion.div
-                        key={item.label}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.5 + i * 0.1 }}
-                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", background: `${item.color}08`, borderRadius: 8, border: `1px solid ${item.color}18` }}
-                      >
-                        <div style={{ width: 18, height: 18, borderRadius: "50%", background: `${item.color}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <Check size={11} color={item.color} />
-                        </div>
-                        <span style={{ fontSize: "0.78rem", color: "rgba(148,163,184,0.8)" }}>{item.label}</span>
-                      </motion.div>
-                    ))}
-                  </motion.div>
-
-                  <motion.button
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.75 }}
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={handleFinish}
-                    style={{ width: "100%", height: 42, borderRadius: 10, cursor: "pointer", background: `linear-gradient(135deg, ${ACCENT}, #5b8dff)`, border: "none", color: "#fff", fontSize: "0.88rem", fontFamily: "inherit", fontWeight: 600, letterSpacing: "0.01em", boxShadow: `0 0 24px ${ACCENT}30` }}
-                  >
-                    Start exploring TradeMind →
-                  </motion.button>
-                </div>
-              )}
-
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 28 }}>
+              <motion.button
+                whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                onClick={handleNext}
+                style={{ height: 40, paddingInline: 24, borderRadius: 10, cursor: "pointer", background: `linear-gradient(135deg, ${ACCENT}, #5b8dff)`, border: "none", color: "#fff", fontSize: "0.84rem", fontFamily: "inherit", fontWeight: 600, display: "flex", alignItems: "center", gap: 7, boxShadow: `0 0 20px ${ACCENT}35` }}
+              >
+                Start the tour <ChevronRight size={15} />
+              </motion.button>
+              <button
+                onClick={handleSkip}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.8rem", color: "rgba(100,116,139,0.5)", fontFamily: "inherit", padding: 0 }}
+              >
+                Skip for now
+              </button>
             </div>
           </motion.div>
-        </AnimatePresence>
+        </div>
+      </>
+    );
+  }
+
+  // ── Spotlight tour steps ──────────────────────────────────────────────────
+  if (isTourStep && currentTour) {
+    const Icon = currentTour.icon;
+    const stepNum = (stepIdx as number) + 1;
+    const totalSteps = TOUR_STEPS.length;
+
+    return (
+      <>
+        {/* Click blocker */}
+        <div style={{ position: "fixed", inset: 0, zIndex: 9988 }} />
+
+        {/* Spotlight window — shows content area through the dark overlay */}
+        {contentRect && (
+          <motion.div
+            key={`spotlight-${stepIdx}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            style={{
+              position: "fixed",
+              top: contentRect.top,
+              left: contentRect.left,
+              width: contentRect.width,
+              height: contentRect.height,
+              zIndex: 9989,
+              boxShadow: `0 0 0 9999px rgba(0,0,0,0.72)`,
+              border: `1.5px solid rgba(${currentTour.glow},0.35)`,
+              borderRadius: 4,
+              pointerEvents: "none",
+            }}
+          />
+        )}
+        {!contentRect && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 9989, background: "rgba(0,0,0,0.72)", pointerEvents: "none" }} />
+        )}
+
+        {/* Tooltip card — positioned inside the content area */}
+        {contentRect && (
+          <motion.div
+            key={`tooltip-${stepIdx}`}
+            initial={{ opacity: 0, y: -12, scale: 0.96 }}
+            animate={{ opacity: navReady ? 1 : 0, y: navReady ? 0 : -12, scale: navReady ? 1 : 0.96 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              position: "fixed",
+              top: contentRect.top + 16,
+              right: Math.max(16, window.innerWidth - contentRect.left - contentRect.width + 16),
+              width: "min(320px, calc(100vw - 32px))",
+              zIndex: 9995,
+              background: "rgba(8,9,20,0.97)",
+              border: `1px solid rgba(${currentTour.glow},0.3)`,
+              borderRadius: 14,
+              overflow: "hidden",
+              boxShadow: `0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(${currentTour.glow},0.08), 0 0 40px rgba(${currentTour.glow},0.12)`,
+              backdropFilter: "blur(20px)",
+            }}
+          >
+            {/* Color accent bar */}
+            <div style={{ height: 3, background: `linear-gradient(90deg, ${currentTour.color}80, transparent)` }} />
+
+            <div style={{ padding: "16px 18px 18px" }}>
+              {/* Step counter */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {TOUR_STEPS.map((_, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        height: 3,
+                        width: i === stepIdx ? 20 : 6,
+                        borderRadius: 2,
+                        background: i <= stepIdx ? currentTour.color : "rgba(255,255,255,0.1)",
+                        transition: "all 0.25s",
+                      }}
+                    />
+                  ))}
+                </div>
+                <span style={{ fontSize: "0.68rem", fontFamily: "monospace", color: "rgba(100,116,139,0.45)", letterSpacing: "0.08em" }}>
+                  {String(stepNum).padStart(2, "0")}/{String(totalSteps).padStart(2, "0")}
+                </span>
+              </div>
+
+              {/* Icon + label */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 9, background: `rgba(${currentTour.glow},0.12)`, border: `1px solid rgba(${currentTour.glow},0.25)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Icon size={16} color={currentTour.color} />
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: "0.7rem", letterSpacing: "0.08em", color: currentTour.color, fontFamily: "monospace", textTransform: "uppercase", opacity: 0.8 }}>
+                    {currentTour.label}
+                  </p>
+                  <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+                    {currentTour.headline}
+                  </p>
+                </div>
+              </div>
+
+              <p style={{ margin: 0, fontSize: "0.78rem", color: "rgba(148,163,184,0.7)", lineHeight: 1.6, marginBottom: 16 }}>
+                {currentTour.desc}
+              </p>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <motion.button
+                  whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                  onClick={handleNext}
+                  style={{
+                    height: 36, paddingInline: 18, borderRadius: 8, cursor: "pointer",
+                    background: `linear-gradient(135deg, rgba(${currentTour.glow},0.3), rgba(${currentTour.glow},0.15))`,
+                    border: `1px solid rgba(${currentTour.glow},0.4)`,
+                    color: currentTour.color, fontSize: "0.8rem", fontFamily: "inherit", fontWeight: 600,
+                    display: "flex", alignItems: "center", gap: 5,
+                  }}
+                >
+                  {stepIdx === 3 ? "Personalise →" : "Next →"}
+                </motion.button>
+                <button
+                  onClick={handleSkip}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", color: "rgba(100,116,139,0.4)", fontFamily: "inherit", padding: 0 }}
+                >
+                  Skip tour
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Loading indicator while navigating */}
+        {!navReady && contentRect && (
+          <div style={{ position: "fixed", top: contentRect.top + contentRect.height / 2 - 20, left: contentRect.left + contentRect.width / 2 - 20, zIndex: 9994 }}>
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              style={{ width: 40, height: 40, borderRadius: "50%", border: `2px solid ${currentTour.color}30`, borderTopColor: currentTour.color }}
+            />
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // ── Market selection (step 4) ─────────────────────────────────────────────
+  if (stepIdx === 4) {
+    return (
+      <>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9990, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }} />
+        <div style={{ position: "fixed", inset: 0, zIndex: 9991, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            style={{ width: "min(400px, calc(100vw - 28px))", background: "#080815", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 18, overflow: "hidden", boxShadow: "0 40px 100px rgba(0,0,0,0.8)", padding: "30px 26px 26px", position: "relative" }}
+          >
+            <div style={{ position: "absolute", top: -40, left: "25%", right: "25%", height: 80, background: `radial-gradient(ellipse, ${ACCENT}20, transparent 70%)`, pointerEvents: "none" }} />
+
+            <p style={{ margin: 0, fontSize: "0.7rem", letterSpacing: "0.1em", color: `${ACCENT}bb`, fontFamily: "monospace", textTransform: "uppercase", marginBottom: 8 }}>
+              Personalise
+            </p>
+            <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.025em" }}>
+              What do you mainly trade?
+            </h2>
+            <p style={{ margin: "8px 0 0", fontSize: "0.8rem", color: "rgba(100,116,139,0.6)" }}>
+              Tailors your Trader DNA and AI suggestions.
+            </p>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 20 }}>
+              {MARKETS.map((m) => {
+                const active = selectedMarket === m;
+                return (
+                  <motion.button
+                    key={m}
+                    whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                    onClick={() => setMarket(m)}
+                    style={{ padding: "8px 18px", borderRadius: 10, cursor: "pointer", fontSize: "0.83rem", fontFamily: "inherit", fontWeight: active ? 600 : 400, background: active ? `${ACCENT}18` : "transparent", border: `1px solid ${active ? ACCENT + "55" : "rgba(255,255,255,0.08)"}`, color: active ? "#b4aeff" : "rgba(148,163,184,0.55)", transition: "all 0.15s" }}
+                  >
+                    {m}
+                  </motion.button>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 24 }}>
+              <motion.button
+                whileHover={{ scale: selectedMarket ? 1.03 : 1 }} whileTap={{ scale: selectedMarket ? 0.97 : 1 }}
+                onClick={handleNext}
+                disabled={!selectedMarket}
+                style={{ height: 38, paddingInline: 22, borderRadius: 9, cursor: selectedMarket ? "pointer" : "default", background: `linear-gradient(135deg, ${ACCENT}, #5b8dff)`, border: "none", color: "#fff", fontSize: "0.82rem", fontFamily: "inherit", fontWeight: 600, opacity: selectedMarket ? 1 : 0.35, display: "flex", alignItems: "center", gap: 6 }}
+              >
+                Continue <ChevronRight size={14} />
+              </motion.button>
+              <button
+                onClick={() => { markOnboarded(undefined); setStepIdx(5); }}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.79rem", color: "rgba(100,116,139,0.5)", fontFamily: "inherit", padding: 0 }}
+              >
+                Skip for now
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      </>
+    );
+  }
+
+  // ── Congratulations (step 5) ──────────────────────────────────────────────
+  return (
+    <>
+      <div style={{ position: "fixed", inset: 0, zIndex: 9990, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }} />
+      <div style={{ position: "fixed", inset: 0, zIndex: 9991, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <motion.div
+          initial={{ opacity: 0, y: 16, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          style={{ width: "min(400px, calc(100vw - 28px))", background: "#080815", border: "1px solid rgba(124,111,224,0.15)", borderRadius: 18, overflow: "hidden", boxShadow: "0 40px 100px rgba(0,0,0,0.8)", padding: "32px 26px 28px", position: "relative", textAlign: "center" }}
+        >
+          <Confetti />
+
+          <motion.div
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 260, damping: 18 }}
+            style={{ width: 68, height: 68, borderRadius: "50%", background: `${ACCENT}20`, border: `2px solid ${ACCENT}45`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", position: "relative" }}
+          >
+            <Sparkles size={28} color={ACCENT} />
+            {[1, 2].map(r => (
+              <motion.div
+                key={r}
+                initial={{ scale: 1, opacity: 0.6 }}
+                animate={{ scale: 1 + r * 0.55, opacity: 0 }}
+                transition={{ duration: 1.3, delay: 0.2 + r * 0.15, repeat: Infinity }}
+                style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `1px solid ${ACCENT}55` }}
+              />
+            ))}
+          </motion.div>
+
+          <motion.h2
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            style={{ margin: 0, fontSize: "1.4rem", fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.025em" }}
+          >
+            You're all set!
+          </motion.h2>
+          <motion.p
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+            style={{ margin: "8px 0 0", fontSize: "0.82rem", color: "rgba(100,116,139,0.7)", lineHeight: 1.65 }}
+          >
+            TradeMind is ready. Start logging trades to activate your Trader DNA.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.42 }}
+            style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 20 }}
+          >
+            {[
+              { label: "Journal ready", color: "#22d3ee" },
+              { label: "Trader DNA unlocks after 5 trades", color: "#a78bfa" },
+              { label: "AI Mentor accessible from main screen", color: "#34d399" },
+            ].map((item, i) => (
+              <motion.div
+                key={item.label}
+                initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.48 + i * 0.08 }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", background: `${item.color}07`, borderRadius: 8, border: `1px solid ${item.color}18` }}
+              >
+                <div style={{ width: 18, height: 18, borderRadius: "50%", background: `${item.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Check size={11} color={item.color} />
+                </div>
+                <span style={{ fontSize: "0.77rem", color: "rgba(148,163,184,0.8)" }}>{item.label}</span>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          <motion.button
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.72 }}
+            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+            onClick={handleNext}
+            style={{ width: "100%", height: 44, borderRadius: 11, cursor: "pointer", background: `linear-gradient(135deg, ${ACCENT}, #5b8dff)`, border: "none", color: "#fff", fontSize: "0.88rem", fontFamily: "inherit", fontWeight: 600, marginTop: 22, boxShadow: `0 0 28px ${ACCENT}30` }}
+          >
+            Start exploring TradeMind →
+          </motion.button>
+        </motion.div>
       </div>
     </>
   );

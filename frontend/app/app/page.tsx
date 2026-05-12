@@ -44,6 +44,15 @@ export default function DashboardPage() {
       url.searchParams.delete("billing");
       window.history.replaceState({}, "", url.toString());
     }
+
+    // Global upgrade modal trigger (dispatched by FeatureGate / any component)
+    const handleOpenUpgrade = (e: Event) => {
+      const plan = (e as CustomEvent).detail?.plan as Plan;
+      if (plan === "edge" || plan === "apex") setUpgradePlan(plan);
+      setUpgradeModalOpen(true);
+    };
+    window.addEventListener("open-upgrade-modal", handleOpenUpgrade);
+    return () => window.removeEventListener("open-upgrade-modal", handleOpenUpgrade);
   }, [init]);
 
   if (!mounted) return null;
