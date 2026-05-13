@@ -85,6 +85,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       register: async (email: string, password: string, name?: string) => {
+        localStorage.removeItem("trademind-trades");
         set({ isLoading: true, error: null });
         try {
           const response = await fetch("/api/auth/register", {
@@ -114,6 +115,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       login: async (email: string, password: string) => {
+        localStorage.removeItem("trademind-trades");
         set({ isLoading: true, error: null });
         try {
           const response = await fetch("/api/auth/login", {
@@ -153,6 +155,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       loginWithGoogle: async (accessToken: string) => {
+        localStorage.removeItem("trademind-trades");
         set({ isLoading: true, error: null });
         try {
           const res = await fetch("/api/auth/google", {
@@ -182,6 +185,7 @@ export const useAuthStore = create<AuthState>()(
         if (typeof window !== "undefined") posthog.reset();
         set({ user: null, token: null, isAuthenticated: false });
         localStorage.removeItem("access_token");
+        localStorage.removeItem("trademind-trades");
       },
 
       fetchCurrentUser: async () => {

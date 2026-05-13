@@ -91,19 +91,31 @@ function Confetti() {
 // ── Spotlight overlay ─────────────────────────────────────────────────────────
 interface SpotlightRect { top: number; left: number; width: number; height: number }
 
-function useContentRect(): SpotlightRect | null {
-  const [rect, setRect] = useState<SpotlightRect | null>(null);
+function useContentRect(stepIdx: number): SpotlightRect {
+  const getViewport = () => ({
+    top: 0, left: 0,
+    width: typeof window !== "undefined" ? window.innerWidth : 1280,
+    height: typeof window !== "undefined" ? window.innerHeight : 800,
+  });
+  const [rect, setRect] = useState<SpotlightRect>(getViewport);
+
   useLayoutEffect(() => {
     function measure() {
       const el = document.querySelector(".app-content") as HTMLElement | null;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      if (el) {
+        const r = el.getBoundingClientRect();
+        setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      } else {
+        setRect(getViewport());
+      }
     }
     measure();
+    // Re-measure after route transition settles
+    const t = setTimeout(measure, 250);
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, []);
+    return () => { clearTimeout(t); window.removeEventListener("resize", measure); };
+  }, [stepIdx]);
+
   return rect;
 }
 
@@ -117,7 +129,7 @@ export function OnboardingFlow() {
   const [selectedMarket, setMarket] = useState<Market | null>(null);
   const [navReady, setNavReady] = useState(false);
   const markedRef = useRef(false);
-  const contentRect = useContentRect();
+  const contentRect = useContentRect(stepIdx);
 
   // Show for new users
   useEffect(() => {
@@ -151,7 +163,7 @@ export function OnboardingFlow() {
     if (stepIdx >= 0 && stepIdx <= 3) {
       setNavReady(false);
       const step = TOUR_STEPS[stepIdx as 0 | 1 | 2 | 3];
-      router.push(`/app${step.path}`);
+      router.push(step.path);
       // Small delay to let the page transition start
       const t = setTimeout(() => setNavReady(true), 420);
       return () => clearTimeout(t);
@@ -278,122 +290,115 @@ export function OnboardingFlow() {
         <div style={{ position: "fixed", inset: 0, zIndex: 9988 }} />
 
         {/* Spotlight window — shows content area through the dark overlay */}
-        {contentRect && (
-          <motion.div
-            key={`spotlight-${stepIdx}`}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-            style={{
-              position: "fixed",
-              top: contentRect.top,
-              left: contentRect.left,
-              width: contentRect.width,
-              height: contentRect.height,
-              zIndex: 9989,
-              boxShadow: `0 0 0 9999px rgba(0,0,0,0.72)`,
-              border: `1.5px solid rgba(${currentTour.glow},0.35)`,
-              borderRadius: 4,
-              pointerEvents: "none",
-            }}
-          />
-        )}
-        {!contentRect && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 9989, background: "rgba(0,0,0,0.72)", pointerEvents: "none" }} />
-        )}
+        <motion.div
+          key={`spotlight-${stepIdx}`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          style={{
+            position: "fixed",
+            top: contentRect.top,
+            left: contentRect.left,
+            width: contentRect.width,
+            height: contentRect.height,
+            zIndex: 9989,
+            boxShadow: `0 0 0 9999px rgba(0,0,0,0.72)`,
+            border: `1.5px solid rgba(${currentTour.glow},0.35)`,
+            borderRadius: 4,
+            pointerEvents: "none",
+          }}
+        />
 
         {/* Tooltip card — positioned inside the content area */}
-        {contentRect && (
-          <motion.div
-            key={`tooltip-${stepIdx}`}
-            initial={{ opacity: 0, y: -12, scale: 0.96 }}
-            animate={{ opacity: navReady ? 1 : 0, y: navReady ? 0 : -12, scale: navReady ? 1 : 0.96 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            style={{
-              position: "fixed",
-              top: contentRect.top + 16,
-              right: Math.max(16, window.innerWidth - contentRect.left - contentRect.width + 16),
-              width: "min(320px, calc(100vw - 32px))",
-              zIndex: 9995,
-              background: "rgba(8,9,20,0.97)",
-              border: `1px solid rgba(${currentTour.glow},0.3)`,
-              borderRadius: 14,
-              overflow: "hidden",
-              boxShadow: `0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(${currentTour.glow},0.08), 0 0 40px rgba(${currentTour.glow},0.12)`,
-              backdropFilter: "blur(20px)",
-            }}
-          >
-            {/* Color accent bar */}
-            <div style={{ height: 3, background: `linear-gradient(90deg, ${currentTour.color}80, transparent)` }} />
+        <motion.div
+          key={`tooltip-${stepIdx}`}
+          initial={{ opacity: 0, y: -12, scale: 0.96 }}
+          animate={{ opacity: navReady ? 1 : 0, y: navReady ? 0 : -12, scale: navReady ? 1 : 0.96 }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            position: "fixed",
+            top: contentRect.top + 16,
+            right: Math.max(16, window.innerWidth - contentRect.left - contentRect.width + 16),
+            width: "min(320px, calc(100vw - 32px))",
+            zIndex: 9995,
+            background: "rgba(8,9,20,0.97)",
+            border: `1px solid rgba(${currentTour.glow},0.3)`,
+            borderRadius: 14,
+            overflow: "hidden",
+            boxShadow: `0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(${currentTour.glow},0.08), 0 0 40px rgba(${currentTour.glow},0.12)`,
+            backdropFilter: "blur(20px)",
+          }}
+        >
+          {/* Color accent bar */}
+          <div style={{ height: 3, background: `linear-gradient(90deg, ${currentTour.color}80, transparent)` }} />
 
-            <div style={{ padding: "16px 18px 18px" }}>
-              {/* Step counter */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {TOUR_STEPS.map((_, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        height: 3,
-                        width: i === stepIdx ? 20 : 6,
-                        borderRadius: 2,
-                        background: i <= stepIdx ? currentTour.color : "rgba(255,255,255,0.1)",
-                        transition: "all 0.25s",
-                      }}
-                    />
-                  ))}
-                </div>
-                <span style={{ fontSize: "0.68rem", fontFamily: "monospace", color: "rgba(100,116,139,0.45)", letterSpacing: "0.08em" }}>
-                  {String(stepNum).padStart(2, "0")}/{String(totalSteps).padStart(2, "0")}
-                </span>
+          <div style={{ padding: "16px 18px 18px" }}>
+            {/* Step counter */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                {TOUR_STEPS.map((_, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      height: 3,
+                      width: i === stepIdx ? 20 : 6,
+                      borderRadius: 2,
+                      background: i <= stepIdx ? currentTour.color : "rgba(255,255,255,0.1)",
+                      transition: "all 0.25s",
+                    }}
+                  />
+                ))}
               </div>
+              <span style={{ fontSize: "0.68rem", fontFamily: "monospace", color: "rgba(100,116,139,0.45)", letterSpacing: "0.08em" }}>
+                {String(stepNum).padStart(2, "0")}/{String(totalSteps).padStart(2, "0")}
+              </span>
+            </div>
 
-              {/* Icon + label */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 9, background: `rgba(${currentTour.glow},0.12)`, border: `1px solid rgba(${currentTour.glow},0.25)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <Icon size={16} color={currentTour.color} />
-                </div>
-                <div>
-                  <p style={{ margin: 0, fontSize: "0.7rem", letterSpacing: "0.08em", color: currentTour.color, fontFamily: "monospace", textTransform: "uppercase", opacity: 0.8 }}>
-                    {currentTour.label}
-                  </p>
-                  <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-                    {currentTour.headline}
-                  </p>
-                </div>
+            {/* Icon + label */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 9, background: `rgba(${currentTour.glow},0.12)`, border: `1px solid rgba(${currentTour.glow},0.25)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon size={16} color={currentTour.color} />
               </div>
-
-              <p style={{ margin: 0, fontSize: "0.78rem", color: "rgba(148,163,184,0.7)", lineHeight: 1.6, marginBottom: 16 }}>
-                {currentTour.desc}
-              </p>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <motion.button
-                  whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                  onClick={handleNext}
-                  style={{
-                    height: 36, paddingInline: 18, borderRadius: 8, cursor: "pointer",
-                    background: `linear-gradient(135deg, rgba(${currentTour.glow},0.3), rgba(${currentTour.glow},0.15))`,
-                    border: `1px solid rgba(${currentTour.glow},0.4)`,
-                    color: currentTour.color, fontSize: "0.8rem", fontFamily: "inherit", fontWeight: 600,
-                    display: "flex", alignItems: "center", gap: 5,
-                  }}
-                >
-                  {stepIdx === 3 ? "Personalise →" : "Next →"}
-                </motion.button>
-                <button
-                  onClick={handleSkip}
-                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", color: "rgba(100,116,139,0.4)", fontFamily: "inherit", padding: 0 }}
-                >
-                  Skip tour
-                </button>
+              <div>
+                <p style={{ margin: 0, fontSize: "0.7rem", letterSpacing: "0.08em", color: currentTour.color, fontFamily: "monospace", textTransform: "uppercase", opacity: 0.8 }}>
+                  {currentTour.label}
+                </p>
+                <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+                  {currentTour.headline}
+                </p>
               </div>
             </div>
-          </motion.div>
-        )}
+
+            <p style={{ margin: 0, fontSize: "0.78rem", color: "rgba(148,163,184,0.7)", lineHeight: 1.6, marginBottom: 16 }}>
+              {currentTour.desc}
+            </p>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <motion.button
+                whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                onClick={handleNext}
+                style={{
+                  height: 36, paddingInline: 18, borderRadius: 8, cursor: "pointer",
+                  background: `linear-gradient(135deg, rgba(${currentTour.glow},0.3), rgba(${currentTour.glow},0.15))`,
+                  border: `1px solid rgba(${currentTour.glow},0.4)`,
+                  color: currentTour.color, fontSize: "0.8rem", fontFamily: "inherit", fontWeight: 600,
+                  display: "flex", alignItems: "center", gap: 5,
+                }}
+              >
+                {stepIdx === 3 ? "Personalise →" : "Next →"}
+              </motion.button>
+              <button
+                onClick={handleSkip}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", color: "rgba(100,116,139,0.4)", fontFamily: "inherit", padding: 0 }}
+              >
+                Skip tour
+              </button>
+            </div>
+          </div>
+        </motion.div>
 
         {/* Loading indicator while navigating */}
-        {!navReady && contentRect && (
+        {!navReady && (
           <div style={{ position: "fixed", top: contentRect.top + contentRect.height / 2 - 20, left: contentRect.left + contentRect.width / 2 - 20, zIndex: 9994 }}>
             <motion.div
               animate={{ rotate: 360 }}

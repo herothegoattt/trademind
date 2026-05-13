@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import Script from "next/script";
 import { PostHogProvider } from "../components/posthog/PostHogProvider";
 import { GoogleAuthProvider } from "../components/providers/GoogleAuthProvider";
+import { OnboardingFlow } from "../components/OnboardingFlow";
 import type { Metadata } from "next";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -125,6 +126,7 @@ export default function RootLayout({
         <PostHogProvider>
           <GoogleAuthProvider>
             {children}
+            <OnboardingFlow />
           </GoogleAuthProvider>
         </PostHogProvider>
       </body>

@@ -4,8 +4,6 @@ import { AppProviders } from "../../components/providers/AppProviders";
 import { SidebarNav } from "../../components/dashboard/SidebarNav";
 import { TopStatusBar } from "../../components/dashboard/TopStatusBar";
 import { ProtectedLayout } from "../../components/ProtectedLayout";
-import { OnboardingFlow } from "../../components/OnboardingFlow";
-
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <ProtectedLayout>
@@ -18,7 +16,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             {children}
           </div>
         </div>
-        <OnboardingFlow />
       </AppProviders>
     </ProtectedLayout>
   );
