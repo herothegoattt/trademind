@@ -9,7 +9,7 @@ import {
   ChatMessage,
 } from "./types";
 import * as api from "./api";
-import { getLang, setLang, Lang } from "./i18n";
+import { getLang, setLang, Lang, t } from "./i18n";
 
 function readLang(): Lang {
   if (typeof window === 'undefined') return getLang();
@@ -123,12 +123,29 @@ export const useDashboardStore = create<DashboardState>()(devtools((set, get) =>
         set({ chatMessages: [...latestState.chatMessages, assistantMsg] });
       } catch (error: any) {
         const latestState = get() as DashboardState;
+        let text: string;
+
+        if (error?.code === "ai_quota_exceeded") {
+          const limit: number = error.limit ?? 3;
+          const resetsAt: string | null = error.resets_at ?? null;
+          let timeStr = "";
+          if (resetsAt) {
+            const d = new Date(resetsAt);
+            timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          }
+          const title = t("ai_quota_title");
+          const body = t("ai_quota_body")
+            .replace("{limit}", String(limit))
+            .replace("{time}", timeStr || "—");
+          text = `${title}\n\n${body}`;
+        } else {
+          text = t("ai_error");
+        }
+
         const errorMsg: ChatMessage = {
           id: (Date.now() + 2).toString(),
           role: "assistant",
-          text:
-            "Ошибка при обращении к AI‑ядру. Попробуйте ещё раз чуть позже." +
-            (error?.message ? `\n\nТехническая деталь: ${error.message}` : ""),
+          text,
           ts: Date.now(),
         };
         set({ chatMessages: [...latestState.chatMessages, errorMsg] });

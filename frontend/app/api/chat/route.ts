@@ -33,6 +33,8 @@ const LANG_MAP: Record<string, string> = {
   es: "Spanish",
 };
 
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -40,6 +42,36 @@ export async function POST(request: NextRequest) {
 
     if (!message?.trim()) {
       return NextResponse.json({ reply: "Please enter a message." }, { status: 400 });
+    }
+
+    // Extract auth token — client sends it in Authorization header
+    const authHeader = request.headers.get("authorization") || "";
+
+    // ── Quota enforcement via FastAPI ──────────────────────────────────────
+    if (authHeader) {
+      const quotaRes = await fetch(`${BACKEND_URL}/api/v1/ai/quota/consume`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+      }).catch(() => null);
+
+      if (quotaRes && quotaRes.status === 429) {
+        const detail = await quotaRes.json().catch(() => ({}));
+        return NextResponse.json(
+          {
+            error: "ai_quota_exceeded",
+            limit: detail?.detail?.limit ?? 3,
+            resets_at: detail?.detail?.resets_at ?? null,
+          },
+          { status: 429 }
+        );
+      }
+
+      if (quotaRes && !quotaRes.ok && quotaRes.status !== 401) {
+        console.error("Quota check failed with status:", quotaRes.status);
+      }
     }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -52,7 +84,6 @@ export async function POST(request: NextRequest) {
 
     const langName = LANG_MAP[language || "en"] || "English";
     const systemPrompt = `${TRADING_SYSTEM_PROMPT}\n\nAlways respond in ${langName}.`;
-
     const userPrompt = `Section: ${section || "General"}${error_type ? `\nError context: ${error_type}` : ""}\n\n${message}`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {

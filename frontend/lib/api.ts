@@ -218,9 +218,13 @@ export async function getNews(limit: number = 20): Promise<NewsItem[]> {
 export async function sendChatMessage(
   payload: SendChatPayload
 ): Promise<{ reply: string }> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const response = await fetch(`/api/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       message: payload.message,
       section: payload.section,
@@ -228,6 +232,15 @@ export async function sendChatMessage(
       language: payload.language ?? "en",
     }),
   });
+
+  if (response.status === 429) {
+    const data = await response.json().catch(() => ({}));
+    const err = new Error("ai_quota_exceeded") as any;
+    err.code = "ai_quota_exceeded";
+    err.limit = data.limit;
+    err.resets_at = data.resets_at;
+    throw err;
+  }
 
   return await handleApiResponse<{ reply: string }>(response);
 }

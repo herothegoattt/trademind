@@ -1,7 +1,7 @@
 """AI chat and analyze endpoints — with plan-based quota enforcement."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,48 +16,53 @@ from app.services.ai_engine import chat, analyze_trading_error, generate_trading
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["ai"])
 
-# ─── Per-plan monthly AI query limits (None = unlimited) ─────────────────────
+# ─── Per-plan daily AI prompt limits ─────────────────────────────────────────
 PLAN_AI_LIMITS: dict[str, int | None] = {
-    "core":  5,
-    "edge":  100,
-    "apex":  None,
+    "core":  3,
+    "edge":  5,
+    "apex":  20,
 }
 
 
-def _check_and_increment_quota(user: User, db: Session) -> None:
+def _check_and_increment_quota(user: User, db: Session) -> dict:
     """
-    Raises HTTP 429 if the user has exhausted their monthly AI quota.
-    Resets the counter if a new calendar month has started.
+    Raises HTTP 429 if the user has exhausted their 24-hour AI quota.
+    Uses a rolling 24h window starting from the first prompt of each period.
+    Returns quota info dict on success.
     """
     plan = getattr(user, "plan", "core") or "core"
-    limit = PLAN_AI_LIMITS.get(plan, 5)
+    limit = PLAN_AI_LIMITS.get(plan, 3)
 
     now = datetime.now(timezone.utc)
 
-    # Reset counter if it's a new month
     reset_at = getattr(user, "ai_quota_reset_at", None)
-    if reset_at is None or (now.year, now.month) > (reset_at.year, reset_at.month):
+    window_expired = reset_at is None or (now - reset_at.replace(tzinfo=timezone.utc) if reset_at.tzinfo is None else now - reset_at) >= timedelta(hours=24)
+
+    if window_expired:
         user.ai_queries_this_month = 0
         user.ai_quota_reset_at = now
+        reset_at = now
         db.flush()
 
-    if limit is not None:
-        used = getattr(user, "ai_queries_this_month", 0) or 0
-        if used >= limit:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={
-                    "code": "ai_quota_exceeded",
-                    "used": used,
-                    "limit": limit,
-                    "plan": plan,
-                    "message": f"You've used all {limit} AI queries this month. Upgrade your plan for more.",
-                },
-            )
+    used = getattr(user, "ai_queries_this_month", 0) or 0
+    reset_at_aware = reset_at.replace(tzinfo=timezone.utc) if reset_at and reset_at.tzinfo is None else reset_at
+    resets_at = (reset_at_aware + timedelta(hours=24)) if reset_at_aware else None
 
-    # Increment
-    user.ai_queries_this_month = (getattr(user, "ai_queries_this_month", 0) or 0) + 1
+    if limit is not None and used >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "ai_quota_exceeded",
+                "used": used,
+                "limit": limit,
+                "plan": plan,
+                "resets_at": resets_at.isoformat() if resets_at else None,
+            },
+        )
+
+    user.ai_queries_this_month = used + 1
     db.commit()
+    return {"used": used + 1, "limit": limit, "resets_at": resets_at.isoformat() if resets_at else None}
 
 
 # ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -120,7 +125,7 @@ def ai_chat(
     )
 
     plan = getattr(current_user, "plan", "core") or "core"
-    limit = PLAN_AI_LIMITS.get(plan, 5)
+    limit = PLAN_AI_LIMITS.get(plan, 3)
     used = getattr(current_user, "ai_queries_this_month", 0) or 0
 
     return ChatResponse(
@@ -136,14 +141,7 @@ def analyze_trade(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TradeAnalysisResponse:
-    """Analyze a completed trade. Requires Edge+ plan."""
-    plan = getattr(current_user, "plan", "core") or "core"
-    if plan == "core":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "plan_required", "plan": "edge", "message": "Trade analysis requires Edge or Apex plan."},
-        )
-
+    """Analyze a completed trade. Available to all plans (daily quota applies)."""
     _check_and_increment_quota(current_user, db)
 
     trade_data = {
@@ -165,14 +163,7 @@ def generate_setup(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SetupGenerationResponse:
-    """Generate a trading setup. Requires Edge+ plan."""
-    plan = getattr(current_user, "plan", "core") or "core"
-    if plan == "core":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "plan_required", "plan": "edge", "message": "Setup generation requires Edge or Apex plan."},
-        )
-
+    """Generate a trading setup. Available to all plans (daily quota applies)."""
     _check_and_increment_quota(current_user, db)
 
     setup = generate_trading_setup(
@@ -188,15 +179,36 @@ def generate_setup(
 def get_quota(
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Return the user's current AI quota status."""
+    """Return the user's current daily AI quota status (read-only, no increment)."""
     plan = getattr(current_user, "plan", "core") or "core"
-    limit = PLAN_AI_LIMITS.get(plan, 5)
+    limit = PLAN_AI_LIMITS.get(plan, 3)
     used = getattr(current_user, "ai_queries_this_month", 0) or 0
     reset_at = getattr(current_user, "ai_quota_reset_at", None)
+    now = datetime.now(timezone.utc)
+    reset_at_aware = reset_at.replace(tzinfo=timezone.utc) if reset_at and reset_at.tzinfo is None else reset_at
+    window_expired = reset_at_aware is None or (now - reset_at_aware) >= timedelta(hours=24)
+    if window_expired:
+        used = 0
+    resets_at = (reset_at_aware + timedelta(hours=24)).isoformat() if reset_at_aware and not window_expired else None
     return {
         "plan": plan,
         "quota_used": used,
         "quota_limit": limit,
         "quota_remaining": None if limit is None else max(0, limit - used),
-        "reset_at": reset_at.isoformat() if reset_at else None,
+        "resets_at": resets_at,
+        "period": "daily",
     }
+
+
+@router.post("/ai/quota/consume")
+def consume_quota(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Check and atomically increment the user's daily AI quota.
+    Called by the Next.js chat route before invoking Claude.
+    Returns 429 if quota exceeded, 200 with quota info otherwise.
+    """
+    quota_info = _check_and_increment_quota(current_user, db)
+    return {"ok": True, **quota_info}

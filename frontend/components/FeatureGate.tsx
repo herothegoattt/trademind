@@ -16,7 +16,7 @@ type Feature =
   | "export";
 
 interface GateConfig {
-  minPlan: "edge" | "apex";
+  minPlan: "core" | "edge" | "apex";
   label: string;
   desc: string;
   color: string;
@@ -25,7 +25,7 @@ interface GateConfig {
 
 const GATE: Record<Feature, GateConfig> = {
   ai_chat: {
-    minPlan: "edge",
+    minPlan: "core",
     label: "AI Mentor",
     desc: "Ask anything about markets, get instant trade analysis and pattern recognition powered by AI.",
     color: "#22d3ee",
@@ -46,7 +46,7 @@ const GATE: Record<Feature, GateConfig> = {
     glow: "129,140,248",
   },
   trader_dna_ai: {
-    minPlan: "edge",
+    minPlan: "core",
     label: "Trader DNA — AI Analysis",
     desc: "Full AI-powered breakdown of your trading patterns, biases and psychological tendencies.",
     color: "#a78bfa",
@@ -60,7 +60,7 @@ const GATE: Record<Feature, GateConfig> = {
     glow: "251,146,60",
   },
   journal_ai: {
-    minPlan: "edge",
+    minPlan: "core",
     label: "Journal AI Analysis",
     desc: "Automatic pattern detection, bias alerts and AI feedback on every trade you log.",
     color: "#22d3ee",
@@ -77,8 +77,8 @@ const GATE: Record<Feature, GateConfig> = {
 
 const PLAN_ORDER: Plan[] = ["core", "edge", "apex"];
 
-function planMeetsMinimum(userPlan: Plan, minPlan: "edge" | "apex"): boolean {
-  return PLAN_ORDER.indexOf(userPlan) >= PLAN_ORDER.indexOf(minPlan);
+function planMeetsMinimum(userPlan: Plan, minPlan: "core" | "edge" | "apex"): boolean {
+  return PLAN_ORDER.indexOf(userPlan) >= PLAN_ORDER.indexOf(minPlan as Plan);
 }
 
 function openUpgradeModal(plan: "edge" | "apex") {
@@ -103,7 +103,7 @@ export function FeatureGate({ feature, children, inline = false }: FeatureGatePr
   if (inline) {
     return (
       <button
-        onClick={() => openUpgradeModal(cfg.minPlan)}
+        onClick={() => openUpgradeModal(cfg.minPlan as "edge" | "apex")}
         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all"
         style={{
           background: `rgba(${cfg.glow},0.08)`,
@@ -112,7 +112,7 @@ export function FeatureGate({ feature, children, inline = false }: FeatureGatePr
         }}
       >
         <Lock size={10} />
-        {cfg.minPlan === "apex" ? "Apex" : "Edge"}
+        {cfg.minPlan === "apex" ? "Apex" : cfg.minPlan === "edge" ? "Edge" : "Core"}
       </button>
     );
   }
@@ -123,6 +123,7 @@ export function FeatureGate({ feature, children, inline = false }: FeatureGatePr
 function GateWall({ cfg }: { cfg: GateConfig }) {
   const [hovering, setHovering] = useState(false);
   const PlanIcon = cfg.minPlan === "apex" ? Crown : Zap;
+  const upgradeTarget = cfg.minPlan === "core" ? "edge" : cfg.minPlan;
 
   return (
     <div className="relative flex flex-col items-center justify-center w-full h-full min-h-[320px] px-6 select-none">
@@ -187,7 +188,7 @@ function GateWall({ cfg }: { cfg: GateConfig }) {
           onHoverEnd={() => setHovering(false)}
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
-          onClick={() => openUpgradeModal(cfg.minPlan)}
+          onClick={() => openUpgradeModal(upgradeTarget as "edge" | "apex")}
           className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm text-white transition-all"
           style={{
             background: `linear-gradient(135deg, rgba(${cfg.glow},0.25), rgba(${cfg.glow},0.12))`,

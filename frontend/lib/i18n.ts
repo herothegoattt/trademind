@@ -426,6 +426,10 @@ const translations: Record<Lang, Record<string, string>> = {
     congrats_tagline: "You're now among the best",
     congrats_sub: "You've activated the {plan} plan. Make the most of everything TradeMind AI has to offer.",
     congrats_cta: 'Start Trading',
+    ai_quota_title: 'Daily limit reached',
+    ai_quota_body: "You've used all {limit} AI prompts for today. Upgrade your plan for more, or try again at {time}.",
+    ai_quota_upgrade: 'Upgrade plan',
+    ai_error: 'AI service error. Please try again later.',
   },
 
   ru: {
@@ -853,6 +857,10 @@ const translations: Record<Lang, Record<string, string>> = {
     congrats_tagline: 'Теперь вы в рядах лучших',
     congrats_sub: 'Вы активировали план {plan}. Используйте все возможности TradeMind AI по максимуму.',
     congrats_cta: 'Начать торговать',
+    ai_quota_title: 'Дневной лимит исчерпан',
+    ai_quota_body: 'Вы использовали все {limit} AI-запроса сегодня. Повысьте план или попробуйте в {time}.',
+    ai_quota_upgrade: 'Повысить план',
+    ai_error: 'Ошибка AI‑сервиса. Попробуйте ещё раз чуть позже.',
   },
 
   uz: {
@@ -1280,6 +1288,10 @@ const translations: Record<Lang, Record<string, string>> = {
     congrats_tagline: 'Siz endi eng yaxshilar qatorida',
     congrats_sub: 'Siz {plan} rejasini faollashtirdingiz. TradeMind AI\'ning barcha imkoniyatlaridan foydalaning.',
     congrats_cta: 'Savdo boshlash',
+    ai_quota_title: 'Kunlik limit tugadi',
+    ai_quota_body: "Bugun {limit} ta AI so'rovdan foydalandingiz. Rejani yuksalting yoki {time} da qayta urinib ko'ring.",
+    ai_quota_upgrade: 'Rejani yuksaltiring',
+    ai_error: "AI xizmati xatosi. Keyinroq qayta urinib ko'ring.",
   },
 };
 

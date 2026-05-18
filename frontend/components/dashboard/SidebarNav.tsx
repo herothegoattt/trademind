@@ -195,7 +195,7 @@ export function SidebarNav() {
           {navGroups.map((group) => (
             <div key={group.label}>
               {/* Shimmering category label */}
-              <p className="px-3 pb-2 text-[11px] font-bold uppercase tracking-[0.13em] nav-label-shimmer">
+              <p className="px-3 pb-2 text-[12.5px] font-bold uppercase tracking-[0.13em] nav-label-shimmer">
                 {group.label}
               </p>
 
