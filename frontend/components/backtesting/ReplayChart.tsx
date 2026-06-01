@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useCallback } from "react";
-import { createChart, IChartApi, ISeriesApi, ColorType, CrosshairMode } from "lightweight-charts";
+import { createChart, IChartApi, ISeriesApi, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries } from "lightweight-charts";
 
 /* ── Public types ─────────────────────────────────────────────────── */
 export interface OHLCVBar {
@@ -27,6 +27,9 @@ interface Props {
   drawWidth?:       number;
   drawings:         Drawing[];
   onDrawingsChange: (d: Drawing[]) => void;
+  candleUpColor?:    string;
+  candleDownColor?:  string;
+  liveBarOverride?:  OHLCVBar;
 }
 
 /* ── Coordinate helpers ───────────────────────────────────────────── */
@@ -154,6 +157,9 @@ export function ReplayChart({
   drawWidth = 2,
   drawings,
   onDrawingsChange,
+  candleUpColor   = "#10b981",
+  candleDownColor = "#ef4444",
+  liveBarOverride,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
@@ -161,23 +167,40 @@ export function ReplayChart({
   const candleRef    = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volRef       = useRef<ISeriesApi<"Histogram"> | null>(null);
   const prevVisible  = useRef(0);
+  // track the last candles array reference to detect dataset swaps vs scrub
+  const prevCandlesRef = useRef<OHLCVBar[]>([]);
   const dprRef       = useRef(1);
 
-  // Drawing state – refs avoid stale closures inside DOM event handlers
+  // refs so event-handler closures always see the latest values
   const toolRef      = useRef(tool);
   const colorRef     = useRef(drawColor);
   const widthRef     = useRef(drawWidth);
   const drawingsRef  = useRef(drawings);
+  const upColorRef   = useRef(candleUpColor);
+  const downColorRef = useRef(candleDownColor);
   const isPenDown    = useRef(false);
   const pendingPen   = useRef<DrawPoint[]>([]);
   const lineStart    = useRef<DrawPoint | null>(null);
   const mouseCSS     = useRef<{ x: number; y: number } | null>(null);
   const rafId        = useRef(0);
 
-  useEffect(() => { toolRef.current    = tool;      }, [tool]);
-  useEffect(() => { colorRef.current   = drawColor; }, [drawColor]);
-  useEffect(() => { widthRef.current   = drawWidth; }, [drawWidth]);
+  useEffect(() => { toolRef.current     = tool;           }, [tool]);
+  useEffect(() => { colorRef.current    = drawColor;      }, [drawColor]);
+  useEffect(() => { widthRef.current    = drawWidth;      }, [drawWidth]);
+  useEffect(() => { upColorRef.current  = candleUpColor;  }, [candleUpColor]);
+  useEffect(() => { downColorRef.current = candleDownColor; }, [candleDownColor]);
   useEffect(() => { drawingsRef.current = drawings; scheduleRender(); }, [drawings]); // eslint-disable-line
+
+  /* ── Apply candle color changes live ───────────────────────────── */
+  useEffect(() => {
+    if (!candleRef.current) return;
+    candleRef.current.applyOptions({
+      upColor:      candleUpColor,
+      downColor:    candleDownColor,
+      wickUpColor:  candleUpColor,
+      wickDownColor: candleDownColor,
+    });
+  }, [candleUpColor, candleDownColor]);
 
   /* ── Render all drawings onto the canvas ────────────────────────── */
   const renderCanvas = useCallback(() => {
@@ -188,15 +211,13 @@ export function ReplayChart({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const W = canvas.width;   // physical pixels
+    const W = canvas.width;
     const H = canvas.height;
     const dpr = dprRef.current;
     ctx.clearRect(0, 0, W, H);
 
-    // Committed drawings
     for (const d of drawingsRef.current) drawShape(ctx, d, chart, series, W, dpr);
 
-    // Pending pen stroke
     if (isPenDown.current && pendingPen.current.length > 1) {
       ctx.save();
       ctx.strokeStyle = colorRef.current;
@@ -214,7 +235,6 @@ export function ReplayChart({
       ctx.restore();
     }
 
-    // Line / ray preview
     const cur = mouseCSS.current;
     const ls  = lineStart.current;
     if (ls && cur && (toolRef.current === "line" || toolRef.current === "ray")) {
@@ -240,7 +260,6 @@ export function ReplayChart({
       }
     }
 
-    // Hline preview
     if (ls && cur && toolRef.current === "hline") {
       const y = series.priceToCoordinate(ls.price);
       if (y != null) {
@@ -259,6 +278,26 @@ export function ReplayChart({
     if (rafId.current) cancelAnimationFrame(rafId.current);
     rafId.current = requestAnimationFrame(() => { renderCanvas(); rafId.current = 0; });
   }, [renderCanvas]);
+
+  /* ── Live bar: fast update() path — never touches viewport ─────── */
+  useEffect(() => {
+    if (!liveBarOverride || !candleRef.current || !volRef.current) return;
+    const c = liveBarOverride;
+    const up = upColorRef.current;
+    const dn = downColorRef.current;
+    try {
+      candleRef.current.update({
+        time: c.time as any, open: c.open, high: c.high, low: c.low, close: c.close,
+      });
+      volRef.current.update({
+        time: c.time as any, value: c.volume,
+        color: c.close >= c.open ? `${up}38` : `${dn}38`,
+      });
+      scheduleRender();
+    } catch {
+      // stale time from quote API — skip this tick, next poll will have fresh data
+    }
+  }, [liveBarOverride, scheduleRender]);
 
   /* ── Create chart once ──────────────────────────────────────────── */
   useEffect(() => {
@@ -284,29 +323,33 @@ export function ReplayChart({
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: {
         borderColor: "rgba(255,255,255,0.06)",
-        scaleMargins: { top: 0.05, bottom: 0.22 },
+        scaleMargins: { top: 0.06, bottom: 0.22 },
       },
       timeScale: {
         borderColor: "rgba(255,255,255,0.06)",
-        timeVisible: true, secondsVisible: false, rightOffset: 3,
+        timeVisible: true, secondsVisible: false, rightOffset: 8,
+        // keep the latest bar visible by default
+        lockVisibleTimeRangeOnResize: true,
       },
     });
 
-    const candleSeries = chart.addCandlestickSeries({
-      upColor: "#10b981", downColor: "#ef4444", borderVisible: false,
-      wickUpColor: "#10b981", wickDownColor: "#ef4444",
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor:       upColorRef.current,
+      downColor:     downColorRef.current,
+      borderVisible: false,
+      wickUpColor:   upColorRef.current,
+      wickDownColor: downColorRef.current,
     });
 
-    const volSeries = chart.addHistogramSeries({
-      color: "rgba(16,185,129,0.3)", priceFormat: { type: "volume" }, priceScaleId: "vol_ov",
+    const volSeries = chart.addSeries(HistogramSeries, {
+      color: "rgba(16,185,129,0.25)", priceFormat: { type: "volume" }, priceScaleId: "vol_ov",
     });
-    chart.priceScale("vol_ov").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+    chart.priceScale("vol_ov").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
 
     chartRef.current  = chart;
     candleRef.current = candleSeries;
     volRef.current    = volSeries;
 
-    // init canvas size
     if (canvasRef.current) {
       canvasRef.current.width  = Math.round(w * dpr);
       canvasRef.current.height = Math.round(h * dpr);
@@ -340,22 +383,46 @@ export function ReplayChart({
   /* ── Data updates ───────────────────────────────────────────────── */
   useEffect(() => {
     if (!candleRef.current || !volRef.current || !candles.length) return;
+
+    // detect dataset swap (new symbol/period loaded) vs slider/replay scrub
+    const isNewDataset = candles !== prevCandlesRef.current;
+    prevCandlesRef.current = candles;
+
     const visible  = candles.slice(0, visibleCount);
-    const isAppend = prevVisible.current > 0 && visibleCount === prevVisible.current + 1;
+    const isAppend = !isNewDataset && prevVisible.current > 0 && visibleCount === prevVisible.current + 1;
     prevVisible.current = visibleCount;
 
+    const up = upColorRef.current;
+    const dn = downColorRef.current;
     const cd = visible.map((c) => ({ time: c.time as any, open: c.open, high: c.high, low: c.low, close: c.close }));
-    const vd = visible.map((c) => ({ time: c.time as any, value: c.volume, color: c.close >= c.open ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)" }));
+    const vd = visible.map((c) => ({
+      time: c.time as any, value: c.volume,
+      color: c.close >= c.open ? `${up}38` : `${dn}38`,
+    }));
 
     if (isAppend) {
+      // single-bar update — fast path, doesn't disturb viewport
       candleRef.current.update(cd[cd.length - 1]);
       volRef.current.update(vd[vd.length - 1]);
+      scheduleRender();
     } else {
       candleRef.current.setData(cd);
       volRef.current.setData(vd);
-      chartRef.current?.timeScale().fitContent();
+      scheduleRender();
+
+      if (isNewDataset) {
+        // new dataset loaded: show last ~80 bars right-aligned, leave room on right
+        const WINDOW = 80;
+        const t = setTimeout(() => {
+          chartRef.current?.timeScale().setVisibleLogicalRange({
+            from: Math.max(-2, cd.length - WINDOW),
+            to:   cd.length - 1 + 10,
+          });
+        }, 30);
+        return () => clearTimeout(t);
+      }
+      // slider scrub: don't touch viewport — let the user's manual pan/zoom persist
     }
-    scheduleRender();
   }, [candles, visibleCount, scheduleRender]);
 
   /* ── Mouse helpers ──────────────────────────────────────────────── */

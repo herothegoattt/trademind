@@ -197,6 +197,15 @@ const ALL_SYMBOLS = (Object.keys(SYMBOLS) as Category[]).flatMap((cat) =>
 );
 
 /* ── Helpers ──────────────────────────────────────────────────── */
+// round a Unix-second timestamp down to the open of its bar for a given interval
+function barOpenTime(ts: number, iv: string): number {
+  if (iv === "1wk") return Math.floor(ts / (7 * 86400)) * (7 * 86400);
+  if (iv === "1d")  return Math.floor(ts / 86400) * 86400;
+  const secs: Record<string, number> = { "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400 };
+  const s = secs[iv] ?? 86400;
+  return Math.floor(ts / s) * s;
+}
+
 function calcATR(bars: OHLCVBar[], n = 14): number {
   if (bars.length < 2) return 0;
   const trs: number[] = [];
@@ -249,12 +258,17 @@ export default function BacktestingPage() {
   const [searchOpen,   setSearchOpen]   = useState(false);
   const [searchQuery,  setSearchQuery]  = useState("");
 
-  const [activeTool,  setActiveTool]  = useState<DrawingTool>("pointer");
-  const [drawColor,   setDrawColor]   = useState("#22d3ee");
-  const [drawWidth,   setDrawWidth]   = useState(2);
-  const [drawings,    setDrawings]    = useState<Drawing[]>([]);
+  const [activeTool,      setActiveTool]      = useState<DrawingTool>("pointer");
+  const [drawColor,       setDrawColor]       = useState("#22d3ee");
+  const [drawWidth,       setDrawWidth]       = useState(2);
+  const [drawings,        setDrawings]        = useState<Drawing[]>([]);
+  const [candleUpColor,   setCandleUpColor]   = useState("#10b981");
+  const [candleDownColor, setCandleDownColor] = useState("#ef4444");
+  const [liveBar,         setLiveBar]         = useState<OHLCVBar | null>(null);
+  const [marketState,     setMarketState]     = useState<string>("CLOSED");
 
   const playRef       = useRef<number | null>(null);
+  const allBarsRef    = useRef<OHLCVBar[]>([]);
   const searchRef     = useRef<HTMLDivElement>(null);
   const searchInputRef= useRef<HTMLInputElement>(null);
   const periodRef     = useRef<HTMLDivElement>(null);
@@ -294,7 +308,7 @@ export default function BacktestingPage() {
 
   /* data fetch */
   const loadData = useCallback(async (sym: string, iv: string, per: string) => {
-    setLoading(true); setError(null); setIsPlaying(false);
+    setLoading(true); setError(null); setIsPlaying(false); setLiveBar(null);
     if (playRef.current !== null) window.clearInterval(playRef.current);
     try {
       const res  = await fetch(`/api/backtesting/ohlcv?symbol=${encodeURIComponent(sym)}&interval=${iv}&period=${per}`);
@@ -302,7 +316,8 @@ export default function BacktestingPage() {
       if (!res.ok) throw new Error(json.detail || "Failed to load data");
       const bars: OHLCVBar[] = json.candles;
       setAllBars(bars);
-      setCurrentIdx(Math.max(49, Math.floor(bars.length * 0.2)));
+      // start at the latest bar (today) — user scrubs left to pick a replay start point
+      setCurrentIdx(bars.length - 1);
     } catch (e: any) {
       setError(e.message ?? "Unknown error"); setAllBars([]);
     } finally {
@@ -335,6 +350,41 @@ export default function BacktestingPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [allBars.length]);
+
+  /* live quote polling — runs whenever data is loaded, updates last bar in real time */
+  const isAtEnd = allBars.length > 0 && currentIdx >= allBars.length - 1;
+  const isAtEndRef = useRef(false);
+  useEffect(() => { isAtEndRef.current = isAtEnd; }, [isAtEnd]);
+  useEffect(() => { allBarsRef.current = allBars; }, [allBars]);
+
+  useEffect(() => {
+    if (!allBars.length) return;
+    let cancelled = false;
+    const poll = async () => {
+      if (!isAtEndRef.current) return; // don't update if user scrolled back in history
+      try {
+        const res = await fetch(`/api/backtesting/quote?symbol=${encodeURIComponent(ticker)}`);
+        if (!res.ok || cancelled) return;
+        const d = await res.json();
+        setMarketState(d.marketState ?? "CLOSED");
+        const bars = allBarsRef.current;
+        const lastBarTime = bars.length > 0 ? bars[bars.length - 1].time : 0;
+        const computedTime = barOpenTime(d.time, interval);
+        const safeTime = Math.max(computedTime, lastBarTime);
+        setLiveBar({
+          time:   safeTime,
+          open:   d.open,
+          high:   d.high,
+          low:    d.low,
+          close:  d.price,
+          volume: d.volume,
+        });
+      } catch { /* network error — silently skip */ }
+    };
+    poll();
+    const iv = window.setInterval(poll, 5000);
+    return () => { cancelled = true; window.clearInterval(iv); };
+  }, [allBars.length, ticker, interval]); // restart only on new data / symbol / interval
 
   /* derived */
   const visibleBars = allBars.slice(0, currentIdx + 1);
@@ -554,6 +604,28 @@ export default function BacktestingPage() {
         {/* Spacer */}
         <div className="flex-1" />
 
+        {/* Live indicator */}
+        {isAtEnd && liveBar && (
+          <div className="flex items-center gap-1.5 flex-shrink-0 px-2 h-6 rounded-md"
+            style={{
+              background: marketState === "REGULAR" ? "rgba(16,185,129,0.1)" : "rgba(100,116,139,0.07)",
+              border: `1px solid ${marketState === "REGULAR" ? "rgba(16,185,129,0.3)" : "rgba(100,116,139,0.15)"}`,
+            }}>
+            <span style={{
+              width: 5, height: 5, borderRadius: "50%", flexShrink: 0,
+              background: marketState === "REGULAR" ? "#10b981" : "rgba(100,116,139,0.5)",
+              boxShadow: marketState === "REGULAR" ? "0 0 6px #10b981" : "none",
+              animation: marketState === "REGULAR" ? "tmPulse 1.4s infinite" : "none",
+              display: "inline-block",
+            }} />
+            <span className="text-[9px] font-bold font-mono tracking-widest" style={{
+              color: marketState === "REGULAR" ? "#34d399" : "rgba(100,116,139,0.45)",
+            }}>
+              {marketState === "REGULAR" ? "LIVE" : marketState === "PRE" ? "PRE" : marketState === "POST" ? "POST" : "CLOSED"}
+            </span>
+          </div>
+        )}
+
         {/* OHLC readout */}
         {currentBar && (
           <div className="hidden lg:flex items-center gap-3 flex-shrink-0">
@@ -598,6 +670,10 @@ export default function BacktestingPage() {
         onWidth={setDrawWidth}
         onClear={() => setDrawings([])}
         drawingsCount={drawings.length}
+        candleUpColor={candleUpColor}
+        candleDownColor={candleDownColor}
+        onCandleUp={setCandleUpColor}
+        onCandleDown={setCandleDownColor}
       />
 
       {/* ── Chart ───────────────────────────────────────────────── */}
@@ -639,6 +715,9 @@ export default function BacktestingPage() {
             drawWidth={drawWidth}
             drawings={drawings}
             onDrawingsChange={setDrawings}
+            candleUpColor={candleUpColor}
+            candleDownColor={candleDownColor}
+            liveBarOverride={isAtEnd && liveBar ? liveBar : undefined}
           />
         )}
       </div>
@@ -961,6 +1040,7 @@ const PRESET_COLORS = ["#22d3ee", "#10b981", "#ef4444", "#f59e0b", "#a78bfa", "#
 
 function DrawToolbar({
   tool, onTool, color, onColor, width, onWidth, onClear, drawingsCount,
+  candleUpColor, candleDownColor, onCandleUp, onCandleDown,
 }: {
   tool: DrawingTool;
   onTool: (t: DrawingTool) => void;
@@ -970,6 +1050,10 @@ function DrawToolbar({
   onWidth: (w: number) => void;
   onClear: () => void;
   drawingsCount: number;
+  candleUpColor: string;
+  candleDownColor: string;
+  onCandleUp: (c: string) => void;
+  onCandleDown: (c: string) => void;
 }) {
   return (
     <div
@@ -1047,7 +1131,7 @@ function DrawToolbar({
         ))}
       </div>
 
-      {/* Clear */}
+      {/* Clear drawings */}
       {drawingsCount > 0 && (
         <>
           <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.07)", flexShrink: 0 }} />
@@ -1066,6 +1150,54 @@ function DrawToolbar({
           </button>
         </>
       )}
+
+      <div style={{ flex: 1 }} />
+
+      {/* Candle colors */}
+      <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.07)", flexShrink: 0 }} />
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "rgba(71,85,105,0.5)" }}>
+          Candles
+        </span>
+        {/* Bull */}
+        <label className="flex items-center gap-1 cursor-pointer" title="Bull candle color">
+          <input
+            type="color"
+            value={candleUpColor}
+            onChange={(e) => onCandleUp(e.target.value)}
+            className="opacity-0 absolute w-0 h-0"
+          />
+          <div
+            className="flex items-center gap-1 px-1.5 h-5 rounded transition-all"
+            style={{
+              background: `${candleUpColor}18`,
+              border: `1px solid ${candleUpColor}55`,
+            }}
+          >
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: candleUpColor }} />
+            <span className="text-[9px] font-bold" style={{ color: candleUpColor }}>Bull</span>
+          </div>
+        </label>
+        {/* Bear */}
+        <label className="flex items-center gap-1 cursor-pointer" title="Bear candle color">
+          <input
+            type="color"
+            value={candleDownColor}
+            onChange={(e) => onCandleDown(e.target.value)}
+            className="opacity-0 absolute w-0 h-0"
+          />
+          <div
+            className="flex items-center gap-1 px-1.5 h-5 rounded transition-all"
+            style={{
+              background: `${candleDownColor}18`,
+              border: `1px solid ${candleDownColor}55`,
+            }}
+          >
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: candleDownColor }} />
+            <span className="text-[9px] font-bold" style={{ color: candleDownColor }}>Bear</span>
+          </div>
+        </label>
+      </div>
     </div>
   );
 }

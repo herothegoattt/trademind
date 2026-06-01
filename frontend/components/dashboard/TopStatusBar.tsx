@@ -7,7 +7,8 @@ import { useDashboardStore } from "../../lib/store";
 import { useT } from "../../lib/i18n";
 import { ProfileModal } from "./ProfileModal";
 import { BottomSheetSettings } from "./BottomSheetSettings";
-import { Bell, BellOff, Settings, User } from "lucide-react";
+import { Bell, BellOff, Settings, User, Brain } from "lucide-react";
+import { motion } from "framer-motion";
 import { cn } from "../../lib/utils";
 import { usePush } from "../../lib/use-push";
 import { useAuthStore } from "@/lib/auth-store";
@@ -83,19 +84,77 @@ export function TopStatusBar() {
 
           {/* Desktop: page title */}
           <div className="hidden md:flex items-center gap-3">
-            <h1 className="text-[13px] font-semibold neon-white" style={{ color: "#edf0f5" }}>
-              {pageLabel}
-            </h1>
-            {pathname !== "/app" && (
-              <span
-                className="hidden lg:block text-[11px] font-medium px-2 py-0.5 rounded-md neon-cyan"
-                style={{
-                  background: "rgba(34,211,238,0.08)",
-                  border: "1px solid rgba(34,211,238,0.14)",
-                }}
-              >
-                AI-powered
-              </span>
+            {pathname === "/app" ? (
+              /* AI Core indicator — replaces plain "Dashboard" text */
+              <div className="flex items-center gap-2">
+                <motion.div
+                  className="w-5 h-5 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(34,211,238,0.14), rgba(99,102,246,0.10))",
+                    border: "1px solid rgba(34,211,238,0.22)",
+                  }}
+                  animate={{
+                    boxShadow: [
+                      "0 0 6px rgba(34,211,238,0.18)",
+                      "0 0 14px rgba(34,211,238,0.42), 0 0 28px rgba(34,211,238,0.1)",
+                      "0 0 6px rgba(34,211,238,0.18)",
+                    ],
+                  }}
+                  transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <motion.span
+                    animate={{ filter: [
+                      "drop-shadow(0 0 2px rgba(34,211,238,0.7))",
+                      "drop-shadow(0 0 5px rgba(34,211,238,1)) drop-shadow(0 0 10px rgba(34,211,238,0.4))",
+                      "drop-shadow(0 0 2px rgba(34,211,238,0.7))",
+                    ]}}
+                    transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <Brain size={11} style={{ color: "#22d3ee" }} />
+                  </motion.span>
+                </motion.div>
+                <motion.h1
+                  className="text-[13px] font-semibold neon-cyan"
+                  animate={{
+                    textShadow: [
+                      "0 0 4px rgba(34,211,238,0.5), 0 0 10px rgba(34,211,238,0.2)",
+                      "0 0 7px rgba(34,211,238,0.9), 0 0 18px rgba(34,211,238,0.45), 0 0 36px rgba(34,211,238,0.12)",
+                      "0 0 4px rgba(34,211,238,0.5), 0 0 10px rgba(34,211,238,0.2)",
+                    ],
+                    color: "#22d3ee",
+                  }}
+                  transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  AI Core
+                </motion.h1>
+                <span
+                  className="text-[10px] font-medium px-2 py-0.5 rounded-md"
+                  style={{
+                    background: "rgba(34,211,238,0.07)",
+                    border: "1px solid rgba(34,211,238,0.13)",
+                    color: "rgba(34,211,238,0.65)",
+                    fontFamily: "monospace",
+                    letterSpacing: "0.12em",
+                  }}
+                >
+                  LIVE
+                </span>
+              </div>
+            ) : (
+              <>
+                <h1 className="text-[13px] font-semibold neon-white" style={{ color: "#edf0f5" }}>
+                  {pageLabel}
+                </h1>
+                <span
+                  className="hidden lg:block text-[11px] font-medium px-2 py-0.5 rounded-md neon-cyan"
+                  style={{
+                    background: "rgba(34,211,238,0.08)",
+                    border: "1px solid rgba(34,211,238,0.14)",
+                  }}
+                >
+                  AI-powered
+                </span>
+              </>
             )}
           </div>
         </div>

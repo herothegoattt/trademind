@@ -11,7 +11,7 @@ import { cn } from "../../lib/utils";
 import {
   BookOpen, Settings, Activity, Globe, FileText,
   Compass, User, TrendingUp, AlertTriangle, FlaskConical,
-  MoreHorizontal, X,
+  MoreHorizontal, X, BarChart2,
 } from "lucide-react";
 
 /* ── Per-item color config ────────────────────────────────────── */
@@ -26,6 +26,7 @@ const COLOR: Record<string, { icon: string; active: string; bar: string; glow: s
   "/investing":       { icon: "#4ade80", active: "rgba(74,222,128,0.09)",  bar: "#4ade80", glow: "74,222,128"  },
   "/analytics-lab":   { icon: "#fb923c", active: "rgba(251,146,60,0.09)",  bar: "#fb923c", glow: "251,146,60"  },
   "/decision-errors": { icon: "#f59e0b", active: "rgba(245,158,11,0.09)",  bar: "#f59e0b", glow: "245,158,11"  },
+  "/backtesting":     { icon: "#22d3ee", active: "rgba(34,211,238,0.09)",  bar: "#22d3ee", glow: "34,211,238"  },
 };
 
 const navGroups = [
@@ -54,6 +55,12 @@ const navGroups = [
       { section: "Decision Errors",path: "/decision-errors",Icon: AlertTriangle, labelKey: "decision_errors"        },
     ],
   },
+  {
+    label: "Training",
+    items: [
+      { section: "Backtesting",    path: "/backtesting",    Icon: BarChart2,     labelKey: "section_backtesting"    },
+    ],
+  },
 ];
 
 const mobileItems = [
@@ -70,6 +77,7 @@ const moreItems = [
   { section: "Investing",       path: "/investing",        Icon: TrendingUp,    labelKey: "section_investing"      },
   { section: "Analytics Lab",   path: "/analytics-lab",    Icon: FlaskConical,  labelKey: "section_analytics_lab"  },
   { section: "Decision Errors", path: "/decision-errors",  Icon: AlertTriangle, labelKey: "decision_errors"        },
+  { section: "Backtesting",     path: "/backtesting",      Icon: BarChart2,     labelKey: "section_backtesting"    },
 ];
 
 /* Icon with animated neon glow when active */

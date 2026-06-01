@@ -131,16 +131,24 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "rgba(5,8,16,0.88)",
-          backdropFilter: "blur(28px)",
-          WebkitBackdropFilter: "blur(28px)",
+          background: "linear-gradient(180deg, rgba(2,3,10,0.90) 0%, rgba(3,4,12,0.92) 100%)",
+          backdropFilter: "blur(36px)",
+          WebkitBackdropFilter: "blur(36px)",
+        }}
+      />
+      {/* Subtle top-edge gradient shimmer */}
+      <div
+        className="absolute top-0 left-0 right-0 pointer-events-none"
+        style={{
+          height: 1,
+          background: "linear-gradient(90deg, transparent 0%, rgba(34,211,238,0.18) 30%, rgba(129,140,248,0.14) 55%, rgba(34,211,238,0.18) 80%, transparent 100%)",
         }}
       />
       {/* Scan-lines overlay */}
       <div
         className="absolute inset-0 pointer-events-none z-[1]"
         style={{
-          backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px)",
+          backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px)",
           backgroundSize: "100% 4px",
         }}
       />
@@ -149,8 +157,10 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
       <div
         className="relative z-10 flex-shrink-0 flex items-center justify-between px-5 py-3.5"
         style={{
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-          background: "rgba(7,10,18,0.97)",
+          borderBottom: "1px solid rgba(34,211,238,0.09)",
+          background: "linear-gradient(90deg, rgba(2,3,10,0.98) 0%, rgba(5,7,16,0.98) 100%)",
+          backdropFilter: "blur(30px)",
+          WebkitBackdropFilter: "blur(30px)",
         }}
       >
         <div className="flex items-center gap-3">
@@ -265,48 +275,85 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
               />
             </div>
 
-            {/* Hero icon with rings */}
+            {/* Hero icon — 3-ring orbital system */}
             <motion.div
-              className="relative flex items-center justify-center mb-5"
-              initial={{ opacity: 0, scale: 0.8 }}
+              className="relative flex items-center justify-center mb-6"
+              style={{ width: 130, height: 130 }}
+              initial={{ opacity: 0, scale: 0.75 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             >
-              {/* Outer pulse ring */}
+              {/* Perspective 3D ring tilt container */}
+              <div style={{
+                position: "absolute", inset: 0,
+                perspective: "600px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <div style={{ transformStyle: "preserve-3d", transform: "rotateX(66deg)", position: "relative" }}>
+                  {[
+                    { size: 118, color: "34,211,238",  dur: "8s",  opacity: 0.18 },
+                    { size:  88, color: "129,140,248", dur: "12s", opacity: 0.14 },
+                    { size:  62, color: "52,211,153",  dur: "16s", opacity: 0.11 },
+                  ].map((ring, i) => (
+                    <div key={i} style={{
+                      position: "absolute",
+                      width: ring.size, height: ring.size,
+                      marginLeft: -ring.size / 2, marginTop: -ring.size / 2,
+                      borderRadius: "50%",
+                      border: `1px solid rgba(${ring.color},${ring.opacity + 0.06})`,
+                      boxShadow: `0 0 14px rgba(${ring.color},${ring.opacity})`,
+                      animation: `${i % 2 === 0 ? "tmSpin" : "tmSpinRev"} ${ring.dur} linear infinite`,
+                    }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Outer soft glow */}
               <motion.div
-                className="absolute rounded-full border"
-                style={{ width: 96, height: 96, borderColor: "rgba(34,211,238,0.1)" }}
-                animate={{ scale: [1, 1.12, 1], opacity: [0.3, 0.7, 0.3] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute rounded-full"
+                style={{ width: 100, height: 100,
+                  background: "radial-gradient(circle, rgba(34,211,238,0.08) 0%, transparent 70%)",
+                  filter: "blur(12px)" }}
+                animate={{ scale: [0.92, 1.08, 0.92], opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
               />
-              {/* Mid ring */}
-              <motion.div
-                className="absolute rounded-full border"
-                style={{ width: 74, height: 74, borderColor: "rgba(34,211,238,0.18)" }}
-                animate={{ scale: [1, 1.07, 1], opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
-              />
+
               {/* Orbiting dot */}
               <motion.div
-                className="absolute w-1.5 h-1.5 rounded-full"
-                style={{ background: "#22d3ee", top: 6, left: "50%", marginLeft: -3,
-                  boxShadow: "0 0 6px rgba(34,211,238,0.9), 0 0 12px rgba(34,211,238,0.4)" }}
-                animate={{ rotate: 360 }}
-                transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
-                transformTemplate={({ rotate }) => `rotate(${rotate}) translateY(-37px)`}
-              />
-              {/* Icon box */}
-              <motion.div
-                className="w-[58px] h-[58px] rounded-2xl flex items-center justify-center"
+                className="absolute w-2 h-2 rounded-full"
                 style={{
-                  background: "linear-gradient(135deg, rgba(34,211,238,0.13), rgba(99,102,246,0.1))",
-                  border: "1px solid rgba(34,211,238,0.28)",
+                  background: "#22d3ee", top: 18, left: "50%", marginLeft: -4,
+                  boxShadow: "0 0 8px rgba(34,211,238,1), 0 0 18px rgba(34,211,238,0.5)",
+                }}
+                animate={{ rotate: 360 }}
+                transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
+                transformTemplate={({ rotate }) => `rotate(${rotate}) translateY(-42px)`}
+              />
+
+              {/* Second orbiting dot (violet, reverse) */}
+              <motion.div
+                className="absolute w-1.5 h-1.5 rounded-full"
+                style={{
+                  background: "#a78bfa", bottom: 22, left: "50%", marginLeft: -3,
+                  boxShadow: "0 0 6px rgba(167,139,250,0.9), 0 0 14px rgba(167,139,250,0.4)",
+                }}
+                animate={{ rotate: -360 }}
+                transition={{ duration: 7, repeat: Infinity, ease: "linear" }}
+                transformTemplate={({ rotate }) => `rotate(${rotate}) translateY(-38px)`}
+              />
+
+              {/* Core icon box */}
+              <motion.div
+                className="relative w-[60px] h-[60px] rounded-2xl flex items-center justify-center"
+                style={{
+                  background: "linear-gradient(135deg, rgba(34,211,238,0.14), rgba(99,102,246,0.10))",
+                  border: "1px solid rgba(34,211,238,0.32)",
                 }}
                 animate={{
                   boxShadow: [
-                    "0 0 18px rgba(34,211,238,0.1), 0 0 40px rgba(34,211,238,0.04)",
-                    "0 0 30px rgba(34,211,238,0.22), 0 0 60px rgba(34,211,238,0.1)",
-                    "0 0 18px rgba(34,211,238,0.1), 0 0 40px rgba(34,211,238,0.04)",
+                    "0 0 20px rgba(34,211,238,0.12), 0 0 48px rgba(34,211,238,0.05)",
+                    "0 0 36px rgba(34,211,238,0.28), 0 0 72px rgba(34,211,238,0.12)",
+                    "0 0 20px rgba(34,211,238,0.12), 0 0 48px rgba(34,211,238,0.05)",
                   ],
                 }}
                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
@@ -314,38 +361,46 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
                 <motion.div
                   animate={{ filter: [
                     "drop-shadow(0 0 3px rgba(34,211,238,0.6))",
-                    "drop-shadow(0 0 8px rgba(34,211,238,1)) drop-shadow(0 0 18px rgba(34,211,238,0.4))",
+                    "drop-shadow(0 0 10px rgba(34,211,238,1)) drop-shadow(0 0 22px rgba(34,211,238,0.45))",
                     "drop-shadow(0 0 3px rgba(34,211,238,0.6))",
                   ]}}
                   transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  <Brain size={26} style={{ color: "#22d3ee" }} />
+                  <Brain size={28} style={{ color: "#22d3ee" }} />
                 </motion.div>
               </motion.div>
             </motion.div>
 
             {/* Title */}
             <motion.h3
-              className="text-[15px] font-semibold mb-1.5 text-center"
-              style={{ color: "#edf0f5" }}
-              initial={{ opacity: 0, y: 8 }}
+              className="font-bold mb-2 text-center tracking-tight"
+              style={{
+                fontSize: "1.1rem",
+                background: "linear-gradient(135deg, #f1f5f9 0%, #67e8f9 40%, #818cf8 70%, #f1f5f9 100%)",
+                backgroundSize: "240% auto",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                animation: "tmSpin 0s, shimmer-slide 8s linear infinite",
+              }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.4 }}
+              transition={{ delay: 0.18, duration: 0.45, ease: "easeOut" }}
             >
               Your AI Trading Coach
             </motion.h3>
             <motion.p
-              className="text-[12px] text-center max-w-[240px] leading-relaxed mb-6"
-              style={{ color: "rgba(90,104,128,0.85)" }}
+              className="text-center max-w-[256px] leading-relaxed mb-7"
+              style={{ fontSize: "0.76rem", color: "rgba(90,104,128,0.9)", lineHeight: 1.65 }}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.22, duration: 0.4 }}
+              transition={{ delay: 0.26, duration: 0.4 }}
             >
-              Ask anything about your trades, strategy, or market conditions.
+              Ask anything about your trades, strategy,&nbsp;or market conditions.
             </motion.p>
 
             {/* Suggestion cards — 2×2 grid */}
-            <div className="grid grid-cols-2 gap-2 w-full max-w-[320px] px-1">
+            <div className="grid grid-cols-2 gap-2.5 w-full max-w-[330px] px-1">
               {SUGGESTIONS.map((s, i) => (
                 <motion.button
                   key={s.label}
@@ -355,8 +410,13 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
                   whileHover={{ scale: 1.03, y: -1 }}
                   whileTap={{ scale: 0.97 }}
                   onClick={() => setDraft(s.label)}
-                  className="flex flex-col items-start gap-2 p-3 rounded-xl text-left transition-colors"
-                  style={{ background: s.bg, border: `1px solid ${s.border}` }}
+                  className="flex flex-col items-start gap-2 p-3.5 rounded-xl text-left transition-all"
+                  style={{
+                    background: s.bg,
+                    border: `1px solid ${s.border}`,
+                    backdropFilter: "blur(10px)",
+                    WebkitBackdropFilter: "blur(10px)",
+                  }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = s.bgHover; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = s.bg; }}
                 >
@@ -524,8 +584,10 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
       <div
         className="relative z-10 flex-shrink-0 px-4 py-3.5"
         style={{
-          borderTop: "1px solid rgba(255,255,255,0.055)",
-          background: "rgba(7,10,18,0.85)",
+          borderTop: "1px solid rgba(34,211,238,0.08)",
+          background: "linear-gradient(180deg, rgba(2,3,10,0.92) 0%, rgba(3,4,12,0.96) 100%)",
+          backdropFilter: "blur(28px)",
+          WebkitBackdropFilter: "blur(28px)",
         }}
       >
         {/* Hidden file input */}

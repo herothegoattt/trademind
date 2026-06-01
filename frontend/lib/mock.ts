@@ -53,6 +53,14 @@ export const suggestedQuestionsBySection: Record<Section, string[]> = {
     "What should I focus on for long-term portfolio growth?",
     "How can I balance risk across different asset classes?",
   ],
+  "Analytics Lab": [
+    "What are my strongest statistical edges?",
+    "Which setups have the highest expectancy?",
+  ],
+  "Backtesting": [
+    "What can I learn from replaying this setup?",
+    "How would my rules have performed historically?",
+  ],
 };
 
 export const warningZonesBySection: Record<Section, string[]> = {
@@ -87,6 +95,14 @@ export const warningZonesBySection: Record<Section, string[]> = {
   "Investing": [
     "Stay diversified across sectors and asset classes",
     "Review your allocation at least quarterly",
+  ],
+  "Analytics Lab": [
+    "Don't over-optimize on past data",
+    "Watch for survivorship bias in backtests",
+  ],
+  "Backtesting": [
+    "Replay objectively — don't retrofit the story",
+    "Mark entries before seeing the outcome",
   ],
 };
 

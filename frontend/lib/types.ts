@@ -9,7 +9,8 @@ export type Section =
   | "Daily Bias"
   | "Trader DNA"
   | "Investing"
-  | "Analytics Lab";
+  | "Analytics Lab"
+  | "Backtesting";
 
 export type ErrorType =
   | "FOMO"

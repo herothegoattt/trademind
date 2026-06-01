@@ -452,3 +452,9 @@ a:hover { color: #67e8f9; }
 
 /* Eliminate 300 ms tap delay */
 button, a, [role="button"], input, textarea, select { touch-action: manipulation; }
+
+@keyframes tmPulse     { 0%,100% { opacity:1 } 50% { opacity:.25 } }
+@keyframes tmSpin      { to { transform: rotateZ(360deg); } }
+@keyframes tmSpinRev   { to { transform: rotateZ(-360deg); } }
+@keyframes tmFloat     { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+@keyframes tmGlowPulse { 0%,100% { opacity:.5; transform:scale(1); } 50% { opacity:.95; transform:scale(1.14); } }
