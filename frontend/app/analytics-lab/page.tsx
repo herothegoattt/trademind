@@ -19,6 +19,7 @@ import { useAuthStore, type Plan } from "../../lib/auth-store";
 import { cn } from "../../lib/utils";
 import { usePlanLimits } from "../../lib/plan-limits";
 import { UpgradeGate } from "../../components/ui/UpgradeGate";
+import OrderFlowLab from "../../components/analytics/OrderFlowLab";
 
 // ─── Tier config ──────────────────────────────────────────────────────────────
 type Tier = "core" | "edge" | "apex" | "pro";
@@ -128,17 +129,18 @@ function NoData({ text = "Добавьте сделки в журнал" }: { te
 export default function AnalyticsLabPage() {
   const { trades } = useTradeStore();
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<"risk" | "performance" | "market" | "montecarlo" | "sortino" | "kelly" | "es">("risk");
+  const [activeTab, setActiveTab] = useState<"risk" | "performance" | "market" | "orderflow" | "montecarlo" | "sortino" | "kelly" | "es">("risk");
   const [accountSize, setAccountSize] = useState("10000");
   const [mcRuns, setMcRuns] = useState(0); // increments to trigger re-run
   const [riskThreshold, setRiskThreshold] = useState(50); // % loss for ruin check
 
   const userPlan = (user?.plan as Plan) || "core";
   const limits = usePlanLimits();
-  // Advanced tabs require Edge+
-  const LOCKED_TABS = limits.analytics_montecarlo
-    ? []
-    : ["montecarlo", "sortino", "kelly", "es"];
+  // Advanced tabs require Edge+ (Monte Carlo family); Order Flow requires Apex (analytics_advanced)
+  const LOCKED_TABS = [
+    ...(limits.analytics_montecarlo ? [] : ["montecarlo", "sortino", "kelly", "es"]),
+    ...(limits.analytics_advanced ? [] : ["orderflow"]),
+  ];
 
   // ── Completed trades only ────────────────────────────────────────────────
   const completed = useMemo(
@@ -432,6 +434,7 @@ export default function AnalyticsLabPage() {
     { id: "risk"        as const, label: "Risk Engine",         icon: Flame,        color: "#f87171" },
     { id: "performance" as const, label: "Performance",         icon: Sigma,        color: "#22d3ee" },
     { id: "market"      as const, label: "Market Structure",    icon: Layers,       color: "#a78bfa" },
+    { id: "orderflow"   as const, label: "Order Flow",          icon: BarChart2,    color: "#a78bfa" },
     { id: "montecarlo"  as const, label: "Monte Carlo",         icon: Dice6,        color: "#f59e0b" },
     { id: "sortino"     as const, label: "Sortino Ratio",       icon: TrendingDown, color: "#818cf8" },
     { id: "kelly"       as const, label: "Kelly Criterion",     icon: Target,       color: "#34d399" },
@@ -987,6 +990,18 @@ export default function AnalyticsLabPage() {
               </div>
             )}
           </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════════
+            BLOCK 3.5 — ORDER FLOW (real market data, Apex)
+        ══════════════════════════════════════════════════════════════════════ */}
+        {activeTab === "orderflow" && !limits.analytics_advanced && (
+          <div className="py-8">
+            <UpgradeGate requiredPlan="apex" feature="Order Flow Lab" blurContent={false} />
+          </div>
+        )}
+        {activeTab === "orderflow" && limits.analytics_advanced && (
+          <OrderFlowLab />
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════
