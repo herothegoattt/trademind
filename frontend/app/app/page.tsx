@@ -1,17 +1,31 @@
 "use client";
+
+// This dashboard reads runtime search params (Stripe redirect, upgrade CTA) so
+// it must be rendered dynamically, not statically prerendered at build time.
+export const dynamic = "force-dynamic";
+
 import { LeftInsightPanel } from "../../components/dashboard/LeftInsightPanel";
 import { CoreHub } from "../../components/dashboard/CoreHub";
 import { AuthRequiredModal } from "../../components/AuthRequiredModal";
 import { SubscriptionModal } from "../../components/dashboard/SubscriptionModal";
 import { useDashboardStore } from "../../lib/store";
 import { useAuthAction } from "../../lib/use-auth-action";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { useAuthStore } from "../../lib/auth-store";
 import type { Plan } from "../../lib/auth-store";
 
 export default function DashboardPage() {
+  // useSearchParams (used inside) requires a Suspense boundary during prerender.
+  return (
+    <Suspense fallback={null}>
+      <DashboardInner />
+    </Suspense>
+  );
+}
+
+function DashboardInner() {
   const init = useDashboardStore((s: any) => s.initDashboard);
   const selectedErrorType = useDashboardStore((s: any) => s.selectedErrorType);
   const selectErrorType = useDashboardStore((s: any) => s.selectErrorType);

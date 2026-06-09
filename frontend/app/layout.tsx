@@ -4,10 +4,16 @@ import Script from "next/script";
 import { PostHogProvider } from "../components/posthog/PostHogProvider";
 import { GoogleAuthProvider } from "../components/providers/GoogleAuthProvider";
 import { OnboardingFlow } from "../components/OnboardingFlow";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 const inter = Inter({ subsets: ["latin"] });
 const GA_ID = "G-EQBEYKHRPW";
+
+export const viewport: Viewport = {
+  themeColor: "#070a12",
+  width: "device-width",
+  initialScale: 1,
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://trademindtech.com"),
@@ -31,11 +37,22 @@ export const metadata: Metadata = {
   authors: [{ name: "TradeMind", url: "https://trademindtech.com" }],
   creator: "TradeMind",
   publisher: "TradeMind",
+  applicationName: "TradeMind AI",
+  category: "finance",
+  manifest: "/manifest.webmanifest",
+  formatDetection: { telephone: false, email: false, address: false },
+  appleWebApp: { capable: true, title: "TradeMind", statusBarStyle: "black-translucent" },
 
   robots: {
     index: true,
     follow: true,
-    googleBot: { index: true, follow: true },
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
   },
 
   openGraph: {
@@ -100,25 +117,45 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               "@context": "https://schema.org",
-              "@type": "WebApplication",
-              name: "TradeMind AI",
-              url: "https://trademindtech.com",
-              logo: "https://trademindtech.com/logo.jpg",
-              description:
-                "AI-powered trading decision support. Detect cognitive biases, get daily market bias, analyze your trades.",
-              applicationCategory: "FinanceApplication",
-              operatingSystem: "Web",
-              offers: {
-                "@type": "Offer",
-                price: "0",
-                priceCurrency: "USD",
-              },
-              creator: {
-                "@type": "Organization",
-                name: "TradeMind",
-                url: "https://trademindtech.com",
-                logo: "https://trademindtech.com/logo.jpg",
-              },
+              "@graph": [
+                {
+                  "@type": "Organization",
+                  "@id": "https://trademindtech.com/#organization",
+                  name: "TradeMind",
+                  url: "https://trademindtech.com",
+                  logo: "https://trademindtech.com/logo.jpg",
+                },
+                {
+                  "@type": "WebSite",
+                  "@id": "https://trademindtech.com/#website",
+                  name: "TradeMind AI",
+                  url: "https://trademindtech.com",
+                  inLanguage: "en",
+                  publisher: { "@id": "https://trademindtech.com/#organization" },
+                },
+                {
+                  "@type": "WebApplication",
+                  "@id": "https://trademindtech.com/#app",
+                  name: "TradeMind AI",
+                  url: "https://trademindtech.com",
+                  description:
+                    "AI-powered trading decision support. Detect cognitive biases, get daily market bias, analyze your trades.",
+                  applicationCategory: "FinanceApplication",
+                  operatingSystem: "Web",
+                  browserRequirements: "Requires JavaScript",
+                  inLanguage: ["en", "ru"],
+                  featureList: [
+                    "Cognitive bias and decision-error detection",
+                    "AI daily market bias",
+                    "Real-time order flow and analytics lab",
+                    "Trading journal and trade analytics",
+                    "Trading setups and playbook",
+                    "Trader DNA behavioral profile",
+                  ],
+                  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+                  publisher: { "@id": "https://trademindtech.com/#organization" },
+                },
+              ],
             }),
           }}
         />

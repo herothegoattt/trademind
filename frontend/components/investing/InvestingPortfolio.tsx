@@ -3,24 +3,28 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus, X, TrendingUp, TrendingDown, DollarSign,
-  BarChart2, Edit2, Trash2, ChevronDown, ChevronUp,
-  Target, Activity, Award
+  Plus, X, TrendingUp, DollarSign,
+  BarChart2, Edit2, Trash2, ChevronDown,
+  Target, Activity, Award, Wallet,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  LineChart, Line, ReferenceLine,
+  AreaChart, Area, ReferenceLine,
 } from 'recharts';
 import {
   usePortfolio, Position, calcPnL, calcPnLPct,
   posInvested, posCurrentValue,
 } from '../../lib/portfolioContext';
+import {
+  Panel, StatTile, EmptyState, PrimaryButton,
+  microLabel, tooltipStyle, CAT_RGB, ACCENT,
+} from './_ui';
 
-// ─── Colors ───────────────────────────────────────────────────────────────────
+// ─── Category colors (hex — re-exported for sibling tabs) ──────────────────────
 export const CAT_COLORS: Record<string, string> = {
-  crypto: '#f97316', stocks: '#06b6d4', forex: '#8b5cf6',
-  commodities: '#f59e0b', etf: '#10b981', other: '#64748b',
+  crypto: '#f59e0b', stocks: '#22d3ee', forex: '#818cf8',
+  commodities: '#d4a853', etf: '#34d399', other: '#94a3b8',
 };
 
 // ─── Form defaults ────────────────────────────────────────────────────────────
@@ -32,28 +36,6 @@ const EMPTY_FORM: Omit<Position, 'id'> = {
   exitDate: undefined,
   status: 'open', notes: '', category: 'stocks',
 };
-
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, color, icon: Icon }: {
-  label: string; value: string; sub?: string; color: string; icon: any;
-}) {
-  return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">{label}</p>
-          <p className={`text-2xl font-black mt-1.5 ${color}`}>{value}</p>
-          {sub && <p className="text-slate-500 text-xs mt-0.5">{sub}</p>}
-        </div>
-        <div className="p-2.5 bg-slate-800 rounded-lg">
-          <Icon size={18} className={color} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type Rec = 'trade' | 'avoid' | 'watch';
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function InvestingPortfolio() {
@@ -98,166 +80,164 @@ export default function InvestingPortfolio() {
     filtered.slice(0, 14).map(p => ({
       name: p.symbol,
       pnl:  parseFloat(calcPnL(p).toFixed(2)),
-      fill: calcPnL(p) >= 0 ? '#10b981' : '#ef4444',
+      fill: calcPnL(p) >= 0 ? '#34d399' : '#f87171',
     })), [filtered]);
 
   const allocData = allocation.map(a => ({
-    name: a.category, value: a.currentValue, color: CAT_COLORS[a.category] || '#64748b',
+    name: a.category, value: a.currentValue, color: CAT_COLORS[a.category] || '#94a3b8',
   }));
 
-  const fmt = (n: number) =>
-    Math.abs(n) >= 1000 ? `$${(n/1000).toFixed(1)}k` : `$${n.toFixed(0)}`;
+  const fmt = (n: number, sign = false): string => {
+    const abs = Math.abs(n);
+    const p = n < 0 ? '-' : sign ? '+' : '';
+    return abs >= 1000 ? `${p}$${(abs / 1000).toFixed(1)}k` : `${p}$${abs.toFixed(0)}`;
+  };
   const pct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+
+  const tone = (n: number) => (n >= 0 ? 'text-emerald-400' : 'text-rose-400');
 
   return (
     <div className="space-y-6">
 
       {/* ── Top Bar ── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-xl font-black text-white">My Investing Portfolio</h2>
-          <p className="text-slate-400 text-sm mt-0.5">Track long-term spot & futures positions — feeds all other tabs</p>
+          <h2 className="text-xl font-semibold tracking-tight text-slate-100">My Investing Portfolio</h2>
+          <p className="text-slate-500 text-sm mt-1">Track long-term spot &amp; futures positions — feeds every other tab</p>
         </div>
-        <button onClick={() => openForm()}
-          className="flex items-center gap-2 px-4 py-2.5 bg-orange-500/20 border border-orange-500/40 text-orange-300 rounded-xl font-bold text-sm hover:bg-orange-500/30 transition-all">
+        <PrimaryButton onClick={() => openForm()}>
           <Plus size={16} /> Add Position
-        </button>
+        </PrimaryButton>
       </div>
 
       {/* ── Stats ── */}
       {positions.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <StatCard label="Invested"      value={fmt(stats.totalInvested)}   color="text-slate-100" icon={DollarSign} />
-          <StatCard label="Current Value" value={fmt(stats.totalCurrentVal)}
-            sub={pct(stats.totalReturnPct)}
-            color={stats.totalCurrentVal >= stats.totalInvested ? 'text-emerald-400' : 'text-rose-400'} icon={Activity} />
-          <StatCard label="Unrealized P&L" value={fmt(stats.unrealizedPnL)}
-            sub={`${stats.openCount} open`}
-            color={stats.unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'} icon={TrendingUp} />
-          <StatCard label="Realized P&L"  value={fmt(stats.realizedPnL)}
-            sub={`${stats.closedCount} closed`}
-            color={stats.realizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'} icon={Target} />
-          <StatCard label="Total P&L"     value={fmt(stats.totalPnL)}
-            color={stats.totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'} icon={BarChart2} />
-          <StatCard label="Win Rate"      value={`${stats.winRate.toFixed(0)}%`}
-            sub={`${positions.filter(p=>calcPnL(p)>0).length}W / ${positions.filter(p=>calcPnL(p)<0).length}L`}
-            color={stats.winRate >= 50 ? 'text-emerald-400' : 'text-rose-400'} icon={Award} />
+          <StatTile index={0} label="Invested"      value={fmt(stats.totalInvested)}   icon={DollarSign} />
+          <StatTile index={1} label="Current Value" value={fmt(stats.totalCurrentVal)}
+            valueClass={tone(stats.totalCurrentVal - stats.totalInvested)}
+            delta={pct(stats.totalReturnPct)} deltaTone={stats.totalReturnPct >= 0 ? 'gain' : 'loss'} icon={Activity} />
+          <StatTile index={2} label="Unrealized P&L" value={fmt(stats.unrealizedPnL, true)}
+            valueClass={tone(stats.unrealizedPnL)}
+            delta={`${stats.openCount} open`} deltaTone="muted" icon={TrendingUp} />
+          <StatTile index={3} label="Realized P&L"  value={fmt(stats.realizedPnL, true)}
+            valueClass={tone(stats.realizedPnL)}
+            delta={`${stats.closedCount} closed`} deltaTone="muted" icon={Target} />
+          <StatTile index={4} label="Total P&L"     value={fmt(stats.totalPnL, true)}
+            valueClass={tone(stats.totalPnL)} icon={BarChart2} />
+          <StatTile index={5} label="Win Rate"      value={`${stats.winRate.toFixed(0)}%`}
+            valueClass={tone(stats.winRate - 50)}
+            delta={`${positions.filter(p=>calcPnL(p)>0).length}W · ${positions.filter(p=>calcPnL(p)<0).length}L`} deltaTone="muted" icon={Award} />
         </div>
       )}
 
       {/* ── Charts ── */}
       {positions.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Cumulative P&L line */}
-          <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <h3 className="text-sm font-bold text-slate-300 mb-4">Cumulative P&L Over Time</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={performance}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="date" stroke="#475569" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#475569" tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: 8 }}
-                  formatter={(v: any) => [`$${Number(v).toFixed(0)}`, 'Cumul. P&L']} />
-                <ReferenceLine y={0} stroke="#475569" strokeDasharray="4 4" />
-                <Line type="monotone" dataKey="cumulativePnL" stroke="#f97316" strokeWidth={2}
-                  dot={{ fill: '#f97316', r: 3 }} activeDot={{ r: 5 }} />
-              </LineChart>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Cumulative P&L area */}
+          <Panel className="lg:col-span-2 p-5">
+            <h3 className={`${microLabel} mb-4`}>Cumulative P&amp;L Over Time</h3>
+            <ResponsiveContainer width="100%" height={210}>
+              <AreaChart data={performance} margin={{ top: 4, right: 6, left: -8, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="pnlFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgb(34,211,238)" stopOpacity={0.28} />
+                    <stop offset="100%" stopColor="rgb(34,211,238)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="date" stroke="#475569" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis stroke="#475569" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={48} />
+                <Tooltip contentStyle={tooltipStyle} cursor={{ stroke: 'rgba(34,211,238,0.3)' }}
+                  formatter={(v: any) => [`$${Number(v).toFixed(0)}`, 'Cumulative P&L']} />
+                <ReferenceLine y={0} stroke="rgba(255,255,255,0.12)" strokeDasharray="4 4" />
+                <Area type="monotone" dataKey="cumulativePnL" stroke="rgb(34,211,238)" strokeWidth={2}
+                  fill="url(#pnlFill)" dot={false} activeDot={{ r: 4, fill: 'rgb(34,211,238)' }} />
+              </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </Panel>
 
           {/* Allocation Pie */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <h3 className="text-sm font-bold text-slate-300 mb-4">Allocation by Category</h3>
+          <Panel className="p-5">
+            <h3 className={`${microLabel} mb-4`}>Allocation by Category</h3>
             {allocData.length > 0 ? (
               <>
                 <ResponsiveContainer width="100%" height={150}>
                   <PieChart>
-                    <Pie data={allocData} cx="50%" cy="50%" innerRadius={42} outerRadius={65}
-                      paddingAngle={2} dataKey="value">
+                    <Pie data={allocData} cx="50%" cy="50%" innerRadius={44} outerRadius={66}
+                      paddingAngle={3} dataKey="value" stroke="none">
                       {allocData.map((e, i) => <Cell key={i} fill={e.color} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: 8 }}
-                      formatter={(v: any) => [`$${Number(v).toFixed(0)}`]} />
+                    <Tooltip contentStyle={tooltipStyle}
+                      formatter={(v: any, _n: any, p: any) => [`$${Number(v).toFixed(0)}`, p?.payload?.name]} />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="space-y-1 mt-1">
+                <div className="space-y-1.5 mt-2">
                   {allocData.map((e, i) => (
                     <div key={i} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: e.color }} />
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: e.color }} />
                         <span className="text-slate-400 capitalize">{e.name}</span>
                       </div>
-                      <span className="text-slate-300 font-mono">{fmt(e.value)}</span>
+                      <span className="text-slate-300 tabular-nums">{fmt(e.value)}</span>
                     </div>
                   ))}
                 </div>
               </>
             ) : (
-              <div className="h-40 flex items-center justify-center text-slate-600 text-sm">No open positions</div>
+              <div className="h-40 grid place-items-center text-slate-600 text-sm">No open positions</div>
             )}
-          </div>
+          </Panel>
 
-          {/* P&L per trade */}
+          {/* P&L per position */}
           {pnlBarData.length > 0 && (
-            <div className="lg:col-span-3 bg-slate-900 border border-slate-800 rounded-xl p-5">
-              <h3 className="text-sm font-bold text-slate-300 mb-4">P&L by Position</h3>
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={pnlBarData} barSize={26}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                  <XAxis dataKey="name" stroke="#475569" tick={{ fontSize: 11 }} />
-                  <YAxis stroke="#475569" tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: 8 }}
+            <Panel className="lg:col-span-3 p-5">
+              <h3 className={`${microLabel} mb-4`}>P&amp;L by Position</h3>
+              <ResponsiveContainer width="100%" height={170}>
+                <BarChart data={pnlBarData} barSize={24} margin={{ top: 4, right: 6, left: -8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="name" stroke="#475569" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#475569" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={48} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.03)' }}
                     formatter={(v: any) => [`$${Number(v).toFixed(0)}`, 'P&L']} />
-                  <ReferenceLine y={0} stroke="#475569" />
+                  <ReferenceLine y={0} stroke="rgba(255,255,255,0.12)" />
                   <Bar dataKey="pnl" radius={[4,4,0,0]}>
                     {pnlBarData.map((e, i) => <Cell key={i} fill={e.fill} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            </Panel>
           )}
         </div>
       )}
 
       {/* ── Filters ── */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
-          {(['all','open','closed'] as const).map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)}
-              className={`px-3 py-1.5 rounded text-xs font-bold transition-all capitalize ${filterStatus===s ? 'bg-orange-500/20 text-orange-300' : 'text-slate-500 hover:text-slate-300'}`}>
-              {s}
-            </button>
-          ))}
+      {positions.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Segmented value={filterStatus} onChange={v => setFilterStatus(v)} options={['all','open','closed'] as const} />
+          <Segmented value={filterType} onChange={v => setFilterType(v)} options={['all','spot','futures'] as const} />
+          <div className="ml-auto flex items-center gap-2">
+            <span className={microLabel}>Sort</span>
+            <Segmented value={sortBy} onChange={v => setSortBy(v)} options={['date','pnl','size'] as const} labels={{ pnl: 'P&L' }} />
+          </div>
         </div>
-        <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
-          {(['all','spot','futures'] as const).map(t => (
-            <button key={t} onClick={() => setFilterType(t)}
-              className={`px-3 py-1.5 rounded text-xs font-bold transition-all capitalize ${filterType===t ? 'bg-blue-500/20 text-blue-300' : 'text-slate-500 hover:text-slate-300'}`}>
-              {t}
-            </button>
-          ))}
-        </div>
-        <div className="ml-auto flex gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
-          <span className="px-2 py-1.5 text-xs text-slate-600">Sort:</span>
-          {([['date','Date'],['pnl','P&L'],['size','Size']] as const).map(([v,l]) => (
-            <button key={v} onClick={() => setSortBy(v)}
-              className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${sortBy===v ? 'bg-slate-700 text-slate-200' : 'text-slate-500 hover:text-slate-300'}`}>
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
       {/* ── Positions List ── */}
       {filtered.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-slate-800 rounded-xl">
-          <div className="text-4xl mb-3">📊</div>
-          <p className="text-slate-400 text-sm mb-4">No positions yet. Add your first long-term trade — all tabs will update automatically.</p>
-          <button onClick={() => openForm()}
-            className="px-4 py-2 bg-orange-500/20 border border-orange-500/30 text-orange-300 rounded-lg text-sm font-bold hover:bg-orange-500/30 transition-all">
-            + Add Position
-          </button>
-        </div>
+        <Panel className="p-2">
+          <EmptyState
+            icon={Wallet}
+            title={positions.length === 0 ? 'No positions yet' : 'No positions match these filters'}
+            action={positions.length === 0 ? (
+              <PrimaryButton onClick={() => openForm()}><Plus size={16} /> Add your first position</PrimaryButton>
+            ) : undefined}
+          >
+            {positions.length === 0
+              ? 'Add your first long-term trade — every tab updates automatically from your holdings.'
+              : 'Try adjusting the status or type filters above.'}
+          </EmptyState>
+        </Panel>
       ) : (
         <div className="space-y-2">
           {filtered.map(pos => {
@@ -266,89 +246,80 @@ export default function InvestingPortfolio() {
             const isGreen = pnl >= 0;
             const isOpen  = pos.status === 'open';
             const isExp   = expandedId === pos.id;
+            const catRgb  = CAT_RGB[pos.category] || CAT_RGB.other;
 
             return (
-              <motion.div key={pos.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                className="rounded-xl border border-slate-700/50 bg-slate-900/80 overflow-hidden">
+              <motion.div key={pos.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                <Panel className={isExp ? '' : 'hover:border-white/[0.12]'}>
+                  <div className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none" onClick={() => setExpandedId(isExp ? null : pos.id)}>
+                    <span className="w-1 h-9 rounded-full flex-shrink-0" style={{ background: `rgb(${catRgb})` }} />
 
-                <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => setExpandedId(isExp ? null : pos.id)}>
-                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: CAT_COLORS[pos.category] || '#64748b' }} />
+                    <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+                      <span className="font-semibold text-slate-100 text-sm">{pos.symbol}</span>
+                      <Tag tone={pos.type === 'futures' ? 'violet' : 'cyan'}>{pos.type.toUpperCase()}</Tag>
+                      <Tag tone={pos.direction === 'long' ? 'emerald' : 'rose'}>{pos.direction.toUpperCase()}</Tag>
+                      {pos.type === 'futures' && pos.leverage > 1 && <Tag tone="amber">{pos.leverage}x</Tag>}
+                      <Tag tone={isOpen ? 'emerald' : 'slate'} soft>{isOpen ? 'OPEN' : 'CLOSED'}</Tag>
+                    </div>
 
-                  <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                    <span className="font-black text-white text-sm">{pos.symbol}</span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${pos.type === 'futures' ? 'bg-purple-500/20 text-purple-300' : 'bg-cyan-500/20 text-cyan-300'}`}>
-                      {pos.type.toUpperCase()}
-                    </span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${pos.direction === 'long' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
-                      {pos.direction.toUpperCase()}
-                    </span>
-                    {pos.type === 'futures' && pos.leverage > 1 && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">{pos.leverage}x</span>
-                    )}
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${isOpen ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
-                      {isOpen ? 'OPEN' : 'CLOSED'}
-                    </span>
+                    <div className="hidden sm:flex flex-col items-end text-xs text-slate-500 min-w-[80px]">
+                      <span className="tabular-nums">${pos.entryPrice.toLocaleString()}</span>
+                      <span className="tabular-nums">×{pos.quantity}</span>
+                    </div>
+
+                    <div className="flex flex-col items-end min-w-[84px]">
+                      <span className={`font-semibold text-sm tabular-nums ${isGreen ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {fmt(pnl, true)}
+                      </span>
+                      <span className={`text-[11px] font-medium tabular-nums ${isGreen ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
+                        {pct(pnlPct)}
+                      </span>
+                    </div>
+                    <motion.span className="text-slate-600 ml-1" animate={{ rotate: isExp ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                      <ChevronDown size={15} />
+                    </motion.span>
                   </div>
 
-                  <div className="hidden sm:flex flex-col items-end text-xs text-slate-500 min-w-[80px]">
-                    <span className="font-mono">${pos.entryPrice.toLocaleString()}</span>
-                    <span>×{pos.quantity}</span>
-                  </div>
-
-                  <div className="flex flex-col items-end min-w-[80px]">
-                    <span className={`font-black text-sm ${isGreen ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {isGreen ? '+' : ''}{fmt(pnl)}
-                    </span>
-                    <span className={`text-[10px] font-bold ${isGreen ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {pct(pnlPct)}
-                    </span>
-                  </div>
-                  <span className="text-slate-700 ml-1">{isExp ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</span>
-                </div>
-
-                <AnimatePresence initial={false}>
-                  {isExp && (
-                    <motion.div key="d" initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }}
-                      exit={{ height:0, opacity:0 }} transition={{ duration: 0.2 }} className="overflow-hidden border-t border-slate-800/50">
-                      <div className="px-4 py-4 space-y-4">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                          {[
-                            { label: 'Entry Price',    val: `$${pos.entryPrice.toLocaleString()}`  },
-                            { label: 'Current Price',  val: `$${pos.currentPrice.toLocaleString()}`},
-                            { label: 'Quantity',       val: String(pos.quantity)                   },
-                            { label: 'Invested',       val: fmt(posInvested(pos))                  },
-                            { label: 'Current Value',  val: fmt(posCurrentValue(pos))              },
-                            { label: 'Entry Date',     val: pos.entryDate                          },
-                            ...(pos.exitDate  ? [{ label: 'Exit Date',  val: pos.exitDate  }] : []),
-                            ...(pos.exitPrice ? [{ label: 'Exit Price', val: `$${pos.exitPrice.toLocaleString()}` }] : []),
-                          ].map(({ label, val }) => (
-                            <div key={label} className="bg-slate-800/40 rounded-lg px-3 py-2">
-                              <div className="text-slate-600 mb-0.5">{label}</div>
-                              <div className="text-slate-200 font-mono font-bold">{val}</div>
-                            </div>
-                          ))}
-                        </div>
-                        {pos.notes && <p className="text-xs text-slate-400 bg-slate-800/30 rounded-lg px-3 py-2">{pos.notes}</p>}
-                        <div className="flex items-center gap-2 pt-1">
-                          <button onClick={() => openForm(pos)}
-                            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all">
-                            <Edit2 size={12}/> Edit
-                          </button>
-                          {isOpen && (
-                            <button onClick={() => closePosition(pos.id)}
-                              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30 transition-all">
-                              <Target size={12}/> Close Position
-                            </button>
+                  <AnimatePresence initial={false}>
+                    {isExp && (
+                      <motion.div key="d" initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }}
+                        exit={{ height:0, opacity:0 }} transition={{ duration: 0.2 }} className="overflow-hidden"
+                        style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div className="px-4 py-4 space-y-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                            {[
+                              { label: 'Entry Price',    val: `$${pos.entryPrice.toLocaleString()}`  },
+                              { label: 'Current Price',  val: `$${pos.currentPrice.toLocaleString()}`},
+                              { label: 'Quantity',       val: String(pos.quantity)                   },
+                              { label: 'Invested',       val: fmt(posInvested(pos))                  },
+                              { label: 'Current Value',  val: fmt(posCurrentValue(pos))              },
+                              { label: 'Entry Date',     val: pos.entryDate                          },
+                              ...(pos.exitDate  ? [{ label: 'Exit Date',  val: pos.exitDate  }] : []),
+                              ...(pos.exitPrice ? [{ label: 'Exit Price', val: `$${pos.exitPrice.toLocaleString()}` }] : []),
+                            ].map(({ label, val }) => (
+                              <div key={label} className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">{label}</div>
+                                <div className="text-slate-200 font-medium tabular-nums">{val}</div>
+                              </div>
+                            ))}
+                          </div>
+                          {pos.notes && (
+                            <p className="text-xs text-slate-400 rounded-xl px-3 py-2.5 leading-relaxed" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                              {pos.notes}
+                            </p>
                           )}
-                          <button onClick={() => deletePosition(pos.id)}
-                            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition-all ml-auto">
-                            <Trash2 size={12}/> Delete
-                          </button>
+                          <div className="flex items-center gap-2 pt-0.5">
+                            <ActionButton onClick={() => openForm(pos)} icon={Edit2}>Edit</ActionButton>
+                            {isOpen && (
+                              <ActionButton onClick={() => closePosition(pos.id)} icon={Target} tone="amber">Close Position</ActionButton>
+                            )}
+                            <ActionButton onClick={() => deletePosition(pos.id)} icon={Trash2} tone="rose" className="ml-auto">Delete</ActionButton>
+                          </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </Panel>
               </motion.div>
             );
           })}
@@ -361,124 +332,102 @@ export default function InvestingPortfolio() {
           <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
             onClick={() => setShowForm(false)}>
-            <motion.div initial={{ scale:0.95, opacity:0 }} animate={{ scale:1, opacity:1 }}
-              exit={{ scale:0.95, opacity:0 }} transition={{ duration:0.18 }}
-              className="w-full max-w-lg bg-[#0d1117] border border-slate-700 rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+            <motion.div initial={{ scale:0.97, opacity:0, y: 8 }} animate={{ scale:1, opacity:1, y: 0 }}
+              exit={{ scale:0.97, opacity:0 }} transition={{ duration:0.18 }}
+              className="w-full max-w-lg rounded-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto"
+              style={{ background: 'rgba(10,13,24,0.98)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 24px 64px -16px rgba(0,0,0,0.8)' }}
               onClick={e => e.stopPropagation()}>
 
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-black text-white">{editId ? 'Edit Position' : 'Add Position'}</h3>
-                <button onClick={() => setShowForm(false)} className="text-slate-500 hover:text-white transition-colors"><X size={20}/></button>
+                <h3 className="text-lg font-semibold tracking-tight text-slate-100">{editId ? 'Edit Position' : 'Add Position'}</h3>
+                <button onClick={() => setShowForm(false)} className="grid place-items-center w-8 h-8 rounded-lg text-slate-500 hover:text-slate-200 transition-colors" style={{ background: 'rgba(255,255,255,0.04)' }}><X size={18}/></button>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Symbol</label>
+                  <FieldLabel>Symbol</FieldLabel>
                   <input value={form.symbol}
                     onChange={e => setForm(f => ({ ...f, symbol: e.target.value.toUpperCase() }))}
                     placeholder="e.g. BTC, AAPL, EURUSD, SPY"
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-orange-500/60 focus:outline-none placeholder-slate-600"/>
+                    className={inputCls}/>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Type</label>
-                  <div className="flex gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
-                    {(['spot','futures'] as const).map(t => (
-                      <button key={t} onClick={() => setForm(f => ({ ...f, type: t, leverage: t==='spot' ? 1 : f.leverage, direction: t==='spot'?'long':f.direction }))}
-                        className={`flex-1 py-1.5 rounded text-xs font-bold transition-all capitalize ${form.type===t ? 'bg-orange-500/20 text-orange-300' : 'text-slate-500'}`}>
-                        {t}
-                      </button>
-                    ))}
-                  </div>
+                  <FieldLabel>Type</FieldLabel>
+                  <ModalSegmented value={form.type} options={['spot','futures']}
+                    onChange={t => setForm(f => ({ ...f, type: t as any, leverage: t==='spot' ? 1 : f.leverage, direction: t==='spot'?'long':f.direction }))} />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Direction</label>
-                  <div className="flex gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
-                    {(['long','short'] as const).map(d => (
-                      <button key={d} onClick={() => setForm(f => ({ ...f, direction: d }))}
-                        disabled={form.type==='spot' && d==='short'}
-                        className={`flex-1 py-1.5 rounded text-xs font-bold transition-all capitalize ${form.direction===d ? d==='long'?'bg-emerald-500/20 text-emerald-300':'bg-rose-500/20 text-rose-300' : 'text-slate-500'} disabled:opacity-30`}>
-                        {d}
-                      </button>
-                    ))}
-                  </div>
+                  <FieldLabel>Direction</FieldLabel>
+                  <ModalSegmented value={form.direction} options={['long','short']}
+                    disabledOption={form.type === 'spot' ? 'short' : undefined}
+                    tones={{ long: 'emerald', short: 'rose' }}
+                    onChange={d => setForm(f => ({ ...f, direction: d as any }))} />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Category</label>
+                  <FieldLabel>Category</FieldLabel>
                   <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none">
+                    className={inputCls}>
                     {['crypto','stocks','forex','commodities','etf','other'].map(c => (
-                      <option key={c} value={c}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>
+                      <option key={c} value={c} className="bg-slate-900">{c.charAt(0).toUpperCase()+c.slice(1)}</option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Status</label>
-                  <div className="flex gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
-                    {(['open','closed'] as const).map(s => (
-                      <button key={s} onClick={() => setForm(f => ({ ...f, status: s }))}
-                        className={`flex-1 py-1.5 rounded text-xs font-bold transition-all capitalize ${form.status===s ? 'bg-slate-600 text-white' : 'text-slate-500'}`}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
+                  <FieldLabel>Status</FieldLabel>
+                  <ModalSegmented value={form.status} options={['open','closed']}
+                    onChange={s => setForm(f => ({ ...f, status: s as any }))} />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Entry Price ($)</label>
+                  <FieldLabel>Entry Price ($)</FieldLabel>
                   <input type="number" min="0" step="any" value={form.entryPrice || ''}
-                    onChange={e => setForm(f => ({ ...f, entryPrice: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-orange-500/60 focus:outline-none"/>
+                    onChange={e => setForm(f => ({ ...f, entryPrice: parseFloat(e.target.value) || 0 }))} className={inputCls}/>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Current Price ($)</label>
+                  <FieldLabel>Current Price ($)</FieldLabel>
                   <input type="number" min="0" step="any" value={form.currentPrice || ''}
-                    onChange={e => setForm(f => ({ ...f, currentPrice: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-orange-500/60 focus:outline-none"/>
+                    onChange={e => setForm(f => ({ ...f, currentPrice: parseFloat(e.target.value) || 0 }))} className={inputCls}/>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Quantity</label>
+                  <FieldLabel>Quantity</FieldLabel>
                   <input type="number" min="0" step="any" value={form.quantity || ''}
-                    onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-orange-500/60 focus:outline-none"/>
+                    onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} className={inputCls}/>
                 </div>
 
                 {form.type === 'futures' && (
                   <div>
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Leverage</label>
+                    <FieldLabel>Leverage</FieldLabel>
                     <input type="number" min="1" max="125" step="1" value={form.leverage}
-                      onChange={e => setForm(f => ({ ...f, leverage: parseInt(e.target.value) || 1 }))}
-                      className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-orange-500/60 focus:outline-none"/>
+                      onChange={e => setForm(f => ({ ...f, leverage: parseInt(e.target.value) || 1 }))} className={inputCls}/>
                   </div>
                 )}
 
                 {form.status === 'closed' && (
                   <div>
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Exit Price ($)</label>
+                    <FieldLabel>Exit Price ($)</FieldLabel>
                     <input type="number" min="0" step="any" value={form.exitPrice || ''}
-                      onChange={e => setForm(f => ({ ...f, exitPrice: parseFloat(e.target.value) || undefined }))}
-                      className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-orange-500/60 focus:outline-none"/>
+                      onChange={e => setForm(f => ({ ...f, exitPrice: parseFloat(e.target.value) || undefined }))} className={inputCls}/>
                   </div>
                 )}
 
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Entry Date</label>
+                  <FieldLabel>Entry Date</FieldLabel>
                   <input type="date" value={form.entryDate}
-                    onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-orange-500/60 focus:outline-none"/>
+                    onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))} className={inputCls}/>
                 </div>
 
                 <div className="col-span-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Notes</label>
+                  <FieldLabel>Notes</FieldLabel>
                   <textarea rows={2} value={form.notes}
                     onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                     placeholder="Strategy thesis, target, stop..."
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-orange-500/60 focus:outline-none placeholder-slate-600 resize-none"/>
+                    className={`${inputCls} resize-none`}/>
                 </div>
               </div>
 
@@ -486,21 +435,106 @@ export default function InvestingPortfolio() {
               {form.entryPrice > 0 && form.currentPrice > 0 && form.quantity > 0 && (() => {
                 const preview = calcPnL({ ...form, id: '' });
                 const pp = calcPnLPct({ ...form, id: '' });
+                const up = preview >= 0;
                 return (
-                  <div className={`rounded-xl p-3 border text-sm font-bold ${preview >= 0 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-300'}`}>
-                    P&L Preview: {preview >= 0 ? '+' : ''}{fmt(preview)} ({pp >= 0 ? '+' : ''}{pp.toFixed(1)}%)
+                  <div className="rounded-xl px-4 py-3 flex items-center justify-between"
+                    style={{ background: up ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)', border: `1px solid ${up ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.25)'}` }}>
+                    <span className={microLabel}>P&amp;L Preview</span>
+                    <span className={`text-sm font-semibold tabular-nums ${up ? 'text-emerald-300' : 'text-rose-300'}`}>
+                      {fmt(preview, true)} <span className="opacity-70">({pp >= 0 ? '+' : ''}{pp.toFixed(1)}%)</span>
+                    </span>
                   </div>
                 );
               })()}
 
               <button onClick={submitForm}
-                className="w-full py-3 bg-orange-500/20 border border-orange-500/40 text-orange-300 rounded-xl font-black text-sm hover:bg-orange-500/30 transition-all">
+                className="w-full py-3 rounded-xl font-semibold text-sm text-cyan-100 transition-all hover:brightness-110"
+                style={{ background: 'rgba(34,211,238,0.15)', border: '1px solid rgba(34,211,238,0.35)' }}>
                 {editId ? 'Save Changes' : 'Add Position'}
               </button>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Local helpers ──────────────────────────────────────────────────────────
+const inputCls = 'w-full px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-white text-sm placeholder-slate-600 transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/40';
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <label className="block mb-1.5 text-[10.5px] font-semibold text-slate-400 uppercase tracking-[0.12em]">{children}</label>;
+}
+
+const TONE_MAP: Record<string, string> = {
+  cyan: '34,211,238', violet: '129,140,248', emerald: '52,211,153',
+  rose: '248,113,113', amber: '245,158,11', slate: '148,163,184',
+};
+
+function Tag({ children, tone = 'slate', soft = false }: { children: React.ReactNode; tone?: keyof typeof TONE_MAP; soft?: boolean }) {
+  const rgb = TONE_MAP[tone];
+  return (
+    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+      style={{ background: `rgba(${rgb},${soft ? 0.1 : 0.14})`, color: `rgb(${rgb})`, border: `1px solid rgba(${rgb},0.22)` }}>
+      {children}
+    </span>
+  );
+}
+
+function ActionButton({
+  children, onClick, icon: Icon, tone = 'slate', className = '',
+}: { children: React.ReactNode; onClick: () => void; icon: any; tone?: 'slate'|'amber'|'rose'; className?: string }) {
+  const styles = {
+    slate: { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#cbd5e1' },
+    amber: { background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#fcd34d' },
+    rose:  { background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', color: '#fca5a5' },
+  }[tone];
+  return (
+    <button onClick={onClick} className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:brightness-110 ${className}`} style={styles}>
+      <Icon size={12} /> {children}
+    </button>
+  );
+}
+
+function Segmented<T extends string>({
+  value, onChange, options, labels = {},
+}: { value: T; onChange: (v: T) => void; options: readonly T[]; labels?: Partial<Record<T, string>> }) {
+  return (
+    <div className="flex gap-1 rounded-xl p-1" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      {options.map(o => {
+        const active = value === o;
+        return (
+          <button key={o} onClick={() => onChange(o)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${active ? 'text-cyan-200' : 'text-slate-500 hover:text-slate-300'}`}
+            style={active ? { background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.28)' } : { border: '1px solid transparent' }}>
+            {labels[o] ?? o}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ModalSegmented({
+  value, options, onChange, disabledOption, tones = {},
+}: {
+  value: string; options: string[]; onChange: (v: string) => void;
+  disabledOption?: string; tones?: Record<string, keyof typeof TONE_MAP>;
+}) {
+  return (
+    <div className="flex gap-1 rounded-xl p-1" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+      {options.map(o => {
+        const active = value === o;
+        const rgb = tones[o] ? TONE_MAP[tones[o]] : ACCENT;
+        return (
+          <button key={o} onClick={() => onChange(o)} disabled={disabledOption === o}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors disabled:opacity-30 ${active ? '' : 'text-slate-500'}`}
+            style={active ? { background: `rgba(${rgb},0.14)`, color: `rgb(${rgb})`, border: `1px solid rgba(${rgb},0.3)` } : { border: '1px solid transparent' }}>
+            {o}
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -1597,44 +1597,75 @@ function AnimNum({ to, suf="", dec=0, active }: { to:number; suf?:string; dec?:n
   return <span>{dec>0?n.toFixed(dec):Math.round(n).toLocaleString()}{suf}</span>;
 }
 
+// plan badge styling — matches the pricing slide (Core/Edge/Apex)
+const PLAN_STYLE: Record<string, { label:string; c:string }> = {
+  core: { label:"Core", c:CYN },
+  edge: { label:"Edge", c:VIO },
+  apex: { label:"Apex", c:AMB },
+};
+
 const ALL_REVIEWS = [
-  { name:"Алексей М.",  role:"Forex · 4 года",       c:VIO, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Alexey&backgroundColor=b6e3f4",   text:"After TradeMind I finally saw that 70% of losses were in the NY overlap. Dropped the session — ended the month in profit." },
-  { name:"Дина К.",     role:"Crypto · Almaty",       c:CYN, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Dina&backgroundColor=d1d4f9",     text:"Trader DNA showed I was cutting profits at 2.3R. Platform paid for itself in the first week." },
-  { name:"Rustam T.",   role:"Stocks · Tashkent",     c:GRN, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Rustam&backgroundColor=c0aede",   text:"In 2 months win-rate went from 38% to 52%. AI found I was entering too early without confirmation." },
-  { name:"Sarah W.",    role:"Options · London",       c:AMB, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Sarah&backgroundColor=ffd5dc",    text:"The risk analyzer flagged patterns I'd been ignoring for years. My drawdown dropped 40% in six weeks." },
-  { name:"Marcus L.",   role:"Futures · New York",     c:RED, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Marcus&backgroundColor=ffdfbf",   text:"Daily Bias alone is worth the subscription. Stopped fighting the trend every morning. Huge shift." },
-  { name:"Yuki T.",     role:"Crypto · Tokyo",         c:VIO, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Yuki&backgroundColor=c0aede",     text:"TradeMind caught that I revenge-trade after losers. Fixed it with a cooling-off rule. Best month ever." },
-  { name:"Elena P.",    role:"Forex · Madrid",         c:CYN, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Elena&backgroundColor=b6e3f4",    text:"Psychology section is gold. I never realized how much FOMO was costing me — now I have data to prove it." },
-  { name:"James K.",    role:"Equities · Chicago",     c:GRN, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=James&backgroundColor=d1fae5",    text:"Setups section replaced my manual spreadsheet. Everything in one place, AI notes on every entry." },
-  { name:"Amir H.",     role:"Crypto · Dubai",         c:AMB, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Amir&backgroundColor=fef3c7",     text:"Community Edge signals have been consistently accurate. 3× better than my old signals group." },
-  { name:"Nina V.",     role:"Forex · Prague",         c:RED, img:"https://api.dicebear.com/9.x/avataaars/svg?seed=Nina&backgroundColor=ffd5dc",     text:"The AI coach picked up I was over-leveraging on Fridays. Simple fix, massive difference in monthly PnL." },
+  { name:"Алексей М.",  role:"Forex · 4 года", plan:"apex", c:VIO, img:"https://randomuser.me/api/portraits/men/32.jpg",   text:"TradeMind показал, что бóльшая часть убытков копилась в лондонско-нью-йоркском оверлапе. Убрал эту сессию — и впервые за полгода закрыл месяц в плюсе." },
+  { name:"@kriptodina", role:"Crypto",         plan:"edge", c:CYN, img:"https://randomuser.me/api/portraits/women/44.jpg", text:"Trader DNA показал, что я слишком рано фиксирую прибыль, а убыткам даю разрастись. Поправила правило выхода — и всё поменялось." },
+  { name:"Marcus L.",   role:"Futures",        plan:"edge", c:GRN, img:"https://randomuser.me/api/portraits/men/52.jpg",   text:"Daily Bias alone pays for the subscription. I stopped fading the trend every morning and my open has been so much cleaner." },
+  { name:"Sarah W.",    role:"Options",        plan:"apex", c:AMB, img:"https://randomuser.me/api/portraits/women/68.jpg", text:"The Setups journal replaced my messy spreadsheet completely. Every entry now has AI notes and a tagged thesis — my reviews take half the time." },
+  { name:"@scalp_mike", role:"Stocks",         plan:"edge", c:RED, img:"https://randomuser.me/api/portraits/men/45.jpg",   text:"In two months my win-rate went from 38% to 52%. The AI flagged that I was entering before confirmation on almost every losing trade." },
+  { name:"Дмитрий В.",  role:"Forex",          plan:"apex", c:VIO, img:"https://randomuser.me/api/portraits/men/15.jpg",   text:"Risk-анализатор вскрыл мои привычки в управлении размером позиции, которые я годами игнорировал. Просадки стали заметно меньше и контролируемее." },
+  { name:"Yuki T.",     role:"Crypto",         plan:"edge", c:CYN, img:"https://randomuser.me/api/portraits/women/65.jpg", text:"TradeMind proved I revenge-trade right after a loss. A simple cooling-off rule killed those trades — best month I've ever logged." },
+  { name:"@nika_fx",    role:"Forex",          plan:"core", c:AMB, img:"https://randomuser.me/api/portraits/women/29.jpg", text:"Раздел по психологии — золото. Даже не подозревала, сколько мне стоили входы на FOMO, пока не увидела всё в цифрах." },
+  { name:"James K.",    role:"Equities",       plan:"apex", c:GRN, img:"https://randomuser.me/api/portraits/men/64.jpg",   text:"Community Edge signals have been far more reliable than the paid Telegram group I left. Genuinely worth it." },
+  { name:"Игорь С.",    role:"Crypto",         plan:"edge", c:RED, img:"https://randomuser.me/api/portraits/men/76.jpg",   text:"AI-коуч заметил, что я перегружаю плечо по пятницам. Одно правило — и пятница из худшего дня стала безубыточной." },
 ];
 
 function ReviewCard({ r }: { r: typeof ALL_REVIEWS[0] }) {
+  const initials = r.name.replace(/^@/,"").split(/[\s_]+/).map(w => w[0]).filter(Boolean).join("").slice(0,2).toUpperCase();
+  const plan = PLAN_STYLE[r.plan] ?? PLAN_STYLE.edge;
   return (
     <div style={{
-      flex:"0 0 320px", background:"rgba(255,255,255,.025)",
-      border:`1px solid ${r.c}22`, borderRadius:16,
-      padding:"20px 18px", display:"flex", flexDirection:"column", gap:14,
+      position:"relative", flex:"0 0 340px",
+      background:"linear-gradient(165deg,rgba(255,255,255,.05) 0%,rgba(255,255,255,.018) 100%)",
+      border:"1px solid rgba(255,255,255,.08)", borderRadius:18,
+      padding:"24px 22px 20px", display:"flex", flexDirection:"column", gap:16, overflow:"hidden",
     }}>
-      <div style={{ color:AMB, fontSize:".8rem", letterSpacing:2 }}>★★★★★</div>
-      <p style={{ margin:0, fontSize:".8rem", color:"rgba(148,163,184,.75)", lineHeight:1.7, flex:1 }}>
-        &ldquo;{r.text}&rdquo;
-      </p>
-      <div style={{ display:"flex", alignItems:"center", gap:12, paddingTop:12, borderTop:"1px solid rgba(255,255,255,.05)" }}>
+      {/* accent glow + top hairline in the card's color */}
+      <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${r.c}aa,transparent)` }} />
+      <div style={{ position:"absolute", top:-60, right:-60, width:160, height:160, borderRadius:"50%", background:`radial-gradient(circle,${r.c}1f,transparent 70%)`, pointerEvents:"none" }} />
+
+      {/* header: avatar + identity + stars */}
+      <div style={{ display:"flex", alignItems:"center", gap:13, position:"relative" }}>
         <div style={{ position:"relative", flexShrink:0 }}>
-          <div style={{ width:42, height:42, borderRadius:12, overflow:"hidden", border:`1.5px solid ${r.c}40`, boxShadow:`0 0 14px ${r.c}30` }}>
+          <div style={{ width:48, height:48, borderRadius:"50%", overflow:"hidden", border:`2px solid ${r.c}55`, boxShadow:`0 0 16px ${r.c}33`, display:"flex", alignItems:"center", justifyContent:"center", background:`${r.c}22`, fontSize:".82rem", fontWeight:700, color:`${r.c}dd` }}>
+            {initials}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={r.img} alt={r.name} width={42} height={42} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}
+            <img src={r.img} alt={r.name} width={48} height={48} loading="lazy" style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", display:"block" }}
               onError={e => { (e.currentTarget as HTMLImageElement).style.display="none"; }} />
           </div>
-          <div style={{ position:"absolute", bottom:1, right:1, width:10, height:10, borderRadius:"50%", background:GRN, border:"2px solid #07080f", boxShadow:`0 0 6px ${GRN}` }} />
+          {/* verified badge */}
+          <div style={{ position:"absolute", bottom:-2, right:-2, width:17, height:17, borderRadius:"50%", background:CYN, border:"2.5px solid #07080f", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#07080f" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+          </div>
         </div>
-        <div>
-          <div style={{ fontSize:".82rem", fontWeight:600, color:"#f1f5f9" }}>{r.name}</div>
-          <div style={{ fontSize:".63rem", color:`${r.c}99`, marginTop:2 }}>{r.role}</div>
+        <div style={{ minWidth:0, flex:1 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+            <span style={{ fontSize:".88rem", fontWeight:700, color:"#f1f5f9", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.name}</span>
+            <span style={{ fontSize:".5rem", fontFamily:"monospace", letterSpacing:".06em", color:`${CYN}cc`, background:`${CYN}1a`, border:`1px solid ${CYN}33`, padding:"1px 5px", borderRadius:20, flexShrink:0 }}>VERIFIED</span>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:4, flexWrap:"wrap" }}>
+            <span style={{ fontSize:".66rem", color:"rgba(148,163,184,.6)" }}>{r.role}</span>
+            <span style={{ width:3, height:3, borderRadius:"50%", background:"rgba(148,163,184,.35)" }} />
+            <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:".58rem", fontWeight:700, fontFamily:"monospace", letterSpacing:".06em", color:plan.c, background:`${plan.c}16`, border:`1px solid ${plan.c}33`, padding:"1px 7px", borderRadius:20 }}>
+              <span style={{ width:5, height:5, borderRadius:"50%", background:plan.c, boxShadow:`0 0 5px ${plan.c}` }} />
+              {plan.label.toUpperCase()}
+            </span>
+          </div>
         </div>
+        <div style={{ color:AMB, fontSize:".72rem", letterSpacing:1.5, flexShrink:0, alignSelf:"flex-start" }}>★★★★★</div>
       </div>
+
+      {/* quote */}
+      <p style={{ margin:0, fontSize:".82rem", color:"rgba(203,213,225,.82)", lineHeight:1.7, flex:1 }}>
+        &ldquo;{r.text}&rdquo;
+      </p>
     </div>
   );
 }
@@ -1642,7 +1673,7 @@ function ReviewCard({ r }: { r: typeof ALL_REVIEWS[0] }) {
 function SlideStats({ active }: { active: boolean }) {
   const t = useT();
   const doubled = [...ALL_REVIEWS, ...ALL_REVIEWS];
-  const CARD_W = 320 + 14; // card width + gap
+  const CARD_W = 340 + 14; // card width + gap
   const totalPx = ALL_REVIEWS.length * CARD_W;
 
   return (
@@ -1979,7 +2010,6 @@ export default function HomePage() {
             <img src="/logo.jpg" alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
           </div>
           <span style={{ fontWeight:700, fontSize:".9rem", letterSpacing:"-.02em" }}>TradeMind</span>
-          <span style={{ fontSize:".56rem", fontFamily:"monospace", letterSpacing:".14em", color:"rgba(100,116,139,.45)", border:"1px solid rgba(100,116,139,.12)", padding:"2px 6px", borderRadius:3 }}>ALPHA</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:20 }}>
           {([["slide-problem","lp_nav_problem"],["slide-how","lp_nav_how"]] as [string,string][]).map(([id,k])=>(

@@ -171,9 +171,12 @@ const LIMITS: Record<Plan, PlanLimits> = {
   },
 };
 
-/** Returns plan limits for the current authenticated user. */
+/** Returns plan limits for the current authenticated user.
+ *  Subscribes to the auth store via a selector so the component re-renders
+ *  when the user/plan loads asynchronously or is rehydrated from persistence —
+ *  using getState() here would freeze limits at the first (logged-out) render. */
 export function usePlanLimits(): PlanLimits {
-  const plan = (useAuthStore.getState().user?.plan as Plan) || "core";
+  const plan = useAuthStore((s) => (s.user?.plan as Plan) || "core");
   return LIMITS[plan] ?? LIMITS.core;
 }
 

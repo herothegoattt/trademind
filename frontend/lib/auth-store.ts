@@ -130,26 +130,42 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const { access_token } = await response.json();
+          if (!access_token) throw new Error("No token returned from server");
           get().setToken(access_token);
+          // The token is valid the moment the server issues it — consider the
+          // user logged in immediately. A hiccup loading the profile below must
+          // never undo a successful authentication.
+          set({ isAuthenticated: true });
 
-          // Fetch user data
-          const userResponse = await fetch("/api/auth/me", {
-            headers: {
-              Authorization: `Bearer ${access_token}`,
-            },
-          });
-
-          if (!userResponse.ok) {
-            throw new Error("Failed to fetch user data");
+          // Fetch the profile — tolerate transient failures (5xx / network).
+          let userResponse: Response | null = null;
+          try {
+            userResponse = await fetch("/api/auth/me", {
+              headers: { Authorization: `Bearer ${access_token}` },
+            });
+          } catch {
+            userResponse = null; // network blip — keep the session, fill profile later
           }
 
-          const userData = await userResponse.json();
-          set({ user: userData, isAuthenticated: true, isLoading: false });
-          identifyUser(userData);
-          posthog.capture("logged_in", { email: userData.email });
+          if (userResponse && userResponse.ok) {
+            const userData = await userResponse.json();
+            set({ user: userData, isAuthenticated: true, isLoading: false });
+            identifyUser(userData);
+            posthog.capture("logged_in", { email: userData.email });
+            return;
+          }
+
+          if (userResponse && (userResponse.status === 401 || userResponse.status === 403)) {
+            // The server rejected a token it just issued — a genuine failure.
+            throw new Error("Account could not be verified. Please try again.");
+          }
+
+          // Transient backend error: stay logged in, ProtectedLayout will retry /me.
+          set({ isLoading: false });
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : "Login failed";
-          set({ error: errorMessage, isLoading: false });
+          get().setToken(null);
+          set({ error: errorMessage, isLoading: false, isAuthenticated: false, user: null });
           throw error;
         }
       },
@@ -189,7 +205,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       fetchCurrentUser: async () => {
-        const token = localStorage.getItem("access_token");
+        const token = get().token || localStorage.getItem("access_token");
         if (!token) {
           set({ isAuthenticated: false, isLoading: false });
           return;
@@ -202,17 +218,26 @@ export const useAuthStore = create<AuthState>()(
             },
           });
 
-          if (!response.ok) {
-            throw new Error("Failed to fetch user");
+          if (response.ok) {
+            const user = await response.json();
+            set({ user, isAuthenticated: true, token, isLoading: false });
+            identifyUser(user);
+            return;
           }
 
-          const user = await response.json();
-          set({ user, isAuthenticated: true, token, isLoading: false });
-          identifyUser(user);
-        } catch (error) {
-          // Silently fail - user is not authenticated
-          set({ isAuthenticated: false, token: null, user: null, isLoading: false });
-          localStorage.removeItem("access_token");
+          // Only a genuine auth failure (expired/invalid token) ends the session.
+          if (response.status === 401 || response.status === 403) {
+            set({ isAuthenticated: false, token: null, user: null, isLoading: false });
+            localStorage.removeItem("access_token");
+            return;
+          }
+
+          // Transient backend error (5xx, cold start, proxy down): keep the
+          // token and the persisted user so a server hiccup doesn't log us out.
+          set((s) => ({ token, isAuthenticated: !!s.user, isLoading: false }));
+        } catch {
+          // Network error / timeout — same: never drop a valid session over a blip.
+          set((s) => ({ token, isAuthenticated: !!s.user, isLoading: false }));
         }
       },
 
@@ -246,6 +271,18 @@ export const useAuthStore = create<AuthState>()(
     {
       name: "auth-storage",
       partialize: (state) => ({ token: state.token, user: state.user }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        // Backfill the token from the standalone key in case the persisted blob lost it.
+        if (!state.token && typeof window !== "undefined") {
+          const t = localStorage.getItem("access_token");
+          if (t) state.token = t;
+        }
+        // A persisted token means the user was logged in — mark them authenticated
+        // right away so reloads never bounce to /login. fetchCurrentUser() then
+        // validates in the background and only a real 401/403 ends the session.
+        if (state.token) state.isAuthenticated = true;
+      },
     }
   )
 );

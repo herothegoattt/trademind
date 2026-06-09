@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Plus, Trash2, Edit2, TrendingUp, TrendingDown,
@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useT } from '../../lib/i18n';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useTradeStore, TradeUI, calculatePnL } from '../../lib/trade-store';
+import { useTradeStore, TradeUI, calculatePnL, getInstrumentInfo, quoteConversion, fetchQuoteToUsdRate } from '../../lib/trade-store';
 import { usePlanLimits } from '../../lib/plan-limits';
 import { UpgradeGate } from '../../components/ui/UpgradeGate';
 
@@ -47,6 +47,7 @@ interface FormData {
   exit: string;
   lots: string;
   accountSize: string;
+  pointValue: string;
   duration: string;
   notes: string;
   images: string[];
@@ -54,7 +55,7 @@ interface FormData {
 
 const EMPTY_FORM: FormData = {
   symbol: '', type: 'long', entry: '', exit: '',
-  lots: '', accountSize: '', duration: '', notes: '', images: [],
+  lots: '', accountSize: '', pointValue: '', duration: '', notes: '', images: [],
 };
 
 /* ── Page ────────────────────────────────────────────────────────── */
@@ -72,19 +73,30 @@ export default function JournalPage() {
   const [formData,      setFormData]      = useState<FormData>(EMPTY_FORM);
   const t = useT();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const entry       = parseFloat(formData.entry);
     const exit        = formData.exit        ? parseFloat(formData.exit)        : undefined;
     const lots        = formData.lots        ? parseFloat(formData.lots)        : undefined;
     const accountSize = formData.accountSize ? parseFloat(formData.accountSize) : undefined;
-    const pnlResult   = exit
-      ? calculatePnL(entry, exit, formData.type, formData.symbol, lots, accountSize)
+    const pointValue  = formData.pointValue  ? parseFloat(formData.pointValue)  : undefined;
+
+    // Cross-currency pairs need a live quote→USD rate for an exact P&L (unless overridden).
+    let quoteToUsdRate: number | undefined;
+    if (exit && lots && !pointValue) {
+      const { needsLiveRate, quote } = quoteConversion(formData.symbol);
+      if (needsLiveRate) {
+        quoteToUsdRate = (await fetchQuoteToUsdRate(quote)) ?? undefined;
+      }
+    }
+
+    const pnlResult = exit
+      ? calculatePnL(entry, exit, formData.type, formData.symbol, lots, accountSize, { pointValue, quoteToUsdRate })
       : null;
 
     const tradeData = {
       symbol: formData.symbol.toUpperCase(), type: formData.type,
-      entry, exit, lots, accountSize,
+      entry, exit, lots, accountSize, pointValue,
       duration: formData.duration, notes: formData.notes,
       images: formData.images,
       pnl: pnlResult?.pnl, pnlPercent: pnlResult?.pnlPercent,
@@ -105,6 +117,7 @@ export default function JournalPage() {
       exit:        trade.exit?.toString()        || '',
       lots:        trade.lots?.toString()        || '',
       accountSize: trade.accountSize?.toString() || '',
+      pointValue:  trade.pointValue?.toString()  || '',
       duration:    trade.duration,
       notes:       trade.notes,
       images:      trade.images ?? [],
@@ -508,6 +521,43 @@ function TradeFormModal({ isOpen, onClose, formData, setFormData, onSubmit, isEd
     setFormData({ ...formData, images: next });
   };
 
+  // Instrument-aware sizing + live P&L preview
+  const instrument = getInstrumentInfo(formData.symbol);
+  const sizeLabel =
+    instrument.instrument === 'index' ? 'Contracts'
+    : instrument.instrument === 'crypto' ? 'Quantity'
+    : instrument.instrument === 'stock' ? 'Shares'
+    : 'Lot Size';
+
+  const pointValue = formData.pointValue ? parseFloat(formData.pointValue) : undefined;
+  const cross = quoteConversion(formData.symbol);
+  const needsRate = cross.needsLiveRate && !pointValue;
+
+  // Pull the live quote→USD rate for cross-currency pairs (EURJPY, EURGBP…)
+  const [crossRate, setCrossRate] = useState<number | null>(null);
+  const [rateLoading, setRateLoading] = useState(false);
+  useEffect(() => {
+    if (!needsRate) { setCrossRate(null); return; }
+    let alive = true;
+    setRateLoading(true);
+    fetchQuoteToUsdRate(cross.quote).then(r => {
+      if (alive) { setCrossRate(r); setRateLoading(false); }
+    });
+    return () => { alive = false; };
+  }, [needsRate, cross.quote]);
+
+  const livePreview = (() => {
+    const entry = parseFloat(formData.entry);
+    const exit  = formData.exit ? parseFloat(formData.exit) : NaN;
+    if (!entry || !exit || Number.isNaN(exit)) return null;
+    const lots = formData.lots ? parseFloat(formData.lots) : undefined;
+    const acct = formData.accountSize ? parseFloat(formData.accountSize) : undefined;
+    return calculatePnL(entry, exit, formData.type, formData.symbol, lots, acct, {
+      pointValue,
+      quoteToUsdRate: crossRate ?? undefined,
+    });
+  })();
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -577,10 +627,15 @@ function TradeFormModal({ isOpen, onClose, formData, setFormData, onSubmit, isEd
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] text-slate-500 uppercase tracking-wider font-medium block mb-1.5">
-                Lot Size
-                <span className="ml-1 text-[10px] normal-case tracking-normal text-slate-600">(for accurate P&L)</span>
+                {sizeLabel}
+                {formData.symbol.trim() && (
+                  <span className="ml-1 text-[10px] normal-case tracking-normal text-cyan-500/80">
+                    {instrument.lotLabel} · {instrument.instrument}
+                  </span>
+                )}
               </label>
-              <input style={inputStyle} type="number" placeholder="0.01" step="0.001" min="0.001"
+              <input style={inputStyle} type="number"
+                placeholder={instrument.lotPlaceholder} step={instrument.lotStep} min={instrument.lotStep}
                 value={formData.lots} onChange={e => setFormData({ ...formData, lots: e.target.value })}
                 onFocus={e => e.target.style.borderColor="rgba(34,211,238,0.35)"}
                 onBlur={e => e.target.style.borderColor="rgba(255,255,255,0.09)"} />
@@ -593,6 +648,46 @@ function TradeFormModal({ isOpen, onClose, formData, setFormData, onSubmit, isEd
                 onBlur={e => e.target.style.borderColor="rgba(255,255,255,0.09)"} />
             </div>
           </div>
+
+          {/* Point-value override — for cross pairs & non-standard instruments */}
+          <div>
+            <label className="text-[11px] text-slate-500 uppercase tracking-wider font-medium block mb-1.5">
+              Point Value Override
+              <span className="ml-1 text-[10px] normal-case tracking-normal text-slate-600">($ per 1.0 move · per {instrument.lotLabel} — optional)</span>
+            </label>
+            <input style={inputStyle} type="number" placeholder={needsRate ? 'e.g. 14.85 (overrides live rate)' : 'optional'} step="any" min="0"
+              value={formData.pointValue} onChange={e => setFormData({ ...formData, pointValue: e.target.value })}
+              onFocus={e => e.target.style.borderColor="rgba(34,211,238,0.35)"}
+              onBlur={e => e.target.style.borderColor="rgba(255,255,255,0.09)"} />
+            {needsRate && (
+              <p className="mt-1.5 text-[10px] text-slate-500">
+                {rateLoading
+                  ? `Fetching ${cross.quote}/USD rate…`
+                  : crossRate
+                    ? `Cross pair — auto-converting with live ${cross.quote}/USD ≈ ${crossRate.toFixed(4)}.`
+                    : `Cross pair — couldn't fetch ${cross.quote}/USD; enter point value for an exact P&L.`}
+              </p>
+            )}
+          </div>
+
+          {/* Live P&L preview — instrument-aware */}
+          {livePreview && (
+            <div className="flex items-center justify-between rounded-xl px-4 py-2.5"
+              style={{
+                background: livePreview.pnl >= 0 ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)',
+                border: `1px solid ${livePreview.pnl >= 0 ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.25)'}`,
+              }}>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                {livePreview.approximate ? 'Estimated P&L ≈' : 'Estimated P&L'}
+                {!formData.lots && <span className="ml-1 normal-case tracking-normal text-slate-600">· add {instrument.lotLabel} for exact</span>}
+                {livePreview.approximate && formData.lots && <span className="ml-1 normal-case tracking-normal text-amber-500/80">· approx, set point value for exact</span>}
+              </span>
+              <span className="text-sm font-semibold tabular-nums" style={{ color: livePreview.pnl >= 0 ? '#6ee7b7' : '#fca5a5' }}>
+                {livePreview.pnl >= 0 ? '+' : ''}${Math.abs(livePreview.pnl).toFixed(2)}
+                <span className="opacity-70 ml-1">({livePreview.pnlPercent >= 0 ? '+' : ''}{livePreview.pnlPercent.toFixed(2)}%)</span>
+              </span>
+            </div>
+          )}
 
           {/* Duration */}
           <div>

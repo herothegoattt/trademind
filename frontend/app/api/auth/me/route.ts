@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyToBackend } from "@/lib/backend-proxy";
 
+// Reads the Authorization header — must be dynamic, never statically collected.
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const auth = req.headers.get("authorization");
@@ -8,7 +11,10 @@ export async function GET(req: NextRequest) {
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch (err) {
+    // Backend unreachable / cold-start / timeout — signal a transient 503 so the
+    // client keeps the session instead of treating it as an auth failure.
     console.error("Me proxy error:", err);
-    return NextResponse.json({ detail: "Internal server error" }, { status: 500 });
+    const detail = err instanceof Error ? err.message : "Service temporarily unavailable";
+    return NextResponse.json({ detail }, { status: 503 });
   }
 }

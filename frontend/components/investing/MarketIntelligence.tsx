@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BarChart3, AlertCircle, RefreshCw, TrendingUp, TrendingDown, Minus, Activity, DollarSign, Globe, Zap } from 'lucide-react';
 import { usePortfolio } from '../../lib/portfolioContext';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { SectionHeader, microLabel } from './_ui';
 
 interface LiveMkt {
   sp500:     { current: number; change: number } | null;
@@ -169,28 +170,22 @@ export default function MarketIntelligence() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.2)' }}>
-            <BarChart3 className="text-cyan-400" size={20} />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-100">Market Intelligence</h2>
-            {lastRefresh && (
-              <p className="text-xs text-slate-500">Updated {lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-            )}
-          </div>
-        </div>
-        <button
-          onClick={fetchData}
-          disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-200 transition-colors"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-        >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </button>
-      </div>
+      <SectionHeader
+        icon={BarChart3}
+        title="Market Intelligence"
+        subtitle={lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Live market context'}
+        right={
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-cyan-300 transition-colors"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        }
+      />
 
       {/* Live Market Ticker Row */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -246,7 +241,7 @@ export default function MarketIntelligence() {
       {insights.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <h3 className="text-lg font-bold text-slate-100">
+            <h3 className="text-lg font-semibold tracking-tight text-slate-100">
               {isEmpty ? 'Market Insights' : 'Insights for Your Holdings'}
             </h3>
             {!isEmpty && <span className="text-xs text-slate-500">based on your portfolio categories</span>}

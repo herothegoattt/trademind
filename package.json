@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "engines": { "node": "22" },
   "scripts": {
+    "dev": "bash dev.sh",
     "build": "cd frontend && npm install && npm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public",
     "start": "node /home/site/wwwroot/frontend/.next/standalone/server.js"
   }

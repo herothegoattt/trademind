@@ -1,38 +1,37 @@
 'use client';
 
-import { TrendingUp, TrendingDown, DollarSign, Percent, AlertCircle } from 'lucide-react';
-import { LineChart, Line, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
+import { TrendingUp, TrendingDown, DollarSign, Percent, Wallet } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Area, AreaChart } from 'recharts';
 import { usePortfolio, calcPnL, posInvested, posCurrentValue } from '../../lib/portfolioContext';
 import { CAT_COLORS } from './InvestingPortfolio';
+import { Panel, StatTile, EmptyState, microLabel, tooltipStyle, DeltaChip, CAT_RGB } from './_ui';
 
 export default function PortfolioOverview() {
   const { positions, stats, allocation, performance, isEmpty } = usePortfolio();
 
   if (isEmpty) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <div className="text-5xl mb-4">📊</div>
-        <h3 className="text-xl font-bold text-slate-200 mb-2">No positions yet</h3>
-        <p className="text-slate-400 text-sm max-w-md">
-          Add your investments in the <span className="text-orange-400 font-bold">My Portfolio</span> tab.
-          All stats, charts and analysis will populate automatically.
-        </p>
-      </div>
+      <EmptyState icon={Wallet} title="No positions yet">
+        Add your investments in the <span className="text-cyan-400 font-medium">My Portfolio</span> tab.
+        Every stat, chart and analysis here will populate automatically.
+      </EmptyState>
     );
   }
 
-  // Produces '-$1.5k' / '-$500' / '+$1.5k' / '$500' — no sign = positive, no dollar-before-minus
+  // '-$1.5k' / '+$1.5k' / '$500'
   const fmt = (n: number, sign = false): string => {
     const abs = Math.abs(n);
     const prefix = n < 0 ? '-' : sign ? '+' : '';
     return abs >= 1000 ? `${prefix}$${(abs / 1000).toFixed(1)}k` : `${prefix}$${abs.toFixed(0)}`;
   };
-  const totalReturn  = stats.totalPnL;
-  const returnPct    = stats.totalReturnPct;
+  const tone = (n: number) => (n >= 0 ? 'text-emerald-400' : 'text-rose-400');
+
+  const totalReturn   = stats.totalPnL;
+  const returnPct     = stats.totalReturnPct;
   const openPositions = positions.filter(p => p.status === 'open');
 
   const allocData = allocation.map(a => ({
-    name: a.category, value: a.currentValue, color: CAT_COLORS[a.category] || '#64748b',
+    name: a.category, value: a.currentValue, color: CAT_COLORS[a.category] || '#94a3b8',
   }));
 
   const topHoldings = [...openPositions]
@@ -44,196 +43,138 @@ export default function PortfolioOverview() {
   return (
     <div className="space-y-6">
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-sm font-medium">Total Portfolio Value</p>
-              <p className="text-3xl font-bold text-slate-100 mt-2">{fmt(stats.totalCurrentVal)}</p>
-              <p className="text-slate-500 text-xs mt-1">{stats.openCount} open positions</p>
-            </div>
-            <div className="p-3 bg-slate-800 rounded-lg"><DollarSign size={24} className="text-cyan-400" /></div>
-          </div>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-sm font-medium">Total Return</p>
-              <p className={`text-3xl font-bold mt-2 ${totalReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {fmt(totalReturn, true)}
-              </p>
-              <p className={`text-xs mt-1 ${returnPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {returnPct >= 0 ? '+' : ''}{returnPct.toFixed(1)}% overall
-              </p>
-            </div>
-            <div className="p-3 bg-slate-800 rounded-lg">
-              {totalReturn >= 0 ? <TrendingUp size={24} className="text-emerald-400" /> : <TrendingDown size={24} className="text-rose-400" />}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-sm font-medium">Unrealized P&L</p>
-              <p className={`text-3xl font-bold mt-2 ${stats.unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {fmt(stats.unrealizedPnL, true)}
-              </p>
-              <p className="text-slate-500 text-xs mt-1">Open positions</p>
-            </div>
-            <div className="p-3 bg-slate-800 rounded-lg"><Percent size={24} className="text-blue-400" /></div>
-          </div>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-sm font-medium">Win Rate</p>
-              <p className={`text-3xl font-bold mt-2 ${stats.winRate >= 50 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {stats.winRate.toFixed(0)}%
-              </p>
-              <p className="text-slate-500 text-xs mt-1">
-                {positions.filter(p => calcPnL(p) > 0).length}W / {positions.filter(p => calcPnL(p) < 0).length}L
-              </p>
-            </div>
-            <div className="p-3 bg-slate-800 rounded-lg"><TrendingUp size={24} className="text-emerald-400" /></div>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile index={0} label="Portfolio Value" value={fmt(stats.totalCurrentVal)}
+          icon={DollarSign} delta={`${stats.openCount} open positions`} deltaTone="muted" />
+        <StatTile index={1} label="Total Return" value={fmt(totalReturn, true)}
+          valueClass={tone(totalReturn)} icon={totalReturn >= 0 ? TrendingUp : TrendingDown}
+          delta={`${returnPct >= 0 ? '+' : ''}${returnPct.toFixed(1)}% overall`} deltaTone={returnPct >= 0 ? 'gain' : 'loss'} />
+        <StatTile index={2} label="Unrealized P&L" value={fmt(stats.unrealizedPnL, true)}
+          valueClass={tone(stats.unrealizedPnL)} icon={Percent} delta="Open positions" deltaTone="muted" />
+        <StatTile index={3} label="Win Rate" value={`${stats.winRate.toFixed(0)}%`}
+          valueClass={tone(stats.winRate - 50)} icon={TrendingUp}
+          delta={`${positions.filter(p => calcPnL(p) > 0).length}W · ${positions.filter(p => calcPnL(p) < 0).length}L`} deltaTone="muted" />
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-slate-100 mb-6">Portfolio Performance (Cumulative P&L)</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Panel className="lg:col-span-2 p-5">
+          <h3 className={`${microLabel} mb-4`}>Portfolio Performance · Cumulative P&amp;L</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={performance}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="date" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#64748b" tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
-                formatter={(v: any) => [`$${Number(v).toFixed(0)}`, 'Cumul. P&L']} />
-              <ReferenceLine y={0} stroke="#475569" strokeDasharray="4 4" />
-              <Line type="monotone" dataKey="cumulativePnL" stroke="#06b6d4" dot={{ fill: '#06b6d4', r: 4 }} activeDot={{ r: 6 }} strokeWidth={2} />
-            </LineChart>
+            <AreaChart data={performance} margin={{ top: 4, right: 6, left: -8, bottom: 0 }}>
+              <defs>
+                <linearGradient id="ovFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgb(34,211,238)" stopOpacity={0.26} />
+                  <stop offset="100%" stopColor="rgb(34,211,238)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <XAxis dataKey="date" stroke="#475569" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis stroke="#475569" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={48} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ stroke: 'rgba(34,211,238,0.3)' }}
+                formatter={(v: any) => [`$${Number(v).toFixed(0)}`, 'Cumulative P&L']} />
+              <ReferenceLine y={0} stroke="rgba(255,255,255,0.12)" strokeDasharray="4 4" />
+              <Area type="monotone" dataKey="cumulativePnL" stroke="rgb(34,211,238)" strokeWidth={2} fill="url(#ovFill)" dot={false} activeDot={{ r: 4, fill: 'rgb(34,211,238)' }} />
+            </AreaChart>
           </ResponsiveContainer>
-        </div>
+        </Panel>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-slate-100 mb-6">Asset Allocation</h3>
+        <Panel className="p-5">
+          <h3 className={`${microLabel} mb-4`}>Asset Allocation</h3>
           {allocData.length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
-                  <Pie data={allocData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2} dataKey="value">
+                  <Pie data={allocData} cx="50%" cy="50%" innerRadius={56} outerRadius={86} paddingAngle={3} dataKey="value" stroke="none">
                     {allocData.map((e, i) => <Cell key={i} fill={e.color} />)}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
-                    formatter={(v: any) => [`$${Number(v).toFixed(0)}`]} />
+                  <Tooltip contentStyle={tooltipStyle}
+                    formatter={(v: any, _n: any, p: any) => [`$${Number(v).toFixed(0)}`, p?.payload?.name]} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-1.5 mt-2">
                 {allocData.map((e, i) => (
                   <div key={i} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: e.color }} />
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: e.color }} />
                       <span className="text-slate-400 capitalize">{e.name}</span>
                     </div>
-                    <span className="text-slate-300 font-mono">{fmt(e.value)}</span>
+                    <span className="text-slate-300 tabular-nums">{fmt(e.value)}</span>
                   </div>
                 ))}
               </div>
             </>
           ) : (
-            <p className="text-slate-500 text-sm">No open positions</p>
+            <div className="h-40 grid place-items-center text-slate-600 text-sm">No open positions</div>
           )}
-        </div>
+        </Panel>
       </div>
 
-      {/* Holdings Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-slate-100 mb-6">Top Holdings</h3>
-        <div className="space-y-3">
-          {topHoldings.map((pos, i) => {
+      {/* Holdings */}
+      <Panel className="p-5">
+        <h3 className={`${microLabel} mb-4`}>Top Holdings</h3>
+        <div className="space-y-1.5">
+          {topHoldings.map((pos) => {
             const pnl    = calcPnL(pos);
-            const pct    = totalOpenVal > 0 ? (posCurrentValue(pos) / totalOpenVal) * 100 : 0;
+            const share  = totalOpenVal > 0 ? (posCurrentValue(pos) / totalOpenVal) * 100 : 0;
+            const pnlPct = posInvested(pos) > 0 ? (pnl / posInvested(pos)) * 100 : 0;
             const isGood = pnl >= 0;
             return (
-              <div key={pos.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CAT_COLORS[pos.category] || '#64748b' }} />
-                  <div>
-                    <p className="text-slate-100 font-bold">{pos.symbol}</p>
+              <div key={pos.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl transition-colors hover:bg-white/[0.02]"
+                style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="w-1 h-8 rounded-full flex-shrink-0" style={{ background: `rgb(${CAT_RGB[pos.category] || CAT_RGB.other})` }} />
+                  <div className="min-w-0">
+                    <p className="text-slate-100 font-semibold text-sm">{pos.symbol}</p>
                     <p className="text-slate-500 text-xs capitalize">{pos.category} · {pos.type}</p>
                   </div>
                 </div>
-                <div className="text-center hidden sm:block">
-                  <p className="text-slate-300 text-sm font-mono">{fmt(posCurrentValue(pos))}</p>
-                  <p className="text-slate-500 text-xs">{pct.toFixed(1)}% of portfolio</p>
+                <div className="text-right hidden sm:block">
+                  <p className="text-slate-300 text-sm tabular-nums">{fmt(posCurrentValue(pos))}</p>
+                  <p className="text-slate-500 text-xs tabular-nums">{share.toFixed(1)}% of book</p>
                 </div>
-                <div className="text-right">
-                  <p className={`font-bold text-sm ${isGood ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {fmt(pnl, true)}
-                  </p>
-                  <p className={`text-xs ${isGood ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    {pnl >= 0 ? '+' : ''}{((pnl / posInvested(pos)) * 100).toFixed(1)}%
-                  </p>
+                <div className="flex items-center gap-2.5 flex-shrink-0">
+                  <span className={`text-sm font-semibold tabular-nums ${isGood ? 'text-emerald-400' : 'text-rose-400'}`}>{fmt(pnl, true)}</span>
+                  <DeltaChip value={pnlPct} size="xs" />
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      </Panel>
 
       {/* Best / Worst */}
       {(stats.best || stats.worst) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {stats.best && (() => {
-            const pnl     = calcPnL(stats.best!);
-            const pct     = posInvested(stats.best!) > 0 ? (pnl / posInvested(stats.best!)) * 100 : 0;
-            const isPos   = pnl >= 0;
-            return (
-              <div className={`rounded-xl p-5 ${isPos ? 'bg-emerald-900/10 border border-emerald-700/30' : 'bg-slate-800/40 border border-slate-700/40'}`}>
-                <div className="flex items-start gap-3">
-                  <div className={`p-2 rounded-lg ${isPos ? 'bg-emerald-900/30' : 'bg-slate-700/40'}`}>
-                    <TrendingUp className={isPos ? 'text-emerald-400' : 'text-slate-400'} size={18} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Best Position</p>
-                    <p className={`text-xl font-black mt-1 ${isPos ? 'text-emerald-400' : 'text-slate-300'}`}>{stats.best!.symbol}</p>
-                    <p className="text-sm text-slate-300">
-                      <span className={isPos ? 'text-emerald-400' : 'text-slate-300'}>{fmt(pnl, true)}</span>
-                      <span className="text-slate-500 ml-1">({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-          {stats.worst && (() => {
-            const pnl     = calcPnL(stats.worst!);
-            const pct     = posInvested(stats.worst!) > 0 ? (pnl / posInvested(stats.worst!)) * 100 : 0;
-            const isNeg   = pnl < 0;
-            return (
-              <div className={`rounded-xl p-5 ${isNeg ? 'bg-rose-900/10 border border-rose-700/30' : 'bg-slate-800/40 border border-slate-700/40'}`}>
-                <div className="flex items-start gap-3">
-                  <div className={`p-2 rounded-lg ${isNeg ? 'bg-rose-900/30' : 'bg-slate-700/40'}`}>
-                    <TrendingDown className={isNeg ? 'text-rose-400' : 'text-slate-400'} size={18} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Worst Position</p>
-                    <p className={`text-xl font-black mt-1 ${isNeg ? 'text-rose-400' : 'text-slate-300'}`}>{stats.worst!.symbol}</p>
-                    <p className="text-sm text-slate-300">
-                      <span className={isNeg ? 'text-rose-400' : 'text-slate-300'}>{fmt(pnl, true)}</span>
-                      <span className="text-slate-500 ml-1">({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {stats.best && <Highlight position={stats.best} kind="best" fmt={fmt} />}
+          {stats.worst && <Highlight position={stats.worst} kind="worst" fmt={fmt} />}
         </div>
       )}
     </div>
+  );
+}
+
+function Highlight({ position, kind, fmt }: { position: any; kind: 'best' | 'worst'; fmt: (n: number, s?: boolean) => string }) {
+  const pnl = calcPnL(position);
+  const pct = posInvested(position) > 0 ? (pnl / posInvested(position)) * 100 : 0;
+  const isBest = kind === 'best';
+  const rgb = isBest ? '52,211,153' : '248,113,113';
+  const Icon = isBest ? TrendingUp : TrendingDown;
+  return (
+    <Panel accent={rgb} glow className="p-5">
+      <div className="flex items-start gap-3">
+        <div className="grid place-items-center w-9 h-9 rounded-xl flex-shrink-0" style={{ background: `rgba(${rgb},0.12)`, border: `1px solid rgba(${rgb},0.25)` }}>
+          <Icon size={17} style={{ color: `rgb(${rgb})` }} />
+        </div>
+        <div>
+          <p className={microLabel}>{isBest ? 'Best Position' : 'Worst Position'}</p>
+          <p className="text-xl font-semibold tracking-tight text-slate-100 mt-1">{position.symbol}</p>
+          <p className="text-sm mt-0.5 tabular-nums">
+            <span style={{ color: `rgb(${rgb})` }}>{fmt(pnl, true)}</span>
+            <span className="text-slate-500 ml-1.5">({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)</span>
+          </p>
+        </div>
+      </div>
+    </Panel>
   );
 }

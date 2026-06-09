@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # Google Sign-In (optional; set to validate id_token aud)
     google_client_id: str | None = None
 
+    # Public URL of the frontend (used for OAuth/redirect/Stripe return URLs)
+    frontend_url: str = "http://localhost:3000"
+
     # AI Models
     anthropic_api_key: str | None = None  # Anthropic Claude API key (https://console.anthropic.com)
     gemini_api_key: str | None = None  # Google Gemini API key
@@ -47,6 +50,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",  # tolerate extra keys in .env instead of crashing on import
     )
 
     # Stripe payments

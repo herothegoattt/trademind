@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromBackendToken } from "@/lib/backend-proxy";
 
+// Reads the Authorization header — must be dynamic, never statically collected.
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const user = await getUserFromBackendToken(req.headers.get("authorization"));

@@ -210,6 +210,167 @@ export function detectStackedImbalances(
   return runs;
 }
 
+/* ── Classic chart indicators (read the candles) ──────────────────────────── */
+export interface LinePoint { time: number; value: number; }
+
+/** Exponential moving average over closes. Seeded with the SMA of the first `period` bars. */
+export function computeEMA(candles: OHLCVBar[], period: number): LinePoint[] {
+  if (candles.length < period || period < 1) return [];
+  const k = 2 / (period + 1);
+  const out: LinePoint[] = [];
+  let ema = 0;
+  for (let i = 0; i < period; i++) ema += candles[i].close;
+  ema /= period;
+  out.push({ time: candles[period - 1].time, value: ema });
+  for (let i = period; i < candles.length; i++) {
+    ema = candles[i].close * k + ema * (1 - k);
+    out.push({ time: candles[i].time, value: ema });
+  }
+  return out;
+}
+
+export interface BollingerPoint { time: number; mid: number; upper: number; lower: number; }
+/** Bollinger Bands — SMA(period) ± mult·σ of closes. */
+export function computeBollinger(candles: OHLCVBar[], period = 20, mult = 2): BollingerPoint[] {
+  if (candles.length < period) return [];
+  const out: BollingerPoint[] = [];
+  for (let i = period - 1; i < candles.length; i++) {
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += candles[j].close;
+    const mid = sum / period;
+    let v = 0;
+    for (let j = i - period + 1; j <= i; j++) v += (candles[j].close - mid) ** 2;
+    const sd = Math.sqrt(v / period);
+    out.push({ time: candles[i].time, mid, upper: mid + mult * sd, lower: mid - mult * sd });
+  }
+  return out;
+}
+
+/** Wilder's RSI over closes. Returns one point per bar from index `period` onward. */
+export function computeRSI(candles: OHLCVBar[], period = 14): LinePoint[] {
+  if (candles.length <= period) return [];
+  let gain = 0, loss = 0;
+  for (let i = 1; i <= period; i++) {
+    const ch = candles[i].close - candles[i - 1].close;
+    if (ch >= 0) gain += ch; else loss -= ch;
+  }
+  let avgGain = gain / period, avgLoss = loss / period;
+  const out: LinePoint[] = [];
+  const rsi = (g: number, l: number) => (l === 0 ? 100 : 100 - 100 / (1 + g / l));
+  out.push({ time: candles[period].time, value: rsi(avgGain, avgLoss) });
+  for (let i = period + 1; i < candles.length; i++) {
+    const ch = candles[i].close - candles[i - 1].close;
+    const g = ch >= 0 ? ch : 0, l = ch < 0 ? -ch : 0;
+    avgGain = (avgGain * (period - 1) + g) / period;
+    avgLoss = (avgLoss * (period - 1) + l) / period;
+    out.push({ time: candles[i].time, value: rsi(avgGain, avgLoss) });
+  }
+  return out;
+}
+
+/**
+ * Developing Point of Control — the price level holding the most cumulative
+ * volume as the session builds (Auction Market Theory). Anchored at the first
+ * bar; the line shows where the market is repeatedly accepting price over time.
+ */
+export function computeDevelopingPOC(candles: OHLCVBar[], rows = 60): LinePoint[] {
+  if (!candles.length) return [];
+  let lo = Infinity, hi = -Infinity;
+  for (const c of candles) { lo = Math.min(lo, c.low); hi = Math.max(hi, c.high); }
+  if (!isFinite(lo) || !isFinite(hi) || hi <= lo) return [];
+  const step = (hi - lo) / rows;
+  const vol = new Array(rows).fill(0);
+  const out: LinePoint[] = [];
+  let pocIdx = 0;
+  for (const c of candles) {
+    const range = c.high - c.low;
+    const start = Math.max(0, Math.floor((c.low - lo) / step));
+    const end = Math.min(rows - 1, Math.floor((c.high - lo) / step));
+    if (range <= 0) { vol[start] += c.volume; }
+    else for (let b = start; b <= end; b++) {
+      const overlap = Math.min(c.high, lo + (b + 1) * step) - Math.max(c.low, lo + b * step);
+      if (overlap > 0) vol[b] += c.volume * (overlap / range);
+    }
+    for (let b = 0; b < rows; b++) if (vol[b] > vol[pocIdx]) pocIdx = b;
+    out.push({ time: c.time, value: lo + (pocIdx + 0.5) * step });
+  }
+  return out;
+}
+
+/* ── POC Absorption (Auction Market Theory) ───────────────────────────────── */
+/**
+ * Absorption = aggressive market orders meet passive limit orders that *absorb*
+ * them, so price barely moves despite heavy one-sided flow. A bar shows
+ * absorption when volume is above average, delta is clearly one-sided, yet the
+ * body stalls (or even closes against the delta) — a large player defending a
+ * level. Net selling absorbed ⇒ bullish (buyers held); net buying absorbed ⇒
+ * bearish (sellers capped it).
+ */
+export interface AbsorptionEvent {
+  barIndex: number;
+  time: number;
+  price: number;                  // level being defended (bar POC / extreme)
+  type: "bullish" | "bearish";    // bullish = bid absorption, bearish = ask absorption
+  delta: number;
+  volume: number;
+  strength: number;               // 0..1 composite confidence
+  real: boolean;                  // true = from real footprint, false = OHLCV estimate
+}
+
+export function detectAbsorption(
+  candles: OHLCVBar[],
+  footprint: FootprintBar[] = [],
+  deltas: number[] = [],
+): AbsorptionEvent[] {
+  if (!candles.length) return [];
+  const avgVol = candles.reduce((s, c) => s + (c.volume > 0 ? c.volume : 0), 0) / candles.length || 1;
+  const events: AbsorptionEvent[] = [];
+  const real = footprint.length > 0;
+  const fpByTime = new Map<number, FootprintBar>();
+  for (const fb of footprint) fpByTime.set(fb.time, fb);
+
+  candles.forEach((c, i) => {
+    const fb = fpByTime.get(c.time);
+    const volume = fb ? fb.totalVol : (c.volume > 0 ? c.volume : 0);
+    if (volume <= 0) return;
+    const delta = fb ? fb.delta : (deltas[i] ?? estimateDeltaFromOHLCV(c));
+    const range = c.high - c.low;
+    const body = Math.abs(c.close - c.open);
+    const bodyRatio = range > 0 ? body / range : 1;     // small ⇒ price stalled
+    const deltaRatio = volume > 0 ? delta / volume : 0;  // signed, ~[-1,1]
+    const volRatio = volume / avgVol;
+
+    // Above-average participation + clearly one-sided + price didn't progress
+    // (or closed against the dominant flow) = absorption.
+    const stalled = bodyRatio <= 0.5 || Math.sign(delta) !== Math.sign(c.close - c.open);
+    if (volRatio < 1.25 || Math.abs(deltaRatio) < 0.22 || !stalled) return;
+
+    const type: AbsorptionEvent["type"] = delta < 0 ? "bullish" : "bearish";
+    // Defended level: bid absorption holds the low, ask absorption caps the high.
+    const price = real && fb
+      ? pocOfBar(fb) ?? (type === "bullish" ? c.low : c.high)
+      : (type === "bullish" ? c.low : c.high);
+
+    const strength = Math.min(1,
+      (Math.min(volRatio, 3) - 1) / 2 * 0.45 +
+      Math.min(1, Math.abs(deltaRatio) / 0.6) * 0.4 +
+      (1 - Math.min(1, bodyRatio)) * 0.15);
+
+    events.push({ barIndex: i, time: c.time, price, type, delta, volume, strength, real });
+  });
+
+  return events;
+}
+
+function pocOfBar(fb: FootprintBar): number | null {
+  let poc: number | null = null, max = -1;
+  for (const cell of fb.cells) {
+    const t = cell.buy + cell.sell;
+    if (t > max) { max = t; poc = cell.price; }
+  }
+  return poc;
+}
+
 /* ── OHLCV delta estimate (non-crypto fallback) ───────────────────────────── */
 /**
  * Approximates per-bar volume delta from candle shape when real tick data is

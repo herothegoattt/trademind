@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Target, TrendingUp, TrendingDown, Zap, AlertCircle, CheckCircle2, Plus, BarChart2 } from 'lucide-react';
 import { usePortfolio, calcPnL, calcPnLPct, posCurrentValue } from '../../lib/portfolioContext';
 import { motion } from 'framer-motion';
+import { SectionHeader } from './_ui';
 
 type Trend = 'up' | 'down' | 'neutral';
 
@@ -121,15 +122,11 @@ export default function LongTermOpportunities() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-xl" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.2)' }}>
-          <Target className="text-cyan-400" size={20} />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-slate-100">Long-Term Opportunities</h2>
-          <p className="text-xs text-slate-500">{isEmpty ? 'Add portfolio positions to personalize' : 'Ranked and personalized to your holdings'}</p>
-        </div>
-      </div>
+      <SectionHeader
+        icon={Target}
+        title="Long-Term Opportunities"
+        subtitle={isEmpty ? 'Add portfolio positions to personalize' : 'Ranked and personalized to your holdings'}
+      />
 
       {/* Portfolio Snapshot (if not empty) */}
       {!isEmpty && (

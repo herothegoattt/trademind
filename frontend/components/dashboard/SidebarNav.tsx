@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDashboardStore } from "../../lib/store";
+import { useRequireAuth } from "../../lib/use-require-auth";
 import { useT } from "../../lib/i18n";
 import { Section } from "../../lib/types";
 import { cn } from "../../lib/utils";
@@ -146,6 +147,7 @@ function NeonBar({ color, glow }: { color: string; glow: string }) {
 export function SidebarNav() {
   const t = useT();
   const selectSection = useDashboardStore((s: any) => s.selectSection);
+  const requireAuth = useRequireAuth();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -215,7 +217,7 @@ export function SidebarNav() {
                     <Link
                       key={section}
                       href={path}
-                      onClick={() => { if (section !== "Decision Errors") selectSection(section as Section); }}
+                      onClick={(e) => { if (!requireAuth(e)) return; if (section !== "Decision Errors") selectSection(section as Section); }}
                       className="block w-full"
                     >
                       <div
@@ -307,7 +309,7 @@ export function SidebarNav() {
             <Link
               key={section}
               href={path}
-              onClick={() => selectSection(section as Section)}
+              onClick={(e) => { if (!requireAuth(e)) return; selectSection(section as Section); }}
               className="flex-1 flex flex-col items-center justify-center py-3 gap-1 min-h-[56px]"
             >
               <motion.span
@@ -413,7 +415,8 @@ export function SidebarNav() {
                     <Link
                       key={section}
                       href={path}
-                      onClick={() => {
+                      onClick={(e) => {
+                        if (!requireAuth(e)) { setMoreOpen(false); return; }
                         if (section !== "Decision Errors") selectSection(section as Section);
                         setMoreOpen(false);
                       }}

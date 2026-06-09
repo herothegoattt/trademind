@@ -876,7 +876,7 @@ function ProfilePageInner() {
                       "rounded-xl p-4 transition-all",
                       isCurrent ? "ring-1" : "bg-white/[0.015] border border-white/[0.04]"
                     )}
-                    style={isCurrent ? { background: meta.bg, ringColor: `${meta.color}30` } : {}}>
+                    style={isCurrent ? { background: meta.bg, ["--tw-ring-color" as any]: `${meta.color}30` } : {}}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
                         <meta.Icon className="w-4 h-4" style={{ color: meta.color }} />

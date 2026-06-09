@@ -31,6 +31,10 @@ interface Setup {
   difficulty: number;
   badge?: 'popular' | 'high-rr' | 'advanced';
   description: string;
+  /** One-paragraph, jargon-free explanation aimed at total beginners. */
+  plain: string;
+  /** Best trading session / time window for this setup. */
+  session: string;
   concept: string;
   candles: Candle[];
   entryCandle: number;
@@ -45,17 +49,37 @@ interface Setup {
   commonMistakes: string[];
 }
 
+// ─── Time-axis label generator (deterministic — SSR safe) ─────────────────────
+function axisTimes(timeframe: string | undefined, n: number): string[] {
+  const tok = (timeframe || '').split(/[\s/]+/)[0] || '1H';
+  const out: string[] = [];
+  const pad = (x: number) => String(x).padStart(2, '0');
+  if (/m$/i.test(tok)) {
+    const step = parseInt(tok) || 15; let mins = 9 * 60 + 30; // 09:30
+    for (let i = 0; i < n; i++) { out.push(`${pad(Math.floor(mins / 60) % 24)}:${pad(mins % 60)}`); mins += step; }
+  } else if (/h$/i.test(tok)) {
+    const step = parseInt(tok) || 1; let mins = 8 * 60;
+    for (let i = 0; i < n; i++) { out.push(`${pad(Math.floor(mins / 60) % 24)}:${pad(mins % 60)}`); mins += step * 60; }
+  } else {
+    const isW = /w/i.test(tok);
+    const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const base = Date.UTC(2024, 0, 2);
+    for (let i = 0; i < n; i++) { const d = new Date(base + i * (isW ? 7 : 1) * 86400000); out.push(`${d.getUTCDate()} ${mon[d.getUTCMonth()]}`); }
+  }
+  return out;
+}
+
 // ─── Enhanced Candle Chart ───────────────────────────────────────────────────
 function CandleChart({
   candles, hlines = [], zones = [], trendlines = [],
-  entryCandle, slPrice, tpPrice, symbol,
+  entryCandle, slPrice, tpPrice, symbol, timeframe,
   vw = 340, vh = 200, labels = true,
 }: {
   candles: Candle[]; hlines?: HLine[]; zones?: Zone[]; trendlines?: TLine[];
-  entryCandle?: number; slPrice?: number; tpPrice?: number; symbol?: string;
+  entryCandle?: number; slPrice?: number; tpPrice?: number; symbol?: string; timeframe?: string;
   vw?: number; vh?: number; labels?: boolean;
 }) {
-  const PL = 6, PR = 44, PT = 14, PB = 4, VOLH = 22, GAP = 4;
+  const PL = 8, PR = 46, PT = 24, PB = 15, VOLH = 16, GAP = 6;
   const PH = vh - PT - PB - VOLH - GAP;
   const CW = vw - PL - PR;
 
@@ -68,8 +92,8 @@ function CandleChart({
   const rawMax = Math.max(...allP);
   const rawMin = Math.min(...allP);
   const rng    = rawMax === rawMin ? 0.001 : rawMax - rawMin;
-  const maxP   = rawMax + rng * 0.08;
-  const minP   = rawMin - rng * 0.08;
+  const maxP   = rawMax + rng * 0.06;
+  const minP   = rawMin - rng * 0.10;
   const pRng   = maxP - minP;
 
   const py = (p: number) => PT + ((maxP - p) / pRng) * PH;
@@ -79,25 +103,57 @@ function CandleChart({
 
   const n    = candles.length;
   const step = CW / n;
-  const bw   = Math.max(step * 0.58, 3);
+  const bw   = Math.max(step * 0.64, 3.5);
   const cx   = (i: number) => PL + (i + 0.5) * step;
+
+  // calmer, professional palette (muted teal / red — easy on the eyes)
+  const UP = '#26a69a', DOWN = '#ef5350', ENTRY = '#f59e0b';
 
   const fmtP = (p: number) =>
     p > 999 ? p.toFixed(1) : p > 9 ? p.toFixed(2) : p.toFixed(4);
 
+  // Moving average overlay (makes the chart read like a real platform)
+  const smaP = Math.min(7, Math.max(2, Math.round(n / 3)));
+  const smaPts = candles
+    .map((_, i) => {
+      if (i < smaP - 1) return null;
+      let s = 0; for (let k = i - smaP + 1; k <= i; k++) s += candles[k].c;
+      return `${cx(i).toFixed(1)},${py(s / smaP).toFixed(1)}`;
+    })
+    .filter(Boolean)
+    .join(' ');
+
+  // Time axis labels (a few, evenly spaced)
+  const times = axisTimes(timeframe, n);
+  const tickCount = Math.min(5, n);
+  const tickIdx = Array.from({ length: tickCount }, (_, k) =>
+    Math.round((k * (n - 1)) / Math.max(tickCount - 1, 1)));
+
+  // Header price stats
+  const last = candles[n - 1].c;
+  const open0 = candles[0].o;
+  const chgPct = ((last - open0) / open0) * 100;
+  const up = chgPct >= 0;
+
   return (
     <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="chartBg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#0c111d" />
+          <stop offset="100%" stopColor="#090d16" />
+        </linearGradient>
+      </defs>
       {/* Background */}
-      <rect width={vw} height={vh} fill="#060a12" />
+      <rect width={vw} height={vh} fill="url(#chartBg)" />
 
       {/* Subtle grid */}
-      {[0.2, 0.4, 0.6, 0.8].map((f, i) => (
+      {[0.25, 0.5, 0.75].map((f, i) => (
         <line key={i} x1={PL} y1={PT + f * PH} x2={vw - PR} y2={PT + f * PH}
-          stroke="rgba(255,255,255,0.04)" strokeWidth="0.8" />
+          stroke="rgba(255,255,255,0.03)" strokeWidth="0.7" />
       ))}
       {[0.25, 0.5, 0.75].map((f, i) => (
         <line key={i} x1={PL + f * CW} y1={PT} x2={PL + f * CW} y2={PT + PH}
-          stroke="rgba(255,255,255,0.025)" strokeWidth="0.8" />
+          stroke="rgba(255,255,255,0.018)" strokeWidth="0.7" />
       ))}
 
       {/* Right separator */}
@@ -132,11 +188,11 @@ function CandleChart({
       {tpPrice != null && (
         <g>
           <line x1={PL} y1={py(tpPrice)} x2={vw - PR} y2={py(tpPrice)}
-            stroke="#34d399" strokeWidth="1.5" strokeDasharray="6,3" opacity="0.9" />
+            stroke={UP} strokeWidth="1.2" strokeDasharray="5,4" opacity="0.7" />
           <rect x={vw - PR + 1} y={py(tpPrice) - 5.5} width={PR - 2} height={11}
-            fill="rgba(52,211,153,0.18)" rx="2" />
+            fill="rgba(38,166,154,0.16)" rx="2" />
           <text x={vw - PR + (PR - 2) / 2 + 1} y={py(tpPrice) + 3.5}
-            fill="#34d399" fontSize="6.5" fontFamily="monospace" textAnchor="middle" fontWeight="bold">TP</text>
+            fill={UP} fontSize="6.5" fontFamily="monospace" textAnchor="middle" fontWeight="bold">TP</text>
         </g>
       )}
 
@@ -144,11 +200,11 @@ function CandleChart({
       {slPrice != null && (
         <g>
           <line x1={PL} y1={py(slPrice)} x2={vw - PR} y2={py(slPrice)}
-            stroke="#f87171" strokeWidth="1.5" strokeDasharray="6,3" opacity="0.9" />
+            stroke={DOWN} strokeWidth="1.2" strokeDasharray="5,4" opacity="0.7" />
           <rect x={vw - PR + 1} y={py(slPrice) - 5.5} width={PR - 2} height={11}
-            fill="rgba(248,113,113,0.18)" rx="2" />
+            fill="rgba(239,83,80,0.16)" rx="2" />
           <text x={vw - PR + (PR - 2) / 2 + 1} y={py(slPrice) + 3.5}
-            fill="#f87171" fontSize="6.5" fontFamily="monospace" textAnchor="middle" fontWeight="bold">SL</text>
+            fill={DOWN} fontSize="6.5" fontFamily="monospace" textAnchor="middle" fontWeight="bold">SL</text>
         </g>
       )}
 
@@ -156,40 +212,46 @@ function CandleChart({
       {trendlines.map((tl, i) => (
         <line key={i}
           x1={cx(tl.x1)} y1={py(tl.y1)} x2={cx(tl.x2)} y2={py(tl.y2)}
-          stroke={tl.color || '#60a5fa'} strokeWidth="1.5" opacity="0.65" strokeLinecap="round" />
+          stroke={tl.color || '#60a5fa'} strokeWidth="1.3" opacity="0.5" strokeLinecap="round" />
       ))}
 
       {/* Volume bars */}
       {candles.map((c, i) => (
         <rect key={i}
           x={cx(i) - bw / 2} y={vy(c.v)} width={bw} height={volBase - vy(c.v)}
-          fill={c.c >= c.o ? 'rgba(52,211,153,0.18)' : 'rgba(248,113,113,0.18)'} rx="1" />
+          fill={c.c >= c.o ? 'rgba(38,166,154,0.22)' : 'rgba(239,83,80,0.22)'} rx="1" />
       ))}
 
       {/* Entry highlight column */}
       {entryCandle != null && (
         <rect x={cx(entryCandle) - step / 2} y={PT} width={step} height={PH}
-          fill="rgba(245,158,11,0.05)" />
+          fill="rgba(245,158,11,0.06)" />
       )}
 
       {/* Candles */}
       {candles.map((c, i) => {
         const isUp = c.c >= c.o;
         const isE  = i === entryCandle;
-        const col  = isE ? '#f59e0b' : isUp ? '#34d399' : '#f87171';
+        const col  = isE ? ENTRY : isUp ? UP : DOWN;
         const by   = py(Math.max(c.o, c.c));
         const bh   = Math.max(py(Math.min(c.o, c.c)) - by, 1.5);
-        const fill = isE ? '#f59e0b' : isUp ? '#34d399' : 'transparent';
+        const fill = isE ? ENTRY : isUp ? UP : DOWN;
         return (
           <g key={i}>
             <line x1={cx(i)} y1={py(c.h)} x2={cx(i)} y2={py(c.l)}
-              stroke={col} strokeWidth="1.2" />
+              stroke={col} strokeWidth="1.1" strokeLinecap="round" />
             <rect x={cx(i) - bw / 2} y={by} width={bw} height={bh}
-              fill={fill} stroke={col} strokeWidth={isE ? 2 : 1.2}
-              fillOpacity={isUp && !isE ? 0.5 : 1} rx="0.8" />
+              fill={fill} stroke={col} strokeWidth={isE ? 1.6 : 1}
+              fillOpacity={isE ? 1 : isUp ? 0.85 : 0.7} rx="1" />
           </g>
         );
       })}
+
+      {/* Moving average overlay */}
+      {smaPts && (
+        <polyline points={smaPts} fill="none"
+          stroke="#5b8def" strokeWidth="1.1" opacity="0.5" strokeLinejoin="round" strokeLinecap="round" />
+      )}
 
       {/* Entry arrow */}
       {entryCandle != null && (
@@ -213,22 +275,48 @@ function CandleChart({
         </text>
       ))}
 
-      {/* Symbol label top-left */}
+      {/* X-axis time labels */}
+      {labels && tickIdx.map((ti, i) => (
+        <text key={i} x={cx(ti)} y={vh - 3}
+          fill="rgba(148,163,184,0.4)" fontSize="5.5" fontFamily="monospace"
+          textAnchor={i === 0 ? 'start' : i === tickIdx.length - 1 ? 'end' : 'middle'}>
+          {times[ti]}
+        </text>
+      ))}
+
+      {/* Header: symbol · timeframe + last price & change (real-platform style) */}
       {symbol && (
         <g>
-          <rect x={PL + 2} y={PT - 1} width={symbol.length * 4.8 + 8} height={11} rx="2"
-            fill="rgba(0,0,0,0.55)" />
-          <text x={PL + 6} y={PT + 7.5}
-            fill="rgba(226,232,240,0.7)" fontSize="6.5" fontFamily="monospace" fontWeight="bold">
+          <text x={PL + 2} y={PT - 9}
+            fill="rgba(241,245,249,0.92)" fontSize="8" fontFamily="monospace" fontWeight="bold">
             {symbol}
+          </text>
+          {timeframe && (
+            <text x={PL + 4 + symbol.length * 5.2} y={PT - 9}
+              fill="rgba(148,163,184,0.55)" fontSize="6" fontFamily="monospace">
+              {timeframe.split(/[\s/]+/)[0]}
+            </text>
+          )}
+          <text x={vw - PR - 2} y={PT - 9} textAnchor="end"
+            fill={up ? UP : DOWN} fontSize="7" fontFamily="monospace" fontWeight="bold">
+            {fmtP(last)}  {up ? '▲' : '▼'}{Math.abs(chgPct).toFixed(2)}%
           </text>
         </g>
       )}
 
-      {/* "EDUCATIONAL" watermark */}
-      <text x={PL + CW / 2} y={PT + PH / 2 + 4}
-        fill="rgba(255,255,255,0.03)" fontSize="18" fontFamily="monospace"
-        fontWeight="bold" textAnchor="middle">EDUCATIONAL</text>
+      {/* MA legend chip */}
+      {smaPts && (
+        <text x={PL + 2} y={PT + 8}
+          fill="#5b8def" fontSize="5.5" fontFamily="monospace" opacity="0.65">
+          — MA{smaP}
+        </text>
+      )}
+
+      {/* Subtle example marker (bottom-right) */}
+      <text x={vw - PR - 2} y={PT + PH - 2} textAnchor="end"
+        fill="rgba(255,255,255,0.08)" fontSize="6" fontFamily="monospace" fontStyle="italic">
+        annotated example
+      </text>
     </svg>
   );
 }
@@ -249,6 +337,8 @@ const SETUPS: Setup[] = [
     difficulty: 1,
     badge: 'popular',
     description: 'Trade pullbacks in a clear uptrend using Higher Highs / Higher Lows structure.',
+    plain: 'When a market is clearly going up, it never moves in a straight line — it climbs, dips a little, then climbs again. This setup waits for one of those small dips and joins the trend while it is "on sale", instead of buying at the top.',
+    session: 'London & New York',
     concept: 'Price moves in waves. An uptrend creates Higher Highs (HH) and Higher Lows (HL). When price pulls back to an HL zone and shows bullish rejection, that\'s a high-probability long entry with the trend. The opposite applies for downtrends.',
     candles: [
       { o:1.0940,h:1.0975,l:1.0930,c:1.0965, v:75 },
@@ -316,6 +406,8 @@ const SETUPS: Setup[] = [
     winRateRange: '40–52%',
     difficulty: 1,
     description: 'Enter when price bounces from a clear horizontal support or resistance level on 4H or Daily.',
+    plain: 'Markets tend to "remember" certain price levels where they turned around before. This setup draws a line at one of those levels and waits for price to come back, touch it, and bounce — then trades in the direction of the bounce.',
+    session: 'Any active session',
     concept: 'Institutional buyers/sellers cluster orders at previously significant price levels. When price returns to these areas, a reaction (bounce) is expected. The more times a level has been tested, the more significant it is.',
     candles: [
       { o:1.2680,h:1.2712,l:1.2655,c:1.2665, v:88 },
@@ -382,6 +474,8 @@ const SETUPS: Setup[] = [
     difficulty: 2,
     badge: 'high-rr',
     description: 'Smart money engineers a false breakout above/below a key level to grab liquidity, then reverses sharply.',
+    plain: 'Big players know exactly where most traders put their stop-losses. Sometimes they push price just past that level to trigger everyone\'s stops, then snap it back the other way. This setup waits for that fake-out, then trades the snap-back.',
+    session: 'London & NY open',
     concept: 'Retail traders place stop losses just above swing highs or below swing lows. Smart money deliberately pushes price through these levels to fill their own orders — called a "liquidity sweep". After the sweep, price rapidly reverses. Trading the reversal gives you an asymmetric opportunity.',
     candles: [
       { o:1.1065,h:1.1080,l:1.1055,c:1.1075, v:62 },
@@ -445,6 +539,8 @@ const SETUPS: Setup[] = [
     winRateRange: '48–60%',
     difficulty: 3,
     description: 'The last bearish candle before a strong bullish impulse becomes a support zone on retrace.',
+    plain: 'Right before a big move up, there is usually one last red candle — that\'s where the big buyers loaded up. This setup marks that candle as a "buy zone" and waits for price to come back down to it, expecting buyers to defend it again.',
+    session: 'Any active session',
     concept: 'An Order Block is the last opposing candle before a strong directional move. Banks and institutions place large limit orders in this zone. When price returns to these levels months or weeks later, those pending orders activate — creating a powerful rejection.',
     candles: [
       { o:2318,h:2325,l:2310,c:2312, v:95 },
@@ -511,6 +607,8 @@ const SETUPS: Setup[] = [
     difficulty: 4,
     badge: 'high-rr',
     description: 'A 3-candle imbalance forms during a fast move. Price returns to fill the gap — entry on rejection.',
+    plain: 'When price moves very fast it sometimes leaves a "gap" — an empty zone it skipped over. Markets tend to come back and fill those gaps, like backtracking to finish a job. This setup spots the gap and trades the move once price returns to fill it.',
+    session: 'London & NY open',
     concept: 'A Fair Value Gap (FVG) is a 3-candle pattern where price moves so fast that a gap forms between Candle 1\'s low and Candle 3\'s high. This "imbalance" acts like a magnet — price is attracted back to fill it. Smart money uses these zones as entry points after the fill.',
     candles: [
       { o:19850,h:19885,l:19830,c:19842, v:95 },
@@ -577,6 +675,8 @@ const SETUPS: Setup[] = [
     difficulty: 5,
     badge: 'advanced',
     description: 'A failed Order Block becomes a Breaker Block. Price returns to the broken zone for a high-conviction entry.',
+    plain: 'Sometimes a level that used to act as a ceiling gets broken and price closes above it. That old ceiling often flips into a new floor. This setup waits for price to come back and retest that flipped level, then trades the bounce off it.',
+    session: 'Daily / swing trade',
     concept: 'When price breaks THROUGH an Order Block (instead of respecting it), that OB becomes a "Breaker Block". The failure reveals a shift in market structure (CHoCH). When price later returns to this zone for a retest, it provides an extremely high-conviction entry with outsized R:R potential.',
     candles: [
       { o:1.0820,h:1.0838,l:1.0795,c:1.0802, v:108 },
@@ -641,6 +741,8 @@ const SETUPS: Setup[] = [
     winRateRange: '50–60%',
     difficulty: 4,
     description: 'Hidden RSI divergence signals trend continuation — powerful low-risk entry in the direction of the trend.',
+    plain: 'An indicator called RSI can disagree with price. When price makes a small pullback but the RSI shows the trend is still strong underneath, it\'s a hint the trend will continue. This setup uses that hidden hint to join the trend again with a tight stop.',
+    session: 'London & New York',
     concept: 'Hidden Divergence occurs when price makes a Higher Low but RSI makes a Lower Low (bullish continuation), or price makes a Lower High while RSI makes a Higher High (bearish continuation). Unlike regular divergence which signals reversals, hidden divergence signals CONTINUATION of the existing trend.',
     candles: [
       { o:198.20,h:199.05,l:197.85,c:198.92, v:78 },
@@ -707,6 +809,8 @@ const SETUPS: Setup[] = [
     difficulty: 5,
     badge: 'advanced',
     description: 'Time-based entry during London or NY open kill zones using overnight consolidation and displacement.',
+    plain: 'The market is most active at specific times of day — the London and New York opens. This setup only trades during those windows, when a clean directional move is most likely, and ignores the quiet hours where price just chops around.',
+    session: 'London 02–05 ET · NY 07–10 ET',
     concept: 'ICT Kill Zones are time windows (London Open: 02:00–05:00 ET, NY Open: 07:00–10:00 ET) when institutional order flow is highest. Price typically sweeps overnight liquidity during these windows and then makes a strong directional move. Combining time, liquidity sweeps and FVGs gives maximum probability.',
     candles: [
       { o:1.0882,h:1.0888,l:1.0875,c:1.0880, v:40 },
@@ -885,7 +989,7 @@ function SetupCard({ setup, onClick }: { setup: Setup; onClick: () => void }) {
       }} />
 
       {/* Chart area */}
-      <div style={{ height: 210, position: 'relative', background: '#060a12' }}>
+      <div style={{ height: 250, position: 'relative', background: '#090d16' }}>
         <CandleChart
           candles={setup.candles}
           hlines={setup.hlines}
@@ -895,7 +999,8 @@ function SetupCard({ setup, onClick }: { setup: Setup; onClick: () => void }) {
           slPrice={setup.slPrice}
           tpPrice={setup.tpPrice}
           symbol={setup.symbol}
-          vw={340} vh={210} labels={true}
+          timeframe={setup.timeframe}
+          vw={360} vh={250} labels={true}
         />
 
         {/* Bottom fade */}
@@ -1120,9 +1225,9 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
           {/* Tab bar */}
           <div className="flex gap-1 -mx-1" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
             {[
-              { id: 'overview' as ModalTab, label: 'Chart & Concept', icon: <BarChart2 style={{ width: 12, height: 12 }} /> },
-              { id: 'rules' as ModalTab, label: 'Entry Rules', icon: <Target style={{ width: 12, height: 12 }} /> },
-              { id: 'mistakes' as ModalTab, label: 'Risk & Mistakes', icon: <AlertTriangle style={{ width: 12, height: 12 }} /> },
+              { id: 'overview' as ModalTab, label: 'What & why', icon: <BarChart2 style={{ width: 12, height: 12 }} /> },
+              { id: 'rules' as ModalTab, label: 'How to trade it', icon: <Target style={{ width: 12, height: 12 }} /> },
+              { id: 'mistakes' as ModalTab, label: 'Risks to avoid', icon: <AlertTriangle style={{ width: 12, height: 12 }} /> },
             ].map(t => (
               <button
                 key={t.id}
@@ -1148,21 +1253,34 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
           <AnimatePresence mode="wait">
             {tab === 'overview' && (
               <motion.div key="overview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* In simple terms — beginner-first explanation */}
+                <div style={{
+                  borderRadius: 14, padding: 18,
+                  background: 'linear-gradient(135deg, rgba(52,211,153,0.08), rgba(34,211,238,0.04))',
+                  border: '1px solid rgba(52,211,153,0.18)',
+                }}>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <Zap style={{ width: 14, height: 14, color: '#34d399' }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6ee7b7', textTransform: 'uppercase', letterSpacing: '0.06em' }}>In simple terms</span>
+                  </div>
+                  <p style={{ fontSize: 13.5, color: 'rgba(226,232,240,0.9)', lineHeight: 1.7 }}>{setup.plain}</p>
+                </div>
+
                 {/* Chart */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <BarChart2 style={{ width: 13, height: 13, color: 'rgba(148,163,184,0.4)' }} />
                     <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(148,163,184,0.4)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-                      Pattern Chart · {setup.symbol}
+                      Annotated example · {setup.symbol} · {setup.timeframe}
                     </span>
                     <span style={{ marginLeft: 'auto', fontSize: 10, color: 'rgba(148,163,184,0.25)', fontStyle: 'italic' }}>
-                      Educational model only
+                      Illustrative — not a live signal
                     </span>
                   </div>
                   <div style={{
-                    height: 280, borderRadius: 14,
+                    height: 360, borderRadius: 14,
                     border: '1px solid rgba(255,255,255,0.07)',
-                    background: '#060a12', overflow: 'hidden',
+                    background: '#090d16', overflow: 'hidden',
                     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
                   }}>
                     <CandleChart
@@ -1174,7 +1292,8 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
                       slPrice={setup.slPrice}
                       tpPrice={setup.tpPrice}
                       symbol={setup.symbol}
-                      vw={720} vh={280} labels={true}
+                      timeframe={setup.timeframe}
+                      vw={760} vh={360} labels={true}
                     />
                   </div>
 
@@ -1185,6 +1304,7 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
                       { line: true, color: '#f87171', dash: true, label: 'Stop Loss (SL)' },
                       { swatch: '#f59e0b', label: 'Entry Candle' },
                       { swatch: 'rgba(129,140,248,0.35)', label: 'Key Zone' },
+                      { line: true, color: '#5b8def', dash: false, label: 'Moving Average' },
                     ].map((item, i) => (
                       <div key={i} className="flex items-center gap-1.5" style={{ fontSize: 11, color: 'rgba(148,163,184,0.45)' }}>
                         {item.line ? (
@@ -1235,6 +1355,45 @@ function SetupModal({ setup, onClose }: { setup: Setup; onClose: () => void }) {
 
             {tab === 'rules' && (
               <motion.div key="rules" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Trade plan cheat-sheet */}
+                {(() => {
+                  const fmt = (p: number) => p > 999 ? p.toFixed(1) : p > 9 ? p.toFixed(2) : p.toFixed(4);
+                  const entryPrice = setup.candles[setup.entryCandle].c;
+                  const plan = [
+                    { label: 'Entry trigger', value: fmt(entryPrice), color: '#f59e0b', icon: <Target style={{ width: 13, height: 13 }} />, hint: 'on confirmation candle' },
+                    { label: 'Stop loss', value: fmt(setup.slPrice), color: '#f87171', icon: <Shield style={{ width: 13, height: 13 }} />, hint: 'risk per trade' },
+                    { label: 'Take profit', value: fmt(setup.tpPrice), color: '#34d399', icon: <TrendingUp style={{ width: 13, height: 13 }} />, hint: `target · ${setup.rr}` },
+                    { label: 'Timeframe', value: setup.timeframe, color: '#60a5fa', icon: <Clock style={{ width: 13, height: 13 }} />, hint: 'chart to watch' },
+                    { label: 'Best session', value: setup.session, color: '#a78bfa', icon: <Activity style={{ width: 13, height: 13 }} />, hint: 'when it works best' },
+                  ];
+                  return (
+                    <div style={{
+                      borderRadius: 14, padding: 16,
+                      background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.08)',
+                    }}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <BookOpen style={{ width: 14, height: 14, color: 'rgba(148,163,184,0.6)' }} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(148,163,184,0.6)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Trade plan at a glance</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {plan.map((p, i) => (
+                          <div key={i} style={{
+                            padding: '10px 12px', borderRadius: 10,
+                            background: `${p.color}0d`, border: `1px solid ${p.color}22`,
+                          }}>
+                            <div className="flex items-center gap-1.5" style={{ color: p.color, marginBottom: 5 }}>
+                              {p.icon}
+                              <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{p.label}</span>
+                            </div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: '#f1f5f9', fontFamily: 'monospace', lineHeight: 1.2 }}>{p.value}</div>
+                            <div style={{ fontSize: 9.5, color: 'rgba(148,163,184,0.45)', marginTop: 2 }}>{p.hint}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Entry steps */}
                 <div style={{
                   borderRadius: 14, padding: 20,
@@ -1388,7 +1547,7 @@ export default function SetupsPage() {
               Setups Library
             </h1>
             <p style={{ fontSize: 11, color: 'rgba(148,163,184,0.4)', marginTop: 1 }}>
-              {SETUPS.length} pattern models with live charts · Educational use only
+              {SETUPS.length} trading setups · annotated chart examples + step-by-step plans
             </p>
           </div>
 
@@ -1449,6 +1608,59 @@ export default function SetupsPage() {
               </motion.button>
             );
           })}
+        </div>
+      </div>
+
+      {/* How-to-use banner */}
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 pt-6">
+        <div style={{
+          borderRadius: 16, padding: '18px 20px',
+          background: 'linear-gradient(135deg, rgba(167,139,250,0.08), rgba(129,140,248,0.03))',
+          border: '1px solid rgba(167,139,250,0.16)',
+        }}>
+          <div className="flex items-center gap-2 mb-3">
+            <BookOpen style={{ width: 15, height: 15, color: '#a78bfa' }} />
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#f1f5f9' }}>New here? How to use this library</span>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3 mb-4">
+            {[
+              { n: 1, t: 'Pick your level', d: 'Start with Beginner setups and work up. Each card shows difficulty and reward-to-risk.' },
+              { n: 2, t: 'Open a setup', d: 'See an annotated chart, a plain-English explanation and a step-by-step trade plan.' },
+              { n: 3, t: 'Practice first', d: 'Backtest or paper-trade it on your own charts before risking real money.' },
+            ].map(s => (
+              <div key={s.n} className="flex gap-3" style={{ fontSize: 12, color: 'rgba(203,213,225,0.75)' }}>
+                <span style={{
+                  flexShrink: 0, width: 22, height: 22, borderRadius: '50%',
+                  background: 'rgba(167,139,250,0.15)', color: '#c4b5fd', border: '1px solid rgba(167,139,250,0.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800,
+                }}>{s.n}</span>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#e2e8f0', marginBottom: 2 }}>{s.t}</div>
+                  <div style={{ lineHeight: 1.5 }}>{s.d}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Chart legend */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2" style={{ paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(148,163,184,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Chart legend:</span>
+            {[
+              { line: true, color: '#34d399', label: 'Take Profit' },
+              { line: true, color: '#f87171', label: 'Stop Loss' },
+              { swatch: '#f59e0b', label: 'Entry candle' },
+              { swatch: 'rgba(129,140,248,0.5)', label: 'Key zone' },
+              { line: true, color: '#5b8def', label: 'Moving average' },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-1.5" style={{ fontSize: 11, color: 'rgba(148,163,184,0.55)' }}>
+                {item.line ? (
+                  <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke={item.color} strokeWidth="1.5" strokeDasharray="4,3" /></svg>
+                ) : (
+                  <div style={{ width: 10, height: 10, borderRadius: 3, background: item.swatch }} />
+                )}
+                {item.label}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

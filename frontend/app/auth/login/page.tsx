@@ -1,10 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGoogleLogin } from "@react-oauth/google";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  User as UserIcon,
+  Check,
+  AlertCircle,
+  Loader2,
+  ShieldCheck,
+  Sparkles,
+  LineChart,
+} from "lucide-react";
 import { useAuthStore } from "@/lib/auth-store";
 import { useT } from "@/lib/i18n";
+
+type Mode = "login" | "signup";
 
 function GoogleLogo() {
   return (
@@ -17,34 +33,47 @@ function GoogleLogo() {
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  height: 40,
-  padding: "0 12px",
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.1)",
-  borderRadius: 8,
-  color: "#e2e8f0",
-  fontSize: "0.875rem",
-  fontFamily: "inherit",
-  outline: "none",
-  boxSizing: "border-box",
-};
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function passwordScore(pw: string): number {
+  if (!pw) return 0;
+  let s = 0;
+  if (pw.length >= 6) s++;
+  if (pw.length >= 10) s++;
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s++;
+  if (/\d/.test(pw)) s++;
+  if (/[^A-Za-z0-9]/.test(pw)) s++;
+  return Math.min(4, s);
+}
 
 export default function LoginPage() {
   const t = useT();
   const router = useRouter();
   const { login, register, loginWithGoogle, isLoading, isAuthenticated } = useAuthStore();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+
+  const [mode, setMode] = useState<Mode>("login");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) router.replace("/app");
   }, [isAuthenticated, router]);
+
+  const emailValid = EMAIL_RE.test(email);
+  const score = useMemo(() => passwordScore(password), [password]);
+  const pwMatch = confirmPassword.length > 0 && password === confirmPassword;
+
+  const switchMode = (m: Mode) => {
+    setMode(m);
+    setError("");
+    setTouched({});
+  };
 
   const applyStoredReferral = async () => {
     try {
@@ -68,180 +97,351 @@ export default function LoginPage() {
         await applyStoredReferral();
         router.push("/app");
       } catch (err) {
-        setError(err instanceof Error ? err.message : t('google_signin_failed'));
+        setError(err instanceof Error ? err.message : t("google_signin_failed"));
       }
     },
-    onError: () => setError(t('google_signin_failed')),
+    onError: () => setError(t("google_signin_failed")),
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setTouched({ name: true, email: true, password: true, confirm: true });
     try {
       if (mode === "login") {
-        if (!email || !password) { setError(t('fill_all_fields')); return; }
+        if (!email || !password) return setError(t("fill_all_fields"));
         await login(email, password);
         router.push("/app");
       } else {
-        if (!name || !email || !password || !confirmPassword) { setError(t('fill_all_fields')); return; }
-        if (password !== confirmPassword) { setError(t('passwords_dont_match')); return; }
-        if (password.length < 6) { setError(t('password_min_6')); return; }
+        if (!name || !email || !password || !confirmPassword) return setError(t("fill_all_fields"));
+        if (!emailValid) return setError(t("email_invalid"));
+        if (password.length < 6) return setError(t("password_min_6"));
+        if (password !== confirmPassword) return setError(t("passwords_dont_match"));
         await register(email, password, name);
         await applyStoredReferral();
-        router.push("/app");
+        setSuccess(true);
+        setTimeout(() => router.push("/app"), 700);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('something_went_wrong'));
+      setError(err instanceof Error ? err.message : t("something_went_wrong"));
     }
   };
 
+  const strengthLabels = [t("pwd_weak"), t("pwd_weak"), t("pwd_fair"), t("pwd_good"), t("pwd_strong")];
+  const strengthColors = ["bg-red-500", "bg-red-500", "bg-amber-500", "bg-cyan-500", "bg-emerald-500"];
+
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "#07080f",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "0 16px",
-      fontFamily: "inherit",
-    }}>
-      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse 60% 40% at 50% 30%, rgba(124,111,224,0.06) 0%, transparent 70%)" }} />
-
-      <div style={{ position: "relative", zIndex: 10, width: "100%", maxWidth: 380 }}>
-
-        {/* Logo */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 32 }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 13,
-            border: "1px solid rgba(124,111,224,0.2)",
-            background: "rgba(10,8,26,0.9)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            overflow: "hidden",
-            boxShadow: "0 0 24px rgba(124,111,224,0.1)",
-          }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.jpg" alt="TradeMind" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <h1 style={{ margin: 0, fontSize: "1.35rem", fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.025em" }}>TradeMind</h1>
-            <p style={{ margin: "4px 0 0", fontSize: "0.7rem", fontFamily: "monospace", letterSpacing: "0.2em", color: "rgba(100,116,139,0.45)" }}>{t('ai_powered_trading')}</p>
-          </div>
-        </div>
-
-        {/* Card */}
-        <div style={{ background: "#0b0a18", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, overflow: "hidden" }}>
-
-          {/* Tabs */}
-          <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-            {(["login", "signup"] as const).map((m) => (
-              <button key={m} onClick={() => { setMode(m); setError(""); }} style={{
-                flex: 1, height: 44, background: "none", border: "none", cursor: "pointer",
-                fontFamily: "inherit", fontSize: "0.85rem", fontWeight: 500,
-                color: mode === m ? "#e2e8f0" : "rgba(100,116,139,0.6)",
-                borderBottom: mode === m ? "2px solid rgba(124,111,224,0.7)" : "2px solid transparent",
-                transition: "all 0.15s",
-              }}>
-                {m === "login" ? t('sign_in_tab') : t('sign_up_tab')}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ padding: "24px" }}>
-
-            {/* Error */}
-            {error && (
-              <div style={{ marginBottom: 16, padding: "10px 12px", borderRadius: 7, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", fontSize: "0.78rem", color: "rgba(252,165,165,0.85)" }}>
-                {error}
-              </div>
-            )}
-
-            {/* Google button */}
-            <button
-              onClick={() => handleGoogleLogin()}
-              disabled={isLoading}
-              style={{
-                width: "100%", height: 42, display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8,
-                cursor: isLoading ? "default" : "pointer", color: "#e2e8f0", fontSize: "0.875rem",
-                fontFamily: "inherit", fontWeight: 500, transition: "all 0.15s ease", opacity: isLoading ? 0.6 : 1,
-              }}
-            >
-              <GoogleLogo />
-              {t('continue_with_google')}
-            </button>
-
-            {/* Divider */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0" }}>
-              <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
-              <span style={{ fontSize: "0.72rem", color: "rgba(100,116,139,0.4)", letterSpacing: "0.05em" }}>OR</span>
-              <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
+    <div className="min-h-screen flex bg-[#06070d] text-white">
+      {/* ── Left brand panel (desktop) ─────────────────────────────────── */}
+      <div className="hidden lg:flex w-[44%] relative overflow-hidden border-r border-white/[0.06]">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse 70% 50% at 30% 20%, rgba(124,111,224,0.18) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 80% 90%, rgba(34,211,238,0.10) 0%, transparent 60%)",
+          }}
+        />
+        <div
+          className="absolute inset-0 opacity-[0.4]"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)",
+            backgroundSize: "48px 48px",
+          }}
+        />
+        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl overflow-hidden border border-purple-500/20 shadow-[0_0_24px_rgba(124,111,224,0.18)]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.jpg" alt="TradeMind" className="w-full h-full object-cover" />
             </div>
-
-            {/* Email/password form */}
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {mode === "signup" && (
-                <input
-                  style={inputStyle}
-                  type="text"
-                  placeholder={t('full_name_ph')}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              )}
-              <input
-                style={inputStyle}
-                type="email"
-                placeholder={t('email_ph')}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <input
-                style={inputStyle}
-                type="password"
-                placeholder={t('password_ph')}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              {mode === "signup" && (
-                <input
-                  style={inputStyle}
-                  type="password"
-                  placeholder={t('confirm_password_ph')}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              )}
-              <button
-                type="submit"
-                disabled={isLoading}
-                style={{
-                  marginTop: 4, width: "100%", height: 42, display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "rgba(124,111,224,0.15)", border: "1px solid rgba(124,111,224,0.3)", borderRadius: 8,
-                  cursor: isLoading ? "default" : "pointer", color: "#c4b5fd", fontSize: "0.875rem",
-                  fontFamily: "inherit", fontWeight: 500, transition: "all 0.15s ease", opacity: isLoading ? 0.6 : 1,
-                }}
-              >
-                {isLoading ? t('please_wait') : mode === "login" ? t('sign_in_tab') : t('create_account_btn')}
-              </button>
-            </form>
-
-            <p style={{ margin: "16px 0 0", fontSize: "0.7rem", textAlign: "center", color: "rgba(100,116,139,0.4)", lineHeight: 1.6 }}>
-              {t('agree_terms_prefix')}{" "}
-              <a href="/terms" style={{ color: "rgba(124,111,224,0.55)", textDecoration: "none" }}>{t('terms_link')}</a>{" "}{t('and_word')}{" "}
-              <a href="/privacy" style={{ color: "rgba(124,111,224,0.55)", textDecoration: "none" }}>{t('privacy_link')}</a>
-            </p>
+            <span className="text-lg font-semibold tracking-tight">TradeMind</span>
           </div>
-        </div>
 
-        <p style={{ margin: "24px 0 0", textAlign: "center", fontSize: "0.65rem", fontFamily: "monospace", letterSpacing: "0.15em", color: "rgba(71,85,105,0.4)" }}>
-          v1.0 · ALPHA
-        </p>
+          <div className="space-y-8 max-w-sm">
+            <h2 className="text-3xl font-bold leading-tight tracking-tight">
+              The AI edge for
+              <br />
+              <span className="bg-gradient-to-r from-purple-300 to-cyan-300 bg-clip-text text-transparent">
+                serious traders
+              </span>
+            </h2>
+            <ul className="space-y-4">
+              {[
+                { icon: Sparkles, text: "AI-powered decision analysis" },
+                { icon: LineChart, text: "Journal, setups & daily bias" },
+                { icon: ShieldCheck, text: "Your data, private and secure" },
+              ].map(({ icon: Icon, text }) => (
+                <li key={text} className="flex items-center gap-3 text-sm text-gray-300">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08]">
+                    <Icon className="w-4 h-4 text-purple-300" />
+                  </span>
+                  {text}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <p className="text-[11px] font-mono tracking-[0.2em] text-gray-700">v1.0 · ALPHA</p>
+        </div>
       </div>
 
-      <style>{`
-        input::placeholder { color: rgba(100,116,139,0.4); }
-        input:focus { border-color: rgba(124,111,224,0.4) !important; box-shadow: 0 0 0 2px rgba(124,111,224,0.1); }
-      `}</style>
+      {/* ── Right form ─────────────────────────────────────────────────── */}
+      <div className="flex-1 flex items-center justify-center px-5 py-10">
+        <div className="w-full max-w-[400px]">
+          {/* Mobile logo */}
+          <div className="lg:hidden flex flex-col items-center gap-3 mb-8">
+            <div className="w-12 h-12 rounded-xl overflow-hidden border border-purple-500/20">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.jpg" alt="TradeMind" className="w-full h-full object-cover" />
+            </div>
+            <span className="text-lg font-semibold tracking-tight">TradeMind</span>
+          </div>
+
+          {/* Heading */}
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold tracking-tight">
+              {mode === "login" ? t("welcome_back") : t("create_account_heading")}
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {mode === "login" ? t("login_subtitle") : t("signup_subtitle")}
+            </p>
+          </div>
+
+          {/* Tabs */}
+          <div className="relative grid grid-cols-2 p-1 rounded-xl bg-white/[0.03] border border-white/[0.07] mb-6">
+            {(["login", "signup"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => switchMode(m)}
+                className={`relative z-10 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  mode === m ? "text-white" : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                {m === "login" ? t("sign_in_tab") : t("sign_up_tab")}
+              </button>
+            ))}
+            <motion.div
+              layout
+              transition={{ type: "spring", stiffness: 400, damping: 32 }}
+              className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-gradient-to-r from-purple-600/30 to-purple-500/20 border border-purple-500/30"
+              style={{ left: mode === "login" ? 4 : "calc(50% + 0px)" }}
+            />
+          </div>
+
+          {/* Error */}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                animate={{ opacity: 1, height: "auto", marginBottom: 16 }}
+                exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-500/[0.08] border border-red-500/20 text-[13px] text-red-300">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Google */}
+          <button
+            onClick={() => handleGoogleLogin()}
+            disabled={isLoading}
+            className="w-full h-11 flex items-center justify-center gap-2.5 rounded-xl bg-white/[0.05] border border-white/[0.1] text-sm font-medium hover:bg-white/[0.08] transition-colors disabled:opacity-60"
+          >
+            <GoogleLogo />
+            {t("continue_with_google")}
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-white/[0.07]" />
+            <span className="text-[11px] uppercase tracking-wider text-gray-600">
+              {t("or_continue_with_email")}
+            </span>
+            <div className="flex-1 h-px bg-white/[0.07]" />
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <AnimatePresence initial={false}>
+              {mode === "signup" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <Field
+                    icon={<UserIcon className="w-4 h-4" />}
+                    type="text"
+                    placeholder={t("full_name_ph")}
+                    value={name}
+                    autoComplete="name"
+                    onChange={setName}
+                    onBlur={() => setTouched((s) => ({ ...s, name: true }))}
+                  />
+                </motion.div>
+              )}
+
+              <Field
+                key="email"
+                icon={<Mail className="w-4 h-4" />}
+                type="email"
+                placeholder={t("email_ph")}
+                value={email}
+                autoComplete="email"
+                onChange={setEmail}
+                onBlur={() => setTouched((s) => ({ ...s, email: true }))}
+                invalid={touched.email && email.length > 0 && !emailValid}
+                valid={emailValid}
+              />
+              {touched.email && email.length > 0 && !emailValid && (
+                <p className="text-[11px] text-red-400 pl-1 -mt-1">{t("email_invalid")}</p>
+              )}
+
+              <Field
+                key="password"
+                icon={<Lock className="w-4 h-4" />}
+                type={showPwd ? "text" : "password"}
+                placeholder={t("password_ph")}
+                value={password}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                onChange={setPassword}
+                onBlur={() => setTouched((s) => ({ ...s, password: true }))}
+                trailing={
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd((v) => !v)}
+                    aria-label={showPwd ? t("hide_pwd") : t("show_pwd")}
+                    className="text-gray-500 hover:text-gray-300"
+                  >
+                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                }
+              />
+
+              {/* Password strength (signup) */}
+              {mode === "signup" && password.length > 0 && (
+                <div className="flex items-center gap-2 pl-1">
+                  <div className="flex gap-1 flex-1">
+                    {[0, 1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className={`h-1 flex-1 rounded-full transition-colors ${
+                          i < score ? strengthColors[score] : "bg-white/[0.08]"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[11px] text-gray-500 w-12 text-right">
+                    {strengthLabels[score]}
+                  </span>
+                </div>
+              )}
+
+              {mode === "signup" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <Field
+                    icon={<Lock className="w-4 h-4" />}
+                    type={showPwd ? "text" : "password"}
+                    placeholder={t("confirm_password_ph")}
+                    value={confirmPassword}
+                    autoComplete="new-password"
+                    onChange={setConfirmPassword}
+                    onBlur={() => setTouched((s) => ({ ...s, confirm: true }))}
+                    invalid={touched.confirm && confirmPassword.length > 0 && !pwMatch}
+                    valid={pwMatch}
+                    trailing={
+                      pwMatch ? <Check className="w-4 h-4 text-emerald-400" /> : undefined
+                    }
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <button
+              type="submit"
+              disabled={isLoading || success}
+              className="w-full h-11 mt-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 text-white text-sm font-semibold shadow-[0_4px_20px_rgba(124,111,224,0.25)] hover:brightness-110 active:scale-[0.99] transition-all disabled:opacity-70"
+            >
+              {success ? (
+                <>
+                  <Check className="w-4 h-4" /> {t("account_created")}
+                </>
+              ) : isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> {t("please_wait")}
+                </>
+              ) : mode === "login" ? (
+                t("sign_in_tab")
+              ) : (
+                t("create_account_btn")
+              )}
+            </button>
+          </form>
+
+          {/* Terms */}
+          <p className="mt-5 text-[11px] leading-relaxed text-center text-gray-600">
+            {t("agree_terms_prefix")}{" "}
+            <a href="/terms" className="text-purple-400/70 hover:text-purple-400">{t("terms_link")}</a>{" "}
+            {t("and_word")}{" "}
+            <a href="/privacy" className="text-purple-400/70 hover:text-purple-400">{t("privacy_link")}</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  icon,
+  trailing,
+  type,
+  placeholder,
+  value,
+  autoComplete,
+  onChange,
+  onBlur,
+  invalid,
+  valid,
+}: {
+  icon: React.ReactNode;
+  trailing?: React.ReactNode;
+  type: string;
+  placeholder: string;
+  value: string;
+  autoComplete?: string;
+  onChange: (v: string) => void;
+  onBlur?: () => void;
+  invalid?: boolean;
+  valid?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2.5 h-11 px-3 rounded-xl bg-white/[0.04] border transition-colors focus-within:border-purple-500/50 focus-within:bg-white/[0.06] ${
+        invalid ? "border-red-500/40" : valid ? "border-emerald-500/30" : "border-white/[0.09]"
+      }`}
+    >
+      <span className={invalid ? "text-red-400/70" : "text-gray-500"}>{icon}</span>
+      <input
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        autoComplete={autoComplete}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        className="flex-1 bg-transparent text-sm text-gray-100 placeholder-gray-600 outline-none"
+      />
+      {trailing}
     </div>
   );
 }

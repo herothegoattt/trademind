@@ -3,18 +3,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createChart, IChartApi, ISeriesApi, ColorType, CrosshairMode,
-  CandlestickSeries, LineSeries,
+  CandlestickSeries, LineSeries, createSeriesMarkers, type SeriesMarker, type Time,
 } from "lightweight-charts";
 import {
   Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine, Line, ComposedChart,
 } from "recharts";
 import {
   Layers, Search, ChevronDown, Activity, Target, Gauge, Crosshair,
-  TrendingUp, TrendingDown, Loader2, AlertTriangle, Info, Zap, Flame, Radio,
+  TrendingUp, TrendingDown, Loader2, AlertTriangle, Info, Zap, Flame, Radio, Magnet,
 } from "lucide-react";
 import {
-  type OHLCVBar, type FootprintBar, type ImbalanceRun,
+  type OHLCVBar, type FootprintBar, type ImbalanceRun, type AbsorptionEvent,
   computeVWAP, computeVolumeProfile, sessionVWAP, estimateDeltaFromOHLCV,
+  computeEMA, computeBollinger, computeRSI, computeDevelopingPOC, detectAbsorption,
 } from "../../lib/orderflow";
 import { useLiveOrderFlow, useLivePolledOHLCV, type BigTrade, type TapeSpeed } from "../../lib/orderflow-live";
 import { VolumeProfilePrimitive, type VolumeProfileData } from "../../lib/volume-profile-primitive";
@@ -115,13 +116,28 @@ function StatCard({ label, value, sub, color = "#a78bfa", icon: Icon }: {
   );
 }
 
+/* ═══ Indicator toggles ══════════════════════════════════════════════════════ */
+interface Indicators { vwap: boolean; ema: boolean; bb: boolean; devPOC: boolean; absorption: boolean; rsi: boolean; }
+const INDICATOR_META: { key: keyof Indicators; label: string; color: string }[] = [
+  { key: "vwap", label: "VWAP ±σ", color: "#f59e0b" },
+  { key: "ema", label: "EMA 9/21/50", color: "#60a5fa" },
+  { key: "bb", label: "Bollinger", color: "#a78bfa" },
+  { key: "devPOC", label: "Developing POC", color: "#22d3ee" },
+  { key: "absorption", label: "POC Absorption", color: "#fbbf24" },
+  { key: "rsi", label: "RSI", color: "#f472b6" },
+];
+
 /* ═══ VWAP + price chart (lightweight-charts) ════════════════════════════════ */
-function VWAPChart({ candles, profile }: { candles: OHLCVBar[]; profile: VolumeProfileData | null }) {
+function VWAPChart({ candles, profile, indicators, absorption }: {
+  candles: OHLCVBar[]; profile: VolumeProfileData | null;
+  indicators: Indicators; absorption: AbsorptionEvent[];
+}) {
   const elRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const lineRefs = useRef<Record<string, ISeriesApi<"Line">>>({});
   const profileRef = useRef<VolumeProfilePrimitive | null>(null);
+  const markersRef = useRef<ReturnType<typeof createSeriesMarkers> | null>(null);
   const fittedRef = useRef(false);
 
   useEffect(() => {
@@ -151,7 +167,15 @@ function VWAPChart({ candles, profile }: { candles: OHLCVBar[]; profile: VolumeP
       l1: mkLine("rgba(34,211,238,0.55)", 1, true),
       u2: mkLine("rgba(167,139,250,0.45)", 1, true),
       l2: mkLine("rgba(167,139,250,0.45)", 1, true),
+      ema9: mkLine("#60a5fa", 1),
+      ema21: mkLine("#f472b6", 1),
+      ema50: mkLine("#94a3b8", 2),
+      bbU: mkLine("rgba(167,139,250,0.5)", 1, true),
+      bbM: mkLine("rgba(167,139,250,0.7)", 1),
+      bbL: mkLine("rgba(167,139,250,0.5)", 1, true),
+      devPOC: mkLine("#22d3ee", 2, true),
     };
+    markersRef.current = createSeriesMarkers(candleRef.current, []);
     // Left-anchored, price-aligned volume profile drawn under the candles.
     const profilePrim = new VolumeProfilePrimitive(0.26, true);
     candleRef.current.attachPrimitive(profilePrim as any);
@@ -161,7 +185,7 @@ function VWAPChart({ candles, profile }: { candles: OHLCVBar[]; profile: VolumeP
       if (chartRef.current && el.clientWidth > 0) chartRef.current.applyOptions({ width: el.clientWidth, height: el.clientHeight });
     });
     ro.observe(el);
-    return () => { ro.disconnect(); chart.remove(); chartRef.current = null; candleRef.current = null; lineRefs.current = {}; profileRef.current = null; };
+    return () => { ro.disconnect(); chart.remove(); chartRef.current = null; candleRef.current = null; lineRefs.current = {}; profileRef.current = null; markersRef.current = null; };
   }, []);
 
   useEffect(() => { profileRef.current?.setData(profile); }, [profile]);
@@ -170,16 +194,87 @@ function VWAPChart({ candles, profile }: { candles: OHLCVBar[]; profile: VolumeP
     if (!candleRef.current || !candles.length) return;
     candleRef.current.setData(candles.map((c) => ({ time: c.time as any, open: c.open, high: c.high, low: c.low, close: c.close })));
     const v = computeVWAP(candles);
-    lineRefs.current.vwap?.setData(v.map((p) => ({ time: p.time as any, value: p.vwap })));
-    lineRefs.current.u1?.setData(v.map((p) => ({ time: p.time as any, value: p.upper1 })));
-    lineRefs.current.l1?.setData(v.map((p) => ({ time: p.time as any, value: p.lower1 })));
-    lineRefs.current.u2?.setData(v.map((p) => ({ time: p.time as any, value: p.upper2 })));
-    lineRefs.current.l2?.setData(v.map((p) => ({ time: p.time as any, value: p.lower2 })));
+    const L = lineRefs.current;
+    L.vwap?.setData(v.map((p) => ({ time: p.time as any, value: p.vwap })));
+    L.u1?.setData(v.map((p) => ({ time: p.time as any, value: p.upper1 })));
+    L.l1?.setData(v.map((p) => ({ time: p.time as any, value: p.lower1 })));
+    L.u2?.setData(v.map((p) => ({ time: p.time as any, value: p.upper2 })));
+    L.l2?.setData(v.map((p) => ({ time: p.time as any, value: p.lower2 })));
+    const toLine = (pts: { time: number; value: number }[]) => pts.map((p) => ({ time: p.time as any, value: p.value }));
+    L.ema9?.setData(toLine(computeEMA(candles, 9)));
+    L.ema21?.setData(toLine(computeEMA(candles, 21)));
+    L.ema50?.setData(toLine(computeEMA(candles, 50)));
+    const bb = computeBollinger(candles, 20, 2);
+    L.bbU?.setData(bb.map((p) => ({ time: p.time as any, value: p.upper })));
+    L.bbM?.setData(bb.map((p) => ({ time: p.time as any, value: p.mid })));
+    L.bbL?.setData(bb.map((p) => ({ time: p.time as any, value: p.lower })));
+    L.devPOC?.setData(toLine(computeDevelopingPOC(candles)));
     // Fit once; afterwards keep the user's zoom/scroll while live data streams in.
     if (!fittedRef.current) { chartRef.current?.timeScale().fitContent(); fittedRef.current = true; }
   }, [candles]);
 
+  // Toggle visibility from the indicator switches
+  useEffect(() => {
+    const L = lineRefs.current;
+    const set = (keys: string[], on: boolean) => keys.forEach((k) => L[k]?.applyOptions({ visible: on }));
+    set(["vwap", "u1", "l1", "u2", "l2"], indicators.vwap);
+    set(["ema9", "ema21", "ema50"], indicators.ema);
+    set(["bbU", "bbM", "bbL"], indicators.bb);
+    set(["devPOC"], indicators.devPOC);
+  }, [indicators]);
+
+  // Absorption markers on the price candles
+  useEffect(() => {
+    if (!markersRef.current) return;
+    if (!indicators.absorption) { markersRef.current.setMarkers([]); return; }
+    const markers: SeriesMarker<Time>[] = absorption.map((a) => ({
+      time: a.time as Time,
+      position: a.type === "bullish" ? "belowBar" : "aboveBar",
+      color: a.type === "bullish" ? "#34d399" : "#f87171",
+      shape: a.type === "bullish" ? "arrowUp" : "arrowDown",
+      text: a.strength >= 0.6 ? "ABS!" : "ABS",
+    }));
+    markersRef.current.setMarkers(markers);
+  }, [absorption, indicators.absorption]);
+
   return <div ref={elRef} className="w-full h-[360px]" />;
+}
+
+/* ═══ RSI sub-panel ══════════════════════════════════════════════════════════ */
+function RSIPanel({ candles }: { candles: OHLCVBar[] }) {
+  const data = useMemo(() => {
+    const rsi = computeRSI(candles, 14);
+    return rsi.map((p) => ({
+      t: new Date(p.time * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+      rsi: p.value,
+    }));
+  }, [candles]);
+  const last = data.length ? data[data.length - 1].rsi : null;
+  if (!data.length) return null;
+  return (
+    <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">RSI (14)</h3>
+        {last != null && (
+          <span className={cn("text-[13px] font-mono font-semibold tabular-nums",
+            last >= 70 ? "text-red-300" : last <= 30 ? "text-emerald-300" : "text-gray-400")}>
+            {last.toFixed(1)} {last >= 70 ? "· перекуплен" : last <= 30 ? "· перепродан" : ""}
+          </span>
+        )}
+      </div>
+      <ResponsiveContainer width="100%" height={130}>
+        <ComposedChart data={data}>
+          <XAxis dataKey="t" tick={{ fill: "#6b7280", fontSize: 9 }} tickLine={false} interval="preserveStartEnd" minTickGap={40} />
+          <YAxis domain={[0, 100]} ticks={[30, 50, 70]} tick={{ fill: "#6b7280", fontSize: 9 }} tickLine={false} axisLine={false} width={28} />
+          <Tooltip contentStyle={{ background: "rgba(7,9,18,0.95)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 11 }}
+            formatter={(v: any) => [Number(v).toFixed(1), "RSI"]} />
+          <ReferenceLine y={70} stroke="rgba(248,113,113,0.35)" strokeDasharray="3 3" />
+          <ReferenceLine y={30} stroke="rgba(52,211,153,0.35)" strokeDasharray="3 3" />
+          <Line dataKey="rsi" stroke="#f472b6" strokeWidth={2} dot={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
 }
 
 /* ═══ Footprint chart (canvas — professional bid×ask ladder) ═════════════════ */
@@ -447,7 +542,11 @@ export default function OrderFlowLab() {
   const [staticError, setStaticError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [indicators, setIndicators] = useState<Indicators>({
+    vwap: true, ema: true, bb: false, devPOC: true, absorption: true, rsi: false,
+  });
   const reqId = useRef(0);
+  const toggleIndicator = (k: keyof Indicators) => setIndicators((s) => ({ ...s, [k]: !s[k] }));
 
   const crypto = isCryptoTicker(ticker);
   const liveEnabled = liveMode;
@@ -502,6 +601,10 @@ export default function OrderFlowLab() {
 
   const profile = useMemo(() => (data ? computeVolumeProfile(data.candles, 30) : null), [data]);
   const vwap = useMemo(() => (data ? sessionVWAP(data.candles) : null), [data]);
+  const absorption = useMemo(
+    () => (data ? detectAbsorption(data.candles, data.footprint, data.deltas) : []),
+    [data],
+  );
   const lastPrice = liveEnabled
     ? (live.data?.lastPrice ?? 0)
     : (data?.candles.length ? data.candles[data.candles.length - 1].close : 0);
@@ -655,6 +758,26 @@ export default function OrderFlowLab() {
         )}
       </div>
 
+      {/* Indicator toggles — overlay the candles to read them properly */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] uppercase tracking-wider text-gray-600 mr-1">Индикаторы</span>
+        {INDICATOR_META.map((ind) => {
+          const on = indicators[ind.key];
+          return (
+            <button key={ind.key} onClick={() => toggleIndicator(ind.key)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all"
+              style={{
+                background: on ? `${ind.color}1f` : "rgba(255,255,255,0.02)",
+                borderColor: on ? `${ind.color}55` : "rgba(255,255,255,0.07)",
+                color: on ? ind.color : "rgba(120,134,158,0.85)",
+              }}>
+              <span className="w-2 h-2 rounded-full" style={{ background: on ? ind.color : "rgba(120,134,158,0.4)" }} />
+              {ind.label}
+            </button>
+          );
+        })}
+      </div>
+
       {error && (
         <div className="flex items-center gap-2 p-4 rounded-xl bg-red-500/[0.05] border border-red-500/15 text-sm text-red-300">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" /> {error}
@@ -676,7 +799,7 @@ export default function OrderFlowLab() {
       {data && !loading && (
         <>
           {/* Stat cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
             <StatCard icon={Gauge} label="Session VWAP" color="#f59e0b"
               value={vwap ? vwap.vwap.toLocaleString("en-US", { maximumFractionDigits: decimalsFor(priceTick) }) : "—"}
               sub={vwap && lastPrice ? `${lastPrice >= vwap.vwap ? "выше" : "ниже"} VWAP` : undefined} />
@@ -696,19 +819,29 @@ export default function OrderFlowLab() {
             <StatCard icon={Zap} label="Speed of Tape" color="#38bdf8"
               value={tape ? `${tape.tradesPerSec.toFixed(1)}/с` : "—"}
               sub={tape ? `${tape.prints} принтов · ${fmtQty(tape.volPerSec)}/с` : (crypto ? "ожидание потока" : "только крипта")} />
+            <StatCard icon={Magnet} label="POC Absorption"
+              color={absorption.length === 0 ? "#fbbf24"
+                : absorption[absorption.length - 1].type === "bullish" ? "#34d399" : "#f87171"}
+              value={String(absorption.length)}
+              sub={absorption.length
+                ? `${absorption[absorption.length - 1].type === "bullish" ? "бычья" : "медвежья"} последняя`
+                : (isReal ? "поглощений нет" : "оценка (est.)")} />
           </div>
 
           {/* Chart + profile */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 bg-white/[0.02] border border-white/[0.05] rounded-2xl p-3">
               <div className="flex items-center gap-3 px-1 pb-2 text-[10px] text-gray-500 flex-wrap">
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-amber-400" /> VWAP</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-cyan-400/60" /> ±1σ</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-fuchsia-400/50" /> ±2σ</span>
+                {indicators.vwap && <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-amber-400" /> VWAP ±σ</span>}
+                {indicators.ema && <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-400" /> EMA 9/21/50</span>}
+                {indicators.bb && <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-fuchsia-400/60" /> Bollinger</span>}
+                {indicators.devPOC && <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-cyan-400" /> Developing POC</span>}
+                {indicators.absorption && <span className="flex items-center gap-1"><span className="text-emerald-400">↑</span><span className="text-red-400">↓</span> Absorption</span>}
                 <span className="flex items-center gap-1 ml-auto"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400/50" /> объём buy</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-400/50" /> sell (слева)</span>
               </div>
-              <VWAPChart key={`${ticker}-${interval}`} candles={data.candles} profile={chartProfile} />
+              <VWAPChart key={`${ticker}-${interval}`} candles={data.candles} profile={chartProfile}
+                indicators={indicators} absorption={absorption} />
             </div>
             <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -717,6 +850,51 @@ export default function OrderFlowLab() {
               </div>
               <VolumeProfilePanel candles={data.candles} tick={priceTick} />
             </div>
+          </div>
+
+          {/* RSI sub-panel */}
+          {indicators.rsi && <RSIPanel candles={data.candles} />}
+
+          {/* POC Absorption (AMT) */}
+          <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Magnet className="w-4 h-4 text-amber-400" />
+                <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">POC Absorption · AMT</h3>
+              </div>
+              <span className="text-[10px] text-gray-600">
+                большой объём + односторонняя дельта, а цена не идёт = крупный игрок поглощает {isReal ? "" : "· оценка (est.)"}
+              </span>
+            </div>
+            {absorption.length === 0 ? (
+              <div className="text-xs text-gray-600 py-6 text-center">Поглощений на видимом окне не найдено</div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                {[...absorption].reverse().slice(0, 12).map((a) => (
+                  <div key={`${a.barIndex}-${a.time}`}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg text-[11px]"
+                    style={{
+                      background: a.type === "bullish" ? "rgba(52,211,153,0.07)" : "rgba(248,113,113,0.07)",
+                      border: `1px solid ${a.type === "bullish" ? "rgba(52,211,153,0.18)" : "rgba(248,113,113,0.18)"}`,
+                    }}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={a.type === "bullish" ? "text-emerald-300" : "text-red-300"}>
+                        {a.type === "bullish" ? "▲ bid" : "▼ ask"}
+                      </span>
+                      <span className="font-mono tabular-nums text-white">{fmtPrice(a.price, priceTick)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-500 font-mono tabular-nums">
+                      <span className={a.delta >= 0 ? "text-emerald-400/80" : "text-red-400/80"}>{fmtSigned(a.delta)}</span>
+                      <span className="text-[9px]">{new Date(a.time * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+                      <span className="w-10 h-1 rounded-full bg-white/10 overflow-hidden">
+                        <span className="block h-full rounded-full"
+                          style={{ width: `${Math.round(a.strength * 100)}%`, background: a.type === "bullish" ? "#34d399" : "#f87171" }} />
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Volume delta strip */}

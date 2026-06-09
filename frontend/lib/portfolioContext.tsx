@@ -25,19 +25,43 @@ export interface Position {
 }
 
 // ─── P&L Helpers (shared) ────────────────────────────────────────────────────
+//
+// Absolute P&L is driven purely by the price move and the size held:
+//
+//     P&L = (price − entry) × quantity        (reversed for shorts)
+//
+// Leverage does NOT scale the dollar P&L — buying 1 unit and gaining $1,000 is
+// $1,000 whether the position is 1× or 10×. Leverage only shrinks the *margin*
+// you commit, which is reflected in `posInvested` (and therefore the % return),
+// not in the nominal profit. (The previous implementation multiplied P&L by
+// leverage, inflating every futures result.)
+
 export function calcPnL(pos: Position): number {
   const price = pos.status === 'closed' && pos.exitPrice != null ? pos.exitPrice : pos.currentPrice;
   const diff  = pos.direction === 'long' ? price - pos.entryPrice : pos.entryPrice - price;
-  return diff * pos.quantity * (pos.type === 'futures' ? pos.leverage : 1);
+  return diff * pos.quantity;
 }
 
+// Capital actually committed to the position:
+//   • spot      → full notional (entry × quantity)
+//   • futures   → margin = notional / leverage
+export function posInvested(pos: Position): number {
+  const notional = pos.entryPrice * pos.quantity;
+  return pos.type === 'futures' && pos.leverage > 1 ? notional / pos.leverage : notional;
+}
+
+// Current worth of the committed capital = capital + P&L.
+//   • spot      → resolves to currentPrice × quantity (market value)
+//   • futures   → margin + unrealized P&L (account equity for the position)
+export function posCurrentValue(pos: Position): number {
+  return posInvested(pos) + calcPnL(pos);
+}
+
+// Return on the capital actually committed (so leverage correctly amplifies %).
 export function calcPnLPct(pos: Position): number {
-  const inv = pos.entryPrice * pos.quantity;
+  const inv = posInvested(pos);
   return inv === 0 ? 0 : (calcPnL(pos) / inv) * 100;
 }
-
-export function posInvested(pos: Position)     { return pos.entryPrice  * pos.quantity; }
-export function posCurrentValue(pos: Position) { return pos.currentPrice * pos.quantity; }
 
 // ─── Computed Stats ────────────────────────────────────────────────────────────
 export interface PortfolioStats {
