@@ -339,7 +339,7 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
         body: JSON.stringify({
           plan: selected,
           billing,
-          success_url: `${window.location.origin}/app?plan_success=1`,
+          success_url: `${window.location.origin}/app?plan_success=1&session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: window.location.href,
           coupon_id: promoApplied?.couponId ?? undefined,
         }),

@@ -155,6 +155,90 @@ def customer_portal(
     return PortalResponse(portal_url=session.url)
 
 
+# ─── Confirm / sync (post-checkout, webhook-independent) ─────────────────────
+class ConfirmRequest(BaseModel):
+    session_id: Optional[str] = None
+
+
+class ConfirmResponse(BaseModel):
+    plan: str
+    plan_expires_at: Optional[datetime] = None
+    activated: bool
+
+
+@router.post("/payments/confirm", response_model=ConfirmResponse)
+def confirm_subscription(
+    body: Optional[ConfirmRequest] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Authoritatively sync the caller's plan from Stripe right after they return
+    from Checkout, so unlocking never depends on the async webhook landing first
+    (a common cause of "paid but still locked"). Idempotent — safe to call on
+    every return and to poll.
+    """
+    current_plan = getattr(current_user, "plan", "core") or "core"
+    current_exp = getattr(current_user, "plan_expires_at", None)
+
+    if not settings.stripe_secret_key:
+        return ConfirmResponse(plan=current_plan, plan_expires_at=current_exp, activated=False)
+
+    import stripe
+    stripe.api_key = settings.stripe_secret_key
+
+    session_id = body.session_id if body else None
+    customer_id = getattr(current_user, "stripe_customer_id", None)
+    plan_hint: Optional[str] = None
+    sub = None
+
+    try:
+        if session_id:
+            sess = stripe.checkout.Session.retrieve(session_id, expand=["subscription"])
+            owner = sess.get("metadata", {}).get("user_id")
+            if owner not in (None, str(current_user.id)):
+                raise HTTPException(status_code=403, detail="Checkout session does not belong to this user")
+            if sess.get("payment_status") not in ("paid", "no_payment_required"):
+                return ConfirmResponse(plan=current_plan, plan_expires_at=current_exp, activated=False)
+            plan_hint = sess.get("metadata", {}).get("plan")
+            customer_id = sess.get("customer") or customer_id
+            sub_obj = sess.get("subscription")
+            if isinstance(sub_obj, str):
+                sub = stripe.Subscription.retrieve(sub_obj)
+            elif isinstance(sub_obj, dict):
+                sub = sub_obj
+        if sub is None and customer_id:
+            subs = stripe.Subscription.list(customer=customer_id, status="active", limit=1)
+            data = subs.get("data", [])
+            if data:
+                sub = data[0]
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001 — Stripe lookup is best-effort
+        logger.warning("confirm_subscription: Stripe lookup failed for user %d: %s", current_user.id, e)
+        sub = None
+
+    if sub is None:
+        return ConfirmResponse(plan=current_plan, plan_expires_at=current_exp, activated=False)
+
+    plan = plan_hint or sub.get("metadata", {}).get("plan") or _plan_from_subscription(sub) or "edge"
+    current_user.plan = plan
+    current_user.stripe_subscription_id = sub.get("id")
+    if customer_id and not getattr(current_user, "stripe_customer_id", None):
+        current_user.stripe_customer_id = customer_id
+    period_end = sub.get("current_period_end")
+    if period_end:
+        current_user.plan_expires_at = datetime.fromtimestamp(period_end, tz=timezone.utc)
+    db.commit()
+    db.refresh(current_user)
+    logger.info("confirm_subscription: user %d synced to plan=%s", current_user.id, plan)
+    return ConfirmResponse(
+        plan=plan,
+        plan_expires_at=getattr(current_user, "plan_expires_at", None),
+        activated=plan != "core",
+    )
+
+
 # ─── Webhook ──────────────────────────────────────────────────────────────────
 @router.post("/payments/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):

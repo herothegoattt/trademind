@@ -40,13 +40,42 @@ function DashboardInner() {
   useEffect(() => {
     init();
     setMounted(true);
-    // Stripe success redirect
+    // Stripe success redirect — confirm the plan synchronously instead of
+    // waiting on the async webhook (which often lands after this redirect,
+    // leaving a paid user locked). Falls back to polling /me as a safety net.
     if (searchParams.get("plan_success") === "1") {
       setPlanSuccess(true);
-      fetchCurrentUser(); // refresh plan from backend
+      const sessionId = searchParams.get("session_id") || undefined;
       const url = new URL(window.location.href);
       url.searchParams.delete("plan_success");
+      url.searchParams.delete("session_id");
       window.history.replaceState({}, "", url.toString());
+
+      (async () => {
+        const token =
+          useAuthStore.getState().token ||
+          (typeof window !== "undefined" ? localStorage.getItem("access_token") : null);
+        if (!token) return;
+        const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+        // Up to 5 attempts: authoritatively sync from Stripe, then refresh user.
+        for (let attempt = 0; attempt < 5; attempt++) {
+          try {
+            const res = await fetch("/api/v1/payments/confirm", {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ session_id: sessionId }),
+            });
+            if (res.ok) {
+              const data = await res.json().catch(() => null);
+              await fetchCurrentUser();
+              if (data?.activated || (data?.plan && data.plan !== "core")) break;
+            }
+          } catch {
+            /* transient — retry */
+          }
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      })();
     }
     // Auto-open upgrade modal from landing page plan CTA
     const upgradePlanParam = searchParams.get("upgrade_plan");

@@ -289,46 +289,61 @@ export function OnboardingFlow() {
         {/* Click blocker */}
         <div style={{ position: "fixed", inset: 0, zIndex: 9988 }} />
 
-        {/* Spotlight window — shows content area through the dark overlay */}
+        {/* Spotlight window — glides/morphs between sections as steps change */}
         <motion.div
-          key={`spotlight-${stepIdx}`}
           initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          style={{
-            position: "fixed",
+          animate={{
+            opacity: 1,
             top: contentRect.top,
             left: contentRect.left,
             width: contentRect.width,
             height: contentRect.height,
+            borderColor: `rgba(${currentTour.glow},0.4)`,
+            boxShadow: `0 0 0 9999px rgba(0,0,0,0.72), inset 0 0 50px rgba(${currentTour.glow},0.05)`,
+          }}
+          transition={{ type: "spring", stiffness: 210, damping: 30, mass: 0.9 }}
+          style={{
+            position: "fixed",
             zIndex: 9989,
-            boxShadow: `0 0 0 9999px rgba(0,0,0,0.72)`,
-            border: `1.5px solid rgba(${currentTour.glow},0.35)`,
-            borderRadius: 4,
+            borderStyle: "solid",
+            borderWidth: 1.5,
+            borderRadius: 8,
             pointerEvents: "none",
           }}
         />
 
-        {/* Tooltip card — positioned inside the content area */}
+        {/* Tooltip card — glides to each section; inner content cross-fades */}
         <motion.div
-          key={`tooltip-${stepIdx}`}
-          initial={{ opacity: 0, y: -12, scale: 0.96 }}
-          animate={{ opacity: navReady ? 1 : 0, y: navReady ? 0 : -12, scale: navReady ? 1 : 0.96 }}
-          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          style={{
-            position: "fixed",
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{
+            opacity: navReady ? 1 : 0,
+            scale: navReady ? 1 : 0.96,
             top: contentRect.top + 16,
             right: Math.max(16, window.innerWidth - contentRect.left - contentRect.width + 16),
+            borderColor: `rgba(${currentTour.glow},0.3)`,
+            boxShadow: `0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(${currentTour.glow},0.08), 0 0 40px rgba(${currentTour.glow},0.12)`,
+          }}
+          transition={{ type: "spring", stiffness: 230, damping: 30, mass: 0.8 }}
+          style={{
+            position: "fixed",
             width: "min(320px, calc(100vw - 32px))",
             zIndex: 9995,
             background: "rgba(8,9,20,0.97)",
-            border: `1px solid rgba(${currentTour.glow},0.3)`,
+            borderStyle: "solid",
+            borderWidth: 1,
             borderRadius: 14,
             overflow: "hidden",
-            boxShadow: `0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(${currentTour.glow},0.08), 0 0 40px rgba(${currentTour.glow},0.12)`,
             backdropFilter: "blur(20px)",
           }}
         >
+          <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={stepIdx}
+            initial={{ opacity: 0, x: 14 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -14 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          >
           {/* Color accent bar */}
           <div style={{ height: 3, background: `linear-gradient(90deg, ${currentTour.color}80, transparent)` }} />
 
@@ -395,18 +410,28 @@ export function OnboardingFlow() {
               </button>
             </div>
           </div>
+          </motion.div>
+          </AnimatePresence>
         </motion.div>
 
-        {/* Loading indicator while navigating */}
-        {!navReady && (
-          <div style={{ position: "fixed", top: contentRect.top + contentRect.height / 2 - 20, left: contentRect.left + contentRect.width / 2 - 20, zIndex: 9994 }}>
+        {/* Loading indicator while navigating — fades cleanly in/out */}
+        <AnimatePresence>
+          {!navReady && (
             <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              style={{ width: 40, height: 40, borderRadius: "50%", border: `2px solid ${currentTour.color}30`, borderTopColor: currentTour.color }}
-            />
-          </div>
-        )}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              style={{ position: "fixed", top: contentRect.top + contentRect.height / 2 - 20, left: contentRect.left + contentRect.width / 2 - 20, zIndex: 9994 }}
+            >
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                style={{ width: 40, height: 40, borderRadius: "50%", border: `2px solid ${currentTour.color}30`, borderTopColor: currentTour.color }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </>
     );
   }
