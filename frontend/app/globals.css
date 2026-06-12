@@ -458,3 +458,30 @@ button, a, [role="button"], input, textarea, select { touch-action: manipulation
 @keyframes tmSpinRev   { to { transform: rotateZ(-360deg); } }
 @keyframes tmFloat     { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
 @keyframes tmGlowPulse { 0%,100% { opacity:.5; transform:scale(1); } 50% { opacity:.95; transform:scale(1.14); } }
+
+/* ── Boot / launch sequence ─────────────────────────────────────────────── */
+/* Stars streak toward the viewer (3D depth → "launch" feel) */
+@keyframes tmStarFly {
+  0%   { opacity:0; transform: translate3d(var(--sx), var(--sy), -700px) scale(.15); }
+  12%  { opacity: var(--so); }
+  100% { opacity:0; transform: translate3d(calc(var(--sx) * 10), calc(var(--sy) * 10), 520px) scale(1.7); }
+}
+/* Radial energy rays sweeping out from the core */
+@keyframes tmWarpRay {
+  0%   { opacity:0; transform: rotate(var(--ang)) scaleY(.25); }
+  45%  { opacity:.45; }
+  100% { opacity:0; transform: rotate(var(--ang)) scaleY(1.35); }
+}
+/* Breathing core glow behind the logo */
+@keyframes tmBootGlow {
+  0%,100% { opacity:.4;  transform:translate(-50%,-50%) scale(1); }
+  50%     { opacity:.75; transform:translate(-50%,-50%) scale(1.16); }
+}
+/* Scanline sweeping down the progress meter */
+@keyframes tmScan { 0% { transform:translateY(-120%); } 100% { transform:translateY(160%); } }
+/* Final launch flash before navigation */
+@keyframes tmBootFlash { 0% { opacity:0; } 28% { opacity:.92; } 100% { opacity:0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tm-boot-star, .tm-boot-ray, .tm-boot-scan { animation: none !important; }
+}

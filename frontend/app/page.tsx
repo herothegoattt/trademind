@@ -26,8 +26,30 @@ function BootScreen({ onDone }: { onDone: () => void }) {
   const [pct, setPct] = useState(0);
   const [idx, setIdx] = useState(0);
   const [done, setDone] = useState(false);
+  const stageRef = useRef<HTMLDivElement>(null);
   const MODS = [t("module_neural"), t("module_market_data"), t("module_risk"),
                 t("module_ai_core"), t("module_bias_filter"), t("module_signals")];
+
+  // Pre-computed starfield + warp rays (stable across renders)
+  const stars = useRef(Array.from({ length: 56 }, () => {
+    const a = Math.random() * Math.PI * 2;
+    const r = 6 + Math.random() * 26;           // spread direction from center
+    return {
+      sx: `${Math.cos(a) * r}px`,
+      sy: `${Math.sin(a) * r}px`,
+      so: 0.35 + Math.random() * 0.55,
+      size: 1 + Math.random() * 2.4,
+      dur: 1.6 + Math.random() * 2.4,
+      delay: -Math.random() * 4,
+      hue: Math.random() > 0.7 ? CYN : (Math.random() > 0.5 ? VIO : "#dbeafe"),
+    };
+  }));
+  const rays = useRef(Array.from({ length: 9 }, (_, i) => ({
+    ang: `${(360 / 9) * i + Math.random() * 12}deg`,
+    dur: 2.2 + Math.random() * 1.6,
+    delay: -Math.random() * 3,
+  })));
+
   useEffect(() => {
     const STEP = TOTAL_MS / MODS.length;
     const ts = MODS.map((_, i) => i > 0 ? setTimeout(() => setIdx(i), i * STEP) : null)
@@ -41,17 +63,78 @@ function BootScreen({ onDone }: { onDone: () => void }) {
     return () => { ts.forEach(clearTimeout); clearInterval(iv); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { if (done) { const id = setTimeout(onDone, 800); return () => clearTimeout(id); } }, [done, onDone]);
+  useEffect(() => { if (done) { const id = setTimeout(onDone, 900); return () => clearTimeout(id); } }, [done, onDone]);
+
+  // Subtle mouse-driven 3D parallax on the boot card — direct DOM, no re-renders
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const onMove = (e: MouseEvent) => {
+      const rx = (e.clientY / window.innerHeight - 0.5) * -10;
+      const ry = (e.clientX / window.innerWidth - 0.5) * 12;
+      el.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg)`;
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, []);
+
+  // warp intensifies as loading approaches 100% and on launch
+  const warp = 0.4 + (pct / 100) * 0.6;
+
   return (
-    <div style={{ height:"100vh", background:"#05060f", display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
+    <div style={{ height:"100vh", background:"#05060f", display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden", perspective:"1100px" }}>
+      {/* ── 3D starfield flying toward the viewer ── */}
+      <div className="tm-boot-stars" style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", pointerEvents:"none", opacity: done ? 1 : 0.92, transition:"opacity .4s" }}>
+        {stars.current.map((p, i) => (
+          <span key={i} className="tm-boot-star" style={{
+            position:"absolute", left:"50%", top:"50%", width:p.size, height:p.size, borderRadius:"50%",
+            background:p.hue, boxShadow:`0 0 6px ${p.hue}`,
+            ["--sx" as string]:p.sx, ["--sy" as string]:p.sy, ["--so" as string]:String(p.so),
+            animation:`tmStarFly ${done ? p.dur * 0.45 : p.dur}s linear ${p.delay}s infinite`,
+          }} />
+        ))}
+      </div>
+
+      {/* ── radial warp rays from the core ── */}
+      <div style={{ position:"absolute", left:"50%", top:"50%", width:0, height:0, pointerEvents:"none" }}>
+        {rays.current.map((r, i) => (
+          <span key={i} className="tm-boot-ray" style={{
+            position:"absolute", left:0, top:0, width:2, height:"58vmax", transformOrigin:"top center",
+            background:`linear-gradient(to bottom, ${CYN}00, ${VIO}${done?"55":"22"}, ${CYN}00)`,
+            ["--ang" as string]:r.ang,
+            animation:`tmWarpRay ${done ? r.dur * 0.5 : r.dur}s ease-in-out ${r.delay}s infinite`,
+          }} />
+        ))}
+      </div>
+
+      {/* breathing core glow */}
+      <div style={{ position:"absolute", left:"50%", top:"50%", width:"60vmax", height:"60vmax", transform:"translate(-50%,-50%)",
+        background:`radial-gradient(circle, rgba(139,92,246,${0.12 * warp}) 0%, transparent 60%)`,
+        animation:"tmBootGlow 3.2s ease-in-out infinite", pointerEvents:"none" }} />
       <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 70% 40% at 50% 0%, rgba(139,92,246,0.1) 0%, transparent 70%)", pointerEvents:"none" }} />
-      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:36, width:"100%", maxWidth:380, padding:"0 24px", zIndex:10 }}>
-        <div style={{ width:70, height:70, borderRadius:18, border:`1px solid ${VIO}40`, overflow:"hidden", boxShadow:`0 0 32px ${VIO}22` }}>
+
+      {/* ── boot card (3D stage, launches forward on done) ── */}
+      <motion.div
+        initial={{ opacity:0, scale:0.82, rotateX:14, y:30 }}
+        animate={done
+          ? { opacity:[1,1,0], scale:1.22, rotateX:0, y:-12, filter:"blur(3px)" }
+          : { opacity:1, scale:1, rotateX:0, y:0 }}
+        transition={done
+          ? { duration:0.9, ease:[0.7,0,0.84,0] }
+          : { duration:0.9, ease:[0.16,1,0.3,1], type:"spring", stiffness:120, damping:16 }}
+        style={{ width:"100%", maxWidth:380, padding:"0 24px", zIndex:10, transformStyle:"preserve-3d", willChange:"transform" }}>
+       <div ref={stageRef} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:36, width:"100%", transformStyle:"preserve-3d", willChange:"transform", transition:"transform .15s ease-out" }}>
+        <motion.div
+          initial={{ rotateY:-90, scale:0.4 }}
+          animate={{ rotateY:0, scale:1 }}
+          transition={{ duration:0.95, ease:[0.16,1,0.3,1], delay:0.1 }}
+          style={{ width:70, height:70, borderRadius:18, border:`1px solid ${VIO}40`, overflow:"hidden",
+            boxShadow:`0 0 ${20 + warp * 34}px ${VIO}${done?"66":"33"}`, animation:"tmFloat 3.4s ease-in-out infinite", transformStyle:"preserve-3d" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.jpg" alt="TradeMind" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-        </div>
+        </motion.div>
         <div style={{ textAlign:"center" }}>
-          <h1 style={{ margin:0, fontSize:"2.3rem", fontWeight:700, letterSpacing:"-.025em", color:"#f1f5f9" }}>TradeMind</h1>
+          <h1 style={{ margin:0, fontSize:"2.3rem", fontWeight:700, letterSpacing:"-.025em", color:"#f1f5f9", textShadow:done?`0 0 28px ${CYN}55`:"none", transition:"text-shadow .4s" }}>TradeMind</h1>
           <p style={{ margin:"8px 0 0", fontSize:"9px", fontFamily:"monospace", letterSpacing:".3em", color:"rgba(100,116,139,.55)" }}>{t("ai_powered_trading")}</p>
         </div>
         <div style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", minHeight:32 }}>
@@ -63,12 +146,24 @@ function BootScreen({ onDone }: { onDone: () => void }) {
         </div>
         <div style={{ width:"100%", height:48, border:`1px solid ${done?"rgba(52,211,153,.35)":"rgba(34,211,238,.2)"}`, borderRadius:9, position:"relative", overflow:"hidden", transition:"border-color .4s" }}>
           <div style={{ position:"absolute", inset:"0 auto 0 0", width:`${pct}%`, background:done?"linear-gradient(90deg,rgba(52,211,153,.2),rgba(52,211,153,.08))":"linear-gradient(90deg,rgba(139,92,246,.2),rgba(34,211,238,.12))", transition:"width .08s linear,background .4s" }} />
+          {/* scanline sweep */}
+          <div className="tm-boot-scan" style={{ position:"absolute", inset:"0 auto 0 0", width:`${pct}%`, overflow:"hidden", pointerEvents:"none" }}>
+            <div className="tm-boot-scan" style={{ position:"absolute", left:0, right:0, height:"60%", background:`linear-gradient(180deg, transparent, ${CYN}33, transparent)`, animation:"tmScan 1.4s linear infinite" }} />
+          </div>
           <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 16px" }}>
             <span style={{ fontSize:"10px", fontFamily:"monospace", letterSpacing:".2em", color:done?"#34d399":"rgba(148,163,184,.4)", transition:"color .3s" }}>{done?t("access_granted"):t("loading_text")}</span>
             <span style={{ fontSize:"10px", fontFamily:"monospace", color:done?"rgba(52,211,153,.8)":"rgba(100,116,139,.5)", transition:"color .3s", fontVariantNumeric:"tabular-nums" }}>{Math.round(pct)}%</span>
           </div>
         </div>
-      </div>
+       </div>
+      </motion.div>
+
+      {/* ── launch flash ── */}
+      {done && (
+        <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:20,
+          background:`radial-gradient(circle at 50% 50%, ${CYN}cc 0%, ${VIO}55 30%, transparent 65%)`,
+          animation:"tmBootFlash .9s ease-out forwards" }} />
+      )}
     </div>
   );
 }
