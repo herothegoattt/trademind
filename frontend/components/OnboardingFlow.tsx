@@ -61,6 +61,15 @@ const TOUR_STEPS = [
 // step index: -1=welcome  0..3=tour  4=market  5=congrats
 type StepIdx = -1 | 0 | 1 | 2 | 3 | 4 | 5;
 
+// Local fallback so completing the tour sticks across restarts even if the
+// backend write fails. The "Replay" action in settings shows it again regardless.
+const ONBOARDED_KEY = "tm_onboarded";
+const hasSeenTour = () =>
+  typeof window !== "undefined" && localStorage.getItem(ONBOARDED_KEY) === "1";
+const markTourSeen = () => {
+  if (typeof window !== "undefined") localStorage.setItem(ONBOARDED_KEY, "1");
+};
+
 // ── Confetti ──────────────────────────────────────────────────────────────────
 function Confetti() {
   const items = useRef(
@@ -131,8 +140,10 @@ export function OnboardingFlow() {
   const markedRef = useRef(false);
   const contentRect = useContentRect(stepIdx);
 
-  // Show for new users
+  // Show for new users only — never auto-show again once the tour has been
+  // completed/skipped (local flag), even if the backend never recorded it.
   useEffect(() => {
+    if (hasSeenTour()) return;
     if (isAuthenticated && user && user.is_onboarded === false && !markedRef.current) {
       setStepIdx(-1);
       setVisible(true);
@@ -173,6 +184,7 @@ export function OnboardingFlow() {
   const handleSkip = async () => {
     if (!markedRef.current) {
       markedRef.current = true;
+      markTourSeen();
       await markOnboarded(selectedMarket ?? undefined);
     }
     setVisible(false);
@@ -188,6 +200,7 @@ export function OnboardingFlow() {
     } else if (stepIdx === 4) {
       if (!markedRef.current) {
         markedRef.current = true;
+        markTourSeen();
         markOnboarded(selectedMarket ?? undefined);
       }
       setStepIdx(5);
