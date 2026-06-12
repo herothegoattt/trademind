@@ -105,6 +105,12 @@ export const useAuthStore = create<AuthState>()(
 
           get().setToken(access_token);
           set({ user: userData as User, isAuthenticated: true, isLoading: false });
+          // Eligible for the product tour: only a fresh sign-up sets this flag,
+          // so existing users who merely log in never see the tour again.
+          try {
+            localStorage.setItem("tm_new_user", "1");
+            localStorage.removeItem("tm_onboarded");
+          } catch {}
           identifyUser(userData as User);
           posthog.capture("signed_up", { email: userData.email });
         } catch (error) {

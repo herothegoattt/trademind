@@ -61,13 +61,19 @@ const TOUR_STEPS = [
 // step index: -1=welcome  0..3=tour  4=market  5=congrats
 type StepIdx = -1 | 0 | 1 | 2 | 3 | 4 | 5;
 
-// Local fallback so completing the tour sticks across restarts even if the
-// backend write fails. The "Replay" action in settings shows it again regardless.
+// The tour auto-shows exactly once, only for a brand-new sign-up. `tm_new_user`
+// is set at registration; `tm_onboarded` is the permanent "already seen" guard.
+// The "Replay" action in settings shows it again regardless of both flags.
 const ONBOARDED_KEY = "tm_onboarded";
+const NEW_USER_KEY = "tm_new_user";
 const hasSeenTour = () =>
   typeof window !== "undefined" && localStorage.getItem(ONBOARDED_KEY) === "1";
+const isNewSignup = () =>
+  typeof window !== "undefined" && localStorage.getItem(NEW_USER_KEY) === "1";
 const markTourSeen = () => {
-  if (typeof window !== "undefined") localStorage.setItem(ONBOARDED_KEY, "1");
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ONBOARDED_KEY, "1");
+  localStorage.removeItem(NEW_USER_KEY);
 };
 
 // ── Confetti ──────────────────────────────────────────────────────────────────
@@ -140,11 +146,13 @@ export function OnboardingFlow() {
   const markedRef = useRef(false);
   const contentRect = useContentRect(stepIdx);
 
-  // Show for new users only — never auto-show again once the tour has been
-  // completed/skipped (local flag), even if the backend never recorded it.
+  // Auto-show ONLY for a brand-new sign-up, and only once. Existing users who
+  // log in (no `tm_new_user` flag) never get the tour — it's purely opt-in for
+  // them via Settings → Replay. Marking it seen up front guarantees "once".
   useEffect(() => {
-    if (hasSeenTour()) return;
-    if (isAuthenticated && user && user.is_onboarded === false && !markedRef.current) {
+    if (hasSeenTour() || markedRef.current) return;
+    if (isAuthenticated && user && isNewSignup()) {
+      markTourSeen();
       setStepIdx(-1);
       setVisible(true);
     }
