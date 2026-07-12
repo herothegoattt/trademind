@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: trademind-backend
+    runtime: python
+    repo: https://github.com/herothegoattt/trademind
+    region: ohio
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 10000
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trademind-db
+          property: connectionString
+      - key: SECRET_KEY
+        value: 28da456567720e9bac4454d4c8b0df54898a3be99a42abc5809cae1d33d932a4
+      - key: CORS_ORIGINS
+        value: https://frontend-five-alpha-13.vercel.app,https://trademindtech.com,https://www.trademindtech.com
+      - key: FRONTEND_URL
+        value: https://frontend-five-alpha-13.vercel.app
+      - key: DEBUG
+        value: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+databases:
+  - name: trademind-db
+    plan: free
+    databaseName: trademind
+    user: trademind
