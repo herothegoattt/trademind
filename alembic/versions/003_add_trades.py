@@ -17,6 +17,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Drop old trades table from migration 002 before creating new schema
+    op.execute("DROP TABLE IF EXISTS trades CASCADE")
     # Create trades table
     op.create_table(
         'trades',
