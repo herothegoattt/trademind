@@ -397,8 +397,9 @@ const translations: Record<Lang, Record<string, string>> = {
     upgrade_access_title: 'Upgrade Access',
     choose_plan_subtitle: 'Choose the plan that fits your trading style',
     monthly_billing: 'Monthly',
-    annual_billing: 'Annual −20%',
-    cancel_anytime: 'Cancel anytime · Secure payment via Stripe',
+    annual_billing: 'Annual',
+    annual_soon: 'Available soon',
+    cancel_anytime: 'Cancel anytime · Secure payment via Lemon Squeezy',
     current_plan_badge: 'Current Plan',
     processing_text: 'Processing...',
     current_plan_btn: 'Current plan',
@@ -438,6 +439,12 @@ const translations: Record<Lang, Record<string, string>> = {
     plan_apex_feat6: 'Custom alerts',
     plan_apex_feat7: 'Early access features',
     plan_apex_feat8: 'Dedicated support',
+
+    // Product descriptions (detailed)
+    plan_edge_desc: 'The Edge plan gives you unlimited AI-powered trade analysis, real-time market data streams, full community access, and advanced trading setups — everything you need to level up your trading.',
+    plan_edge_desc_short: 'Unlimited AI analysis, live market data & full community.',
+    plan_apex_desc: 'Get everything in Edge plus 1-on-1 AI coaching sessions, an exclusive high-conviction signal stream, portfolio optimization tools, full API access for algorithmic trading, custom alerts, and dedicated priority support.',
+    plan_apex_desc_short: 'All Edge features + exclusive coaching, signals, API & priority support.',
 
     // Congrats overlay
     congrats_text: 'Congratulations!',
@@ -846,8 +853,9 @@ const translations: Record<Lang, Record<string, string>> = {
     upgrade_access_title: 'Улучшить доступ',
     choose_plan_subtitle: 'Выберите план для вашего стиля торговли',
     monthly_billing: 'Ежемесячно',
-    annual_billing: 'Ежегодно −20%',
-    cancel_anytime: 'Отмена в любое время · Безопасная оплата через Stripe',
+    annual_billing: 'Ежегодно',
+    annual_soon: 'Скоро будет доступно',
+    cancel_anytime: 'Отмена в любое время · Безопасная оплата через Lemon Squeezy',
     current_plan_badge: 'Текущий план',
     processing_text: 'Обработка...',
     current_plan_btn: 'Текущий план',
@@ -887,6 +895,12 @@ const translations: Record<Lang, Record<string, string>> = {
     plan_apex_feat6: 'Кастомные оповещения',
     plan_apex_feat7: 'Ранний доступ к функциям',
     plan_apex_feat8: 'Выделенная поддержка',
+
+    // Product descriptions (detailed)
+    plan_edge_desc: 'План Edge — это безлимитный AI-анализ сделок, рыночные данные в реальном времени, полный доступ к сообществу и продвинутые торговые сетапы. Всё необходимое для профессионального роста.',
+    plan_edge_desc_short: 'Безлимитный AI, живые данные рынка и полное сообщество.',
+    plan_apex_desc: 'Всё из Edge плюс 1-на-1 AI-коучинг сессии, эксклюзивный поток сигналов высокой уверенности, инструменты оптимизации портфеля, полный API-доступ для алгоритмической торговли, кастомные оповещения и выделенная поддержка.',
+    plan_apex_desc_short: 'Всё из Edge + коучинг, сигналы, API и приоритетная поддержка.',
 
     // Congrats overlay
     congrats_text: 'Поздравляем!',
@@ -1295,8 +1309,9 @@ const translations: Record<Lang, Record<string, string>> = {
     upgrade_access_title: 'Kirishni yaxshilash',
     choose_plan_subtitle: 'Savdo uslubingizga mos rejani tanlang',
     monthly_billing: 'Oylik',
-    annual_billing: 'Yillik −20%',
-    cancel_anytime: "Istalgan vaqt bekor qilish · Xavfsiz to'lov Stripe orqali",
+    annual_billing: 'Yillik',
+    annual_soon: 'Tez orada',
+    cancel_anytime: "Istalgan vaqt bekor qilish · Xavfsiz to'lov Lemon Squeezy orqali",
     current_plan_badge: 'Joriy reja',
     processing_text: 'Ishlanmoqda...',
     current_plan_btn: 'Joriy reja',
@@ -1336,6 +1351,12 @@ const translations: Record<Lang, Record<string, string>> = {
     plan_apex_feat6: 'Maxsus ogohlantirishlar',
     plan_apex_feat7: 'Funksiyalarga erta kirish',
     plan_apex_feat8: "Maxsus qo'llab-quvvatlash",
+
+    // Product descriptions (detailed)
+    plan_edge_desc: "Edge rejasi — cheksiz AI savdo tahlili, real-taym bozor ma'lumotlari, to'liq jamiyat kirishi va ilg'or savdo setuplari. Savdoningizni yangi darajaga olib chiqing.",
+    plan_edge_desc_short: "Cheksiz AI, jonli bozor ma'lumotlari va to'liq jamiyat.",
+    plan_apex_desc: "Edge'dagi hamma narsa va yana: 1-ga-1 AI kouching sessiyalari, eksklyuziv signal oqimi, portfolio optimizatsiyasi, to'liq API kirish, maxsus ogohlantirishlar va ustuvor qo'llab-quvvatlash.",
+    plan_apex_desc_short: "Edge'dagi hammasi + kouching, signallar, API va ustuvor qo'llab-quvvatlash.",
 
     // Congrats overlay
     congrats_text: 'Tabriklaymiz!',

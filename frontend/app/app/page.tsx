@@ -1,6 +1,6 @@
 "use client";
 
-// This dashboard reads runtime search params (Stripe redirect, upgrade CTA) so
+// This dashboard reads runtime search params (payment redirect, upgrade CTA) so
 // it must be rendered dynamically, not statically prerendered at build time.
 export const dynamic = "force-dynamic";
 
@@ -40,7 +40,7 @@ function DashboardInner() {
   useEffect(() => {
     init();
     setMounted(true);
-    // Stripe success redirect — confirm the plan synchronously instead of
+    // Payment success redirect — confirm the plan synchronously instead of
     // waiting on the async webhook (which often lands after this redirect,
     // leaving a paid user locked). Falls back to polling /me as a safety net.
     if (searchParams.get("plan_success") === "1") {
@@ -57,7 +57,7 @@ function DashboardInner() {
           (typeof window !== "undefined" ? localStorage.getItem("access_token") : null);
         if (!token) return;
         const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-        // Up to 5 attempts: authoritatively sync from Stripe, then refresh user.
+        // Up to 5 attempts: authoritatively sync from provider, then refresh user.
         for (let attempt = 0; attempt < 5; attempt++) {
           try {
             const res = await fetch("/api/v1/payments/confirm", {

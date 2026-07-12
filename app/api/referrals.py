@@ -5,11 +5,11 @@ Endpoints:
   GET  /referral/my-code          — get or create user's referral code + stats
   POST /referral/click            — track a referral link click (public, no auth)
   POST /referral/validate-promo   — check a promo code (returns discount info)
-  POST /referral/apply-promo      — apply promo to checkout (returns Stripe coupon id)
+  POST /referral/apply-promo      — apply promo to checkout (returns discount info)
   GET  /referral/promo-codes      — list all active promo codes (admin use / seeding)
 
 Referral reward logic:
-  - Referree gets: 15% off their first paid plan (applied at checkout as Stripe coupon)
+  - Referree gets: 15% off their first paid plan (applied at checkout via Lemon Squeezy discount)
   - Referrer gets:  $10 credit per conversion (stored as referral_credits_cents)
                    After 3 conversions → 1 month free Edge added automatically
 """
@@ -88,38 +88,12 @@ def _validate_promo_code(code: str, db: Session, plan: Optional[str] = None, bil
     return promo
 
 
-def _get_or_create_stripe_coupon(promo: PromoCode) -> Optional[str]:
-    """Get or create a Stripe coupon for this promo code. Returns coupon id."""
-    if not settings.stripe_secret_key:
-        return None
-    try:
-        import stripe
-        stripe.api_key = settings.stripe_secret_key
-
-        if promo.stripe_coupon_id:
-            return promo.stripe_coupon_id
-
-        coupon_kwargs: dict = {
-            "name": f"{promo.code} — {promo.description or promo.code}",
-            "duration": "once",
-            "id": f"tm_{promo.code.lower()}",
-        }
-        if promo.discount_type == "percent":
-            coupon_kwargs["percent_off"] = promo.discount_value
-        else:
-            coupon_kwargs["amount_off"] = int(promo.discount_value)
-            coupon_kwargs["currency"] = "usd"
-
-        try:
-            coupon = stripe.Coupon.create(**coupon_kwargs)
-        except stripe.error.InvalidRequestError:
-            # Already exists — retrieve it
-            coupon = stripe.Coupon.retrieve(f"tm_{promo.code.lower()}")
-
-        return coupon.id
-    except Exception as e:
-        logger.warning("Stripe coupon creation failed: %s", e)
-        return None
+def _get_discount_data(promo: PromoCode) -> dict:
+    """Return discount data for Lemon Squeezy checkout."""
+    return {
+        "discount_type": promo.discount_type,
+        "discount_value": promo.discount_value,
+    }
 
 
 # ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -147,7 +121,6 @@ class PromoValidateResponse(BaseModel):
     discount_type: str
     discount_value: float
     uses_remaining: Optional[int]
-    stripe_coupon_id: Optional[str] = None
 
 
 class PromoApplyRequest(BaseModel):
@@ -157,7 +130,6 @@ class PromoApplyRequest(BaseModel):
 
 
 class PromoApplyResponse(BaseModel):
-    stripe_coupon_id: Optional[str]
     discount_type: str
     discount_value: float
     message: str
@@ -227,17 +199,15 @@ def validate_promo(
     promo = _validate_promo_code(body.code, db, body.plan, body.billing)
     uses_remaining = None if promo.max_uses is None else max(0, promo.max_uses - promo.uses_count)
 
-    # Get/create Stripe coupon so the frontend can pass it to Stripe Checkout
-    coupon_id = _get_or_create_stripe_coupon(promo)
+    discount = _get_discount_data(promo)
 
     return PromoValidateResponse(
         valid=True,
         code=promo.code,
         description=promo.description,
-        discount_type=promo.discount_type,
-        discount_value=promo.discount_value,
+        discount_type=discount["discount_type"],
+        discount_value=discount["discount_value"],
         uses_remaining=uses_remaining,
-        stripe_coupon_id=coupon_id,
     )
 
 
@@ -248,27 +218,24 @@ def apply_promo(
     db: Session = Depends(get_db),
 ):
     """
-    Validate and consume a promo code. Returns Stripe coupon id to pass
-    to checkout session. Increments usage counter.
+    Validate and consume a promo code. Returns discount info to pass
+    to Lemon Squeezy checkout. Increments usage counter.
     """
     promo = _validate_promo_code(body.code, db, body.plan, body.billing)
-    coupon_id = _get_or_create_stripe_coupon(promo)
 
     # Consume the code
     promo.uses_count = (promo.uses_count or 0) + 1
-    if promo.stripe_coupon_id is None and coupon_id:
-        promo.stripe_coupon_id = coupon_id
     db.commit()
 
+    discount = _get_discount_data(promo)
     value_str = (
         f"{int(promo.discount_value)}% off"
         if promo.discount_type == "percent"
         else f"${promo.discount_value / 100:.0f} off"
     )
     return PromoApplyResponse(
-        stripe_coupon_id=coupon_id,
-        discount_type=promo.discount_type,
-        discount_value=promo.discount_value,
+        discount_type=discount["discount_type"],
+        discount_value=discount["discount_value"],
         message=f"Promo applied: {value_str} — {promo.description or promo.code}",
     )
 
@@ -311,7 +278,7 @@ def reward_conversion(
     db: Session = Depends(get_db),
 ):
     """
-    Internal endpoint called by the Stripe webhook when a referred user makes
+    Internal endpoint called by the payment webhook when a referred user makes
     their first payment. Rewards the referrer with $10 credit.
     """
     use = db.query(ReferralUse).filter(

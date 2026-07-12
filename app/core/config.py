@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # Google Sign-In (optional; set to validate id_token aud)
     google_client_id: str | None = None
 
-    # Public URL of the frontend (used for OAuth/redirect/Stripe return URLs)
+    # Public URL of the frontend (used for OAuth/redirect/payment return URLs)
     frontend_url: str = "http://localhost:3000"
 
     # AI Models
@@ -53,14 +53,15 @@ class Settings(BaseSettings):
         extra="ignore",  # tolerate extra keys in .env instead of crashing on import
     )
 
-    # Stripe payments
-    stripe_secret_key: str | None = None
-    stripe_webhook_secret: str | None = None
-    # Stripe Price IDs — set these in .env after creating products in Stripe Dashboard
-    stripe_price_edge_monthly: str | None = None
-    stripe_price_edge_annual: str | None = None
-    stripe_price_apex_monthly: str | None = None
-    stripe_price_apex_annual: str | None = None
+    # Lemon Squeezy payments
+    lemonsqueezy_api_key: str | None = None
+    lemonsqueezy_store_id: str | None = None
+    lemonsqueezy_webhook_secret: str | None = None
+    # Lemon Squeezy Variant IDs — set these in .env after creating products in Lemon Squeezy Dashboard
+    ls_variant_edge_monthly: str | None = None
+    ls_variant_edge_annual: str | None = None
+    ls_variant_apex_monthly: str | None = None
+    ls_variant_apex_annual: str | None = None
 
     # Market Data APIs
     oanda_api_key: str | None = None  # OANDA v20 API key (https://developer.oanda.com)

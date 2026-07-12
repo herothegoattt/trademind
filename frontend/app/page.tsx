@@ -1985,8 +1985,8 @@ function SlidePricing({ active, onLaunch }: { active: boolean; onLaunch: (plan?:
   const [annual, setAnnual] = useState(false);
   const plans = [
     { key:"core", name:"Core", price:0,  color:CYN, popular:false, feats:[t("plan_core_feat1"),t("plan_core_feat2"),t("plan_core_feat3"),t("plan_core_feat4"),t("plan_core_feat5")] },
-    { key:"edge", name:"Edge", price:29, color:VIO, popular:true,  feats:[t("plan_edge_feat1"),t("plan_edge_feat2"),t("plan_edge_feat3"),t("plan_edge_feat4"),t("plan_edge_feat5"),t("plan_edge_feat6")] },
-    { key:"apex", name:"Apex", price:79, color:AMB, popular:false, feats:[t("plan_apex_feat1"),t("plan_apex_feat2"),t("plan_apex_feat3"),t("plan_apex_feat4"),t("plan_apex_feat5"),t("plan_apex_feat6")] },
+    { key:"edge", name:"Edge", price:29, color:VIO, popular:true,  desc:t("plan_edge_desc_short"), feats:[t("plan_edge_feat1"),t("plan_edge_feat2"),t("plan_edge_feat3"),t("plan_edge_feat4"),t("plan_edge_feat5"),t("plan_edge_feat6")] },
+    { key:"apex", name:"Apex", price:79, color:AMB, popular:false, desc:t("plan_apex_desc_short"), feats:[t("plan_apex_feat1"),t("plan_apex_feat2"),t("plan_apex_feat3"),t("plan_apex_feat4"),t("plan_apex_feat5"),t("plan_apex_feat6")] },
   ];
   return (
     <Slide id="slide-pricing" bg="rgba(5,6,15,1)">
@@ -2003,12 +2003,19 @@ function SlidePricing({ active, onLaunch }: { active: boolean; onLaunch: (plan?:
           </motion.h2>
           <motion.div initial={{ opacity:0 }} animate={active?{ opacity:1 }:{}} transition={{ duration:.5, delay:.26 }}
             style={{ display:"inline-flex", alignItems:"center", gap:3, padding:4, background:"rgba(255,255,255,.04)", borderRadius:9, border:"1px solid rgba(255,255,255,.07)", marginTop:14 }}>
-            {([t("lp_pricing_monthly"), t("lp_pricing_annual")] as string[]).map((b,i)=>(
-              <button key={i} onClick={()=>setAnnual(i===1)}
-                style={{ padding:"6px 16px", borderRadius:6, cursor:"pointer", border:"none", fontSize:".74rem", fontFamily:"inherit", background:annual===(i===1)?"rgba(255,255,255,.08)":"transparent", color:annual===(i===1)?"#f1f5f9":"rgba(100,116,139,.55)", transition:"background .2s,color .2s", display:"inline-flex", alignItems:"center", gap:5 }}>
-                {b}{i===1&&<span style={{ fontSize:".56rem", fontFamily:"monospace", color:GRN }}>−20%</span>}
+            <button onClick={()=>setAnnual(false)}
+              style={{ padding:"6px 16px", borderRadius:6, cursor:"pointer", border:"none", fontSize:".74rem", fontFamily:"inherit", background:annual?"transparent":"rgba(255,255,255,.08)", color:annual?"rgba(100,116,139,.55)":"#f1f5f9", transition:"background .2s,color .2s" }}>
+              {t("lp_pricing_monthly")}
+            </button>
+            <div className="relative group">
+              <button disabled
+                style={{ padding:"6px 16px", borderRadius:6, cursor:"not-allowed", border:"none", fontSize:".74rem", fontFamily:"inherit", background:"transparent", color:"rgba(100,116,139,.3)", transition:"background .2s,color .2s", display:"inline-flex", alignItems:"center", gap:5 }}>
+                {t("lp_pricing_annual")} <span style={{ fontSize:".56rem", fontFamily:"monospace", color:"rgba(100,116,139,.3)" }}>−20%</span>
               </button>
-            ))}
+              <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium bg-gray-900 border border-white/10 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                {t('annual_soon')}
+              </div>
+            </div>
           </motion.div>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
@@ -2021,10 +2028,11 @@ function SlidePricing({ active, onLaunch }: { active: boolean; onLaunch: (plan?:
                   background:pl.popular?`linear-gradient(160deg,${VIO}10,${VIO}04)`:"rgba(255,255,255,.025)",
                   border:pl.popular?`1px solid ${VIO}38`:"1px solid rgba(255,255,255,.07)", display:"flex", flexDirection:"column" }}>
                 {pl.popular&&<div style={{ position:"absolute", top:14, right:14, fontSize:".56rem", fontFamily:"monospace", letterSpacing:".16em", color:`${VIO}ee`, background:`${VIO}1e`, border:`1px solid ${VIO}30`, padding:"2px 9px", borderRadius:100 }}>POPULAR</div>}
-                <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:12 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
                   <div style={{ width:7, height:7, borderRadius:"50%", background:pl.color, boxShadow:`0 0 7px ${pl.color}` }} />
                   <span style={{ fontSize:".66rem", fontFamily:"monospace", letterSpacing:".2em", color:`${pl.color}bb` }}>{pl.name.toUpperCase()}</span>
                 </div>
+                {pl.desc&&<div style={{ fontSize:".6rem", color:"rgba(148,163,184,.4)", lineHeight:1.3, marginBottom:12, paddingLeft:14 }}>{pl.desc}</div>}
                 <div style={{ display:"flex", alignItems:"baseline", gap:4, marginBottom:16 }}>
                   <span style={{ fontSize:"2.2rem", fontWeight:800, letterSpacing:"-.04em", color:"#f1f5f9" }}>{pl.price===0?"Free":`$${price}`}</span>
                   {pl.price>0&&<span style={{ fontSize:".74rem", color:"rgba(100,116,139,.45)" }}>{t("lp_pricing_per_mo")}</span>}

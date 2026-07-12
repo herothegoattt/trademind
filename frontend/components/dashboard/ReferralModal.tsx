@@ -33,7 +33,6 @@ interface PromoResult {
   discount_type: string;
   discount_value: number;
   uses_remaining?: number | null;
-  stripe_coupon_id?: string | null;
 }
 
 // ─── Early-user promos (shown as featured deals) ─────────────────────────────

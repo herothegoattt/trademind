@@ -261,7 +261,7 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
   const [authOpen, setAuthOpen] = useState(false);
   const [congratsPlan, setCongratsPlan] = useState<(typeof PLAN_DEFS)[number] | null>(null);
   const [promoCode, setPromoCode] = useState("");
-  const [promoApplied, setPromoApplied] = useState<{ code: string; discountPct: number; couponId?: string } | null>(null);
+  const [promoApplied, setPromoApplied] = useState<{ code: string; discountPct: number } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [referralOpen, setReferralOpen] = useState(false);
@@ -282,7 +282,7 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
       return;
     }
 
-    // Admin bypass — set plan directly without Stripe
+    // Admin bypass — set plan directly without payment
     if (isAdmin && user) {
       setConfirming(true);
       try {
@@ -325,7 +325,7 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
       return;
     }
 
-    // Free plan → paid plan: create Stripe Checkout session
+    // Free plan → paid plan: create Lemon Squeezy Checkout
     if (selected === "core") return; // core is free, nothing to pay
     setConfirming(true);
     try {
@@ -339,9 +339,8 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
         body: JSON.stringify({
           plan: selected,
           billing,
-          success_url: `${window.location.origin}/app?plan_success=1&session_id={CHECKOUT_SESSION_ID}`,
+          success_url: `${window.location.origin}/app?plan_success=1`,
           cancel_url: window.location.href,
-          coupon_id: promoApplied?.couponId ?? undefined,
         }),
       });
 
@@ -383,7 +382,6 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
         setPromoApplied({
           code: data.code,
           discountPct: data.discount_type === "percent" ? data.discount_value : 0,
-          couponId: data.stripe_coupon_id,
         });
       } else {
         const err = await res.json().catch(() => ({}));
@@ -446,19 +444,31 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
                     className="flex items-center rounded-lg overflow-hidden text-xs"
                     style={{ border: "1px solid rgba(255,255,255,0.08)" }}
                   >
-                    {(["monthly", "annual"] as const).map((b) => (
+                    <button
+                      onClick={() => setBilling("monthly")}
+                      className="px-3 py-1.5 font-medium transition-all"
+                      style={{
+                        background: billing === "monthly" ? "rgba(255,255,255,0.08)" : "transparent",
+                        color: billing === "monthly" ? "#e2e8f0" : "rgba(100,116,139,0.7)",
+                      }}
+                    >
+                      {t('monthly_billing')}
+                    </button>
+                    <div className="relative group">
                       <button
-                        key={b}
-                        onClick={() => setBilling(b)}
-                        className="px-3 py-1.5 font-medium transition-all"
+                        disabled
+                        className="px-3 py-1.5 font-medium transition-all cursor-not-allowed"
                         style={{
-                          background: billing === b ? "rgba(255,255,255,0.08)" : "transparent",
-                          color: billing === b ? "#e2e8f0" : "rgba(100,116,139,0.7)",
+                          background: "transparent",
+                          color: "rgba(100,116,139,0.35)",
                         }}
                       >
-                        {b === "annual" ? t('annual_billing') : t('monthly_billing')}
+                        {t('annual_billing')}
                       </button>
-                    ))}
+                      <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium bg-gray-900 border border-white/10 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                        {t('annual_soon')}
+                      </div>
+                    </div>
                   </div>
                   <button
                     onClick={onClose}
