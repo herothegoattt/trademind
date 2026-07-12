@@ -1941,7 +1941,7 @@ function SlideStats({ active }: { active: boolean }) {
         <div style={{ ...inner, ...px, marginBottom:44 }}>
           <motion.div initial={{ opacity:0, y:24 }} animate={active?{ opacity:1, y:0 }:{}} transition={{ duration:.6, delay:.1 }}
             style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
-            {([{to:120,suf:"+",labelKey:"lp_stats_traders_label",c:VIO},{to:3000,suf:"+",labelKey:"lp_stats_trades_label",c:CYN},{to:2.1,suf:"×",labelKey:"lp_stats_rr_label",c:AMB,dec:1}] as {to:number;suf:string;labelKey:string;c:string;dec?:number}[]).map((s,i)=>(
+            {([{to:210,suf:"+",labelKey:"lp_stats_traders_label",c:VIO},{to:3000,suf:"+",labelKey:"lp_stats_trades_label",c:CYN},{to:2.1,suf:"×",labelKey:"lp_stats_rr_label",c:AMB,dec:1}] as {to:number;suf:string;labelKey:string;c:string;dec?:number}[]).map((s,i)=>(
               <motion.div key={i} initial={{ opacity:0, y:16 }} animate={active?{ opacity:1, y:0 }:{}} transition={{ duration:.5, delay:.15+i*.08 }}
                 style={{ textAlign:"center", padding:"22px 16px", background:"rgba(255,255,255,.025)", border:"1px solid rgba(255,255,255,.07)", borderRadius:14 }}>
                 <div style={{ fontSize:"clamp(2rem,4vw,2.8rem)", fontWeight:800, letterSpacing:"-.04em", color:s.c, lineHeight:1, marginBottom:8 }}>
@@ -1957,7 +1957,7 @@ function SlideStats({ active }: { active: boolean }) {
         <motion.div initial={{ opacity:0 }} animate={active?{ opacity:1 }:{}} transition={{ duration:.5, delay:.3 }}
           style={{ textAlign:"center", marginBottom:24 }}>
           <span style={{ fontSize:".62rem", fontFamily:"monospace", letterSpacing:".22em", color:`${VIO}88`, textTransform:"uppercase" }}>
-            — Traders about TradeMind —
+            — 210+ Active Traders —
           </span>
         </motion.div>
 
