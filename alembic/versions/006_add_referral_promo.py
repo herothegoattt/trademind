@@ -31,7 +31,7 @@ def upgrade():
         sa.Column("billing_cycle", sa.String(10), nullable=True),
         sa.Column("max_uses", sa.Integer(), nullable=True),
         sa.Column("uses_count", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="1"),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("stripe_coupon_id", sa.String(255), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
@@ -70,11 +70,11 @@ def upgrade():
     op.execute("""
         INSERT INTO promo_codes (code, description, discount_type, discount_value, max_uses, is_active)
         VALUES
-          ('LAUNCH',   'Launch special — 25% off any plan', 'percent', 25, 500, 1),
-          ('EARLY50',  'Early user — 50% off first month',  'percent', 50, 100, 1),
-          ('TRADEMIND','Welcome gift — 20% off',            'percent', 20, NULL, 1),
-          ('VIP30',    'VIP early access — 30% off',        'percent', 30, 50,  1),
-          ('ANNUAL20', 'Extra 20% off annual plans',        'percent', 20, NULL, 1)
+          ('LAUNCH',   'Launch special — 25% off any plan', 'percent', 25, 500, true),
+          ('EARLY50',  'Early user — 50% off first month',  'percent', 50, 100, true),
+          ('TRADEMIND','Welcome gift — 20% off',            'percent', 20, NULL, true),
+          ('VIP30',    'VIP early access — 30% off',        'percent', 30, 50,  true),
+          ('ANNUAL20', 'Extra 20% off annual plans',        'percent', 20, NULL, true)
     """)
 
 
