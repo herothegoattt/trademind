@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useSpring } from "framer-motion";
 import { useT } from "../lib/i18n";
 
 const VIO = "#8b5cf6";
@@ -23,146 +23,143 @@ const enter = (delay = 0, y = 24) => ({
 // ═════════════════════════════════════════════════════════════════════════════
 function BootScreen({ onDone }: { onDone: () => void }) {
   const t = useT();
-  const [pct, setPct] = useState(0);
   const [idx, setIdx] = useState(0);
   const [done, setDone] = useState(false);
-  const stageRef = useRef<HTMLDivElement>(null);
   const MODS = [t("module_neural"), t("module_market_data"), t("module_risk"),
                 t("module_ai_core"), t("module_bias_filter"), t("module_signals")];
 
-  // Pre-computed starfield + warp rays (stable across renders)
-  const stars = useRef(Array.from({ length: 56 }, () => {
-    const a = Math.random() * Math.PI * 2;
-    const r = 6 + Math.random() * 26;           // spread direction from center
-    return {
-      sx: `${Math.cos(a) * r}px`,
-      sy: `${Math.sin(a) * r}px`,
-      so: 0.35 + Math.random() * 0.55,
-      size: 1 + Math.random() * 2.4,
-      dur: 1.6 + Math.random() * 2.4,
-      delay: -Math.random() * 4,
-      hue: Math.random() > 0.7 ? CYN : (Math.random() > 0.5 ? VIO : "#dbeafe"),
-    };
-  }));
-  const rays = useRef(Array.from({ length: 9 }, (_, i) => ({
-    ang: `${(360 / 9) * i + Math.random() * 12}deg`,
-    dur: 2.2 + Math.random() * 1.6,
-    delay: -Math.random() * 3,
+  // progress-ring geometry
+  const R = 56, STROKE = 3, C = 2 * Math.PI * R;
+
+  // refs let us drive the ring/percent every frame WITHOUT re-rendering React —
+  // the old version called setState ~60×/s, re-mounting every particle each frame.
+  const ringRef = useRef<SVGCircleElement>(null);
+  const dotRef = useRef<HTMLDivElement>(null);
+  const pctRef = useRef<HTMLSpanElement>(null);
+
+  // dust positions, computed once — animated purely in CSS (compositor only)
+  const dust = useRef(Array.from({ length: 16 }, () => ({
+    x: Math.random() * 100, y: Math.random() * 100,
+    s: 1 + Math.random() * 1.6, o: 0.1 + Math.random() * 0.22,
+    dur: 7 + Math.random() * 8, delay: -Math.random() * 12,
+    dx: `${(Math.random() - 0.5) * 30}px`, dy: `${-18 - Math.random() * 30}px`,
+    hue: Math.random() > 0.6 ? CYN : VIO,
   })));
 
   useEffect(() => {
     const STEP = TOTAL_MS / MODS.length;
     const ts = MODS.map((_, i) => i > 0 ? setTimeout(() => setIdx(i), i * STEP) : null)
       .filter(Boolean) as ReturnType<typeof setTimeout>[];
-    const s = Date.now();
-    const iv = setInterval(() => {
-      const p = Math.min(100, ((Date.now() - s) / TOTAL_MS) * 100);
-      setPct(p);
-      if (p >= 100) { clearInterval(iv); setDone(true); }
-    }, 16);
-    return () => { ts.forEach(clearTimeout); clearInterval(iv); };
+    const s = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const p = Math.min(100, ((now - s) / TOTAL_MS) * 100);
+      if (ringRef.current) ringRef.current.style.strokeDashoffset = String(C * (1 - p / 100));
+      if (dotRef.current) dotRef.current.style.transform = `rotate(${(p / 100) * 360}deg)`;
+      if (pctRef.current) pctRef.current.textContent = `· ${Math.round(p)}%`;
+      if (p >= 100) { setDone(true); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { ts.forEach(clearTimeout); cancelAnimationFrame(raf); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { if (done) { const id = setTimeout(onDone, 900); return () => clearTimeout(id); } }, [done, onDone]);
-
-  // Subtle mouse-driven 3D parallax on the boot card — direct DOM, no re-renders
-  useEffect(() => {
-    const el = stageRef.current;
-    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const onMove = (e: MouseEvent) => {
-      const rx = (e.clientY / window.innerHeight - 0.5) * -10;
-      const ry = (e.clientX / window.innerWidth - 0.5) * 12;
-      el.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg)`;
-    };
-    window.addEventListener("mousemove", onMove);
-    return () => window.removeEventListener("mousemove", onMove);
-  }, []);
-
-  // warp intensifies as loading approaches 100% and on launch
-  const warp = 0.4 + (pct / 100) * 0.6;
+  useEffect(() => { if (done) { const id = setTimeout(onDone, 760); return () => clearTimeout(id); } }, [done, onDone]);
 
   return (
-    <div style={{ height:"100vh", background:"#05060f", display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden", perspective:"1100px" }}>
-      {/* ── 3D starfield flying toward the viewer ── */}
-      <div className="tm-boot-stars" style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", pointerEvents:"none", opacity: done ? 1 : 0.92, transition:"opacity .4s" }}>
-        {stars.current.map((p, i) => (
-          <span key={i} className="tm-boot-star" style={{
-            position:"absolute", left:"50%", top:"50%", width:p.size, height:p.size, borderRadius:"50%",
-            background:p.hue, boxShadow:`0 0 6px ${p.hue}`,
-            ["--sx" as string]:p.sx, ["--sy" as string]:p.sy, ["--so" as string]:String(p.so),
-            animation:`tmStarFly ${done ? p.dur * 0.45 : p.dur}s linear ${p.delay}s infinite`,
+    // resolves to the exact /app background so the route swap is invisible
+    <div style={{ height:"100vh", background:"#070a12", display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
+      {/* ── soft ambience — opacity-only breathing, no blur filter (cheap) ── */}
+      <div style={{ position:"absolute", inset:0, pointerEvents:"none", opacity: done ? 0 : 1, transition:"opacity .5s",
+        background:`radial-gradient(60vmax 60vmax at 50% 50%, ${VIO}1a 0%, transparent 60%), radial-gradient(ellipse 60% 45% at 50% 6%, ${CYN}10 0%, transparent 65%)`,
+        animation:"tmBootBreath 6s ease-in-out infinite" }} />
+
+      {/* ── drifting dust (pure CSS, GPU-composited) ── */}
+      <div style={{ position:"absolute", inset:0, pointerEvents:"none", opacity: done ? 0 : 1, transition:"opacity .45s" }}>
+        {dust.current.map((d, i) => (
+          <span key={i} style={{
+            position:"absolute", left:`${d.x}%`, top:`${d.y}%`, width:d.s, height:d.s, borderRadius:"50%",
+            background:d.hue, boxShadow:`0 0 6px ${d.hue}`, willChange:"transform,opacity",
+            ["--o" as string]:String(d.o), ["--dx" as string]:d.dx, ["--dy" as string]:d.dy,
+            animation:`tmBootDust ${d.dur}s ease-in-out ${d.delay}s infinite`,
           }} />
         ))}
       </div>
 
-      {/* ── radial warp rays from the core ── */}
-      <div style={{ position:"absolute", left:"50%", top:"50%", width:0, height:0, pointerEvents:"none" }}>
-        {rays.current.map((r, i) => (
-          <span key={i} className="tm-boot-ray" style={{
-            position:"absolute", left:0, top:0, width:2, height:"58vmax", transformOrigin:"top center",
-            background:`linear-gradient(to bottom, ${CYN}00, ${VIO}${done?"55":"22"}, ${CYN}00)`,
-            ["--ang" as string]:r.ang,
-            animation:`tmWarpRay ${done ? r.dur * 0.5 : r.dur}s ease-in-out ${r.delay}s infinite`,
-          }} />
-        ))}
-      </div>
+      {/* ── warp-dive rings — only on launch, transform+opacity only ── */}
+      {done && [0, 0.12, 0.24].map((delay, i) => (
+        <motion.div key={i}
+          initial={{ scale:0.15, opacity:0.7 }} animate={{ scale:7, opacity:0 }}
+          transition={{ duration:0.85, delay, ease:[0.55, 0, 0.85, 0.25] }}
+          style={{ position:"absolute", width:220, height:220, borderRadius:"50%",
+            border:`1.5px solid ${i % 2 ? CYN : VIO}`, boxShadow:`0 0 24px ${i % 2 ? CYN : VIO}55`, pointerEvents:"none", zIndex:8 }} />
+      ))}
 
-      {/* breathing core glow */}
-      <div style={{ position:"absolute", left:"50%", top:"50%", width:"60vmax", height:"60vmax", transform:"translate(-50%,-50%)",
-        background:`radial-gradient(circle, rgba(139,92,246,${0.12 * warp}) 0%, transparent 60%)`,
-        animation:"tmBootGlow 3.2s ease-in-out infinite", pointerEvents:"none" }} />
-      <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 70% 40% at 50% 0%, rgba(139,92,246,0.1) 0%, transparent 70%)", pointerEvents:"none" }} />
-
-      {/* ── boot card (3D stage, launches forward on done) ── */}
+      {/* ── center stage — assembles on enter, accelerates INTO the screen on launch ── */}
       <motion.div
-        initial={{ opacity:0, scale:0.82, rotateX:14, y:30 }}
-        animate={done
-          ? { opacity:[1,1,0], scale:1.22, rotateX:0, y:-12, filter:"blur(3px)" }
-          : { opacity:1, scale:1, rotateX:0, y:0 }}
+        initial={{ opacity:0, scale:0.92 }}
+        animate={done ? { opacity:0, scale:8 } : { opacity:1, scale:1 }}
         transition={done
-          ? { duration:0.9, ease:[0.7,0,0.84,0] }
-          : { duration:0.9, ease:[0.16,1,0.3,1], type:"spring", stiffness:120, damping:16 }}
-        style={{ width:"100%", maxWidth:380, padding:"0 24px", zIndex:10, transformStyle:"preserve-3d", willChange:"transform" }}>
-       <div ref={stageRef} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:36, width:"100%", transformStyle:"preserve-3d", willChange:"transform", transition:"transform .15s ease-out" }}>
-        <motion.div
-          initial={{ rotateY:-90, scale:0.4 }}
-          animate={{ rotateY:0, scale:1 }}
-          transition={{ duration:0.95, ease:[0.16,1,0.3,1], delay:0.1 }}
-          style={{ width:70, height:70, borderRadius:18, border:`1px solid ${VIO}40`, overflow:"hidden",
-            boxShadow:`0 0 ${20 + warp * 34}px ${VIO}${done?"66":"33"}`, animation:"tmFloat 3.4s ease-in-out infinite", transformStyle:"preserve-3d" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.jpg" alt="TradeMind" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-        </motion.div>
+          ? { duration:0.78, ease:[0.6, 0, 0.85, 0.2] }   // easeIn → "dive" acceleration
+          : { duration:0.9, ease:[0.22, 1, 0.36, 1] }}
+        style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:34, zIndex:10, padding:"0 24px", willChange:"transform,opacity" }}>
+
+        {/* progress ring + logo */}
+        <div style={{ position:"relative", width:R * 2 + 40, height:R * 2 + 40, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <svg width={R * 2 + 40} height={R * 2 + 40} viewBox={`0 0 ${R * 2 + 40} ${R * 2 + 40}`}
+            style={{ position:"absolute", inset:0, transform:"rotate(-90deg)" }}>
+            <defs>
+              <linearGradient id="bootRing" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor={CYN} />
+                <stop offset="100%" stopColor={VIO} />
+              </linearGradient>
+            </defs>
+            <circle cx="50%" cy="50%" r={R} fill="none" stroke="rgba(255,255,255,.06)" strokeWidth={STROKE} />
+            <circle ref={ringRef} cx="50%" cy="50%" r={R} fill="none" stroke="url(#bootRing)" strokeWidth={STROKE}
+              strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C}
+              style={{ filter:`drop-shadow(0 0 5px ${VIO}aa)` }} />
+          </svg>
+          {/* glowing leading dot riding the arc */}
+          <div ref={dotRef} style={{ position:"absolute", inset:0, pointerEvents:"none", willChange:"transform" }}>
+            <span style={{ position:"absolute", left:"50%", top:20, width:7, height:7, marginLeft:-3.5,
+              borderRadius:"50%", background:"#fff", boxShadow:`0 0 12px ${CYN},0 0 4px #fff` }} />
+          </div>
+          {/* logo */}
+          <div style={{ width:72, height:72, borderRadius:20, border:`1px solid ${VIO}33`, overflow:"hidden",
+            boxShadow:`0 0 38px ${VIO}33, inset 0 1px 0 rgba(255,255,255,.08)`, animation:"tmFloat 4s ease-in-out infinite" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.jpg" alt="TradeMind" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+          </div>
+        </div>
+
+        {/* wordmark */}
         <div style={{ textAlign:"center" }}>
-          <h1 style={{ margin:0, fontSize:"2.3rem", fontWeight:700, letterSpacing:"-.025em", color:"#f1f5f9", textShadow:done?`0 0 28px ${CYN}55`:"none", transition:"text-shadow .4s" }}>TradeMind</h1>
-          <p style={{ margin:"8px 0 0", fontSize:"9px", fontFamily:"monospace", letterSpacing:".3em", color:"rgba(100,116,139,.55)" }}>{t("ai_powered_trading")}</p>
+          <h1 style={{ margin:0, fontSize:"2.2rem", fontWeight:700, letterSpacing:"-.03em", color:"#f1f5f9", textShadow:done?`0 0 30px ${CYN}66`:"none", transition:"text-shadow .4s" }}>TradeMind</h1>
+          <p style={{ margin:"9px 0 0", fontSize:"9px", fontFamily:"monospace", letterSpacing:".34em", color:"rgba(100,116,139,.5)" }}>{t("ai_powered_trading")}</p>
         </div>
-        <div style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", minHeight:32 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ width:5, height:5, borderRadius:"50%", background:CYN, boxShadow:`0 0 7px ${CYN}`, display:"inline-block", animation:"tmPulse 1s infinite" }} />
-            <span style={{ fontSize:"10px", fontFamily:"monospace", letterSpacing:".16em", color:"rgba(148,163,184,.8)" }}>{MODS[idx]}</span>
-          </div>
-          <span style={{ fontSize:"9px", fontFamily:"monospace", color:"rgba(100,116,139,.45)" }}>{idx+1} / {MODS.length}</span>
+
+        {/* status line — module crossfade + tabular percent (ref-driven) */}
+        <div style={{ display:"flex", alignItems:"center", gap:10, minHeight:18 }}>
+          <span style={{ width:5, height:5, borderRadius:"50%", background:done?GRN:CYN, boxShadow:`0 0 8px ${done?GRN:CYN}`, animation:"tmPulse 1.4s infinite", flexShrink:0 }} />
+          <AnimatePresence mode="wait">
+            <motion.span key={done ? "granted" : idx}
+              initial={{ opacity:0, y:6 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-6 }} transition={{ duration:.3 }}
+              style={{ fontSize:"10px", fontFamily:"monospace", letterSpacing:".2em", color:done?GRN:"rgba(148,163,184,.72)" }}>
+              {done ? t("access_granted") : MODS[idx]}
+            </motion.span>
+          </AnimatePresence>
+          <span ref={pctRef} style={{ fontSize:"10px", fontFamily:"monospace", letterSpacing:".05em", color:"rgba(100,116,139,.4)", fontVariantNumeric:"tabular-nums" }}>· 0%</span>
         </div>
-        <div style={{ width:"100%", height:48, border:`1px solid ${done?"rgba(52,211,153,.35)":"rgba(34,211,238,.2)"}`, borderRadius:9, position:"relative", overflow:"hidden", transition:"border-color .4s" }}>
-          <div style={{ position:"absolute", inset:"0 auto 0 0", width:`${pct}%`, background:done?"linear-gradient(90deg,rgba(52,211,153,.2),rgba(52,211,153,.08))":"linear-gradient(90deg,rgba(139,92,246,.2),rgba(34,211,238,.12))", transition:"width .08s linear,background .4s" }} />
-          {/* scanline sweep */}
-          <div className="tm-boot-scan" style={{ position:"absolute", inset:"0 auto 0 0", width:`${pct}%`, overflow:"hidden", pointerEvents:"none" }}>
-            <div className="tm-boot-scan" style={{ position:"absolute", left:0, right:0, height:"60%", background:`linear-gradient(180deg, transparent, ${CYN}33, transparent)`, animation:"tmScan 1.4s linear infinite" }} />
-          </div>
-          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 16px" }}>
-            <span style={{ fontSize:"10px", fontFamily:"monospace", letterSpacing:".2em", color:done?"#34d399":"rgba(148,163,184,.4)", transition:"color .3s" }}>{done?t("access_granted"):t("loading_text")}</span>
-            <span style={{ fontSize:"10px", fontFamily:"monospace", color:done?"rgba(52,211,153,.8)":"rgba(100,116,139,.5)", transition:"color .3s", fontVariantNumeric:"tabular-nums" }}>{Math.round(pct)}%</span>
-          </div>
-        </div>
-       </div>
       </motion.div>
 
-      {/* ── launch flash ── */}
+      {/* ── launch bloom — single scaling glow, transform+opacity only ── */}
       {done && (
-        <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:20,
-          background:`radial-gradient(circle at 50% 50%, ${CYN}cc 0%, ${VIO}55 30%, transparent 65%)`,
-          animation:"tmBootFlash .9s ease-out forwards" }} />
+        <motion.div
+          initial={{ opacity:0, scale:0.3 }} animate={{ opacity:[0, 0.55, 0], scale:2.4 }}
+          transition={{ duration:0.8, ease:[0.5, 0, 0.85, 0.3] }}
+          style={{ position:"absolute", width:"42vmax", height:"42vmax",
+            borderRadius:"50%", pointerEvents:"none", zIndex:20, willChange:"transform,opacity",
+            background:`radial-gradient(circle, ${CYN}66 0%, ${VIO}2a 40%, transparent 70%)` }} />
       )}
     </div>
   );
@@ -189,92 +186,257 @@ function Slide({ id, children, bg = "#05060f", style = {} }: {
 const px = { padding:"0 clamp(16px,5vw,64px)" };
 const inner = { width:"100%", maxWidth:1040, margin:"0 auto" } as React.CSSProperties;
 
+// ─── premium hero primitives ──────────────────────────────────────────────────
+// fine film grain — fractal noise, set once, blended for matte texture
+const NOISE = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+
+// magnetic wrapper — element eases toward the cursor, springs back on leave
+function Magnetic({ children, strength = 0.4 }: { children: React.ReactNode; strength?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0), y = useMotionValue(0);
+  const sx = useSpring(x, { stiffness: 200, damping: 16, mass: 0.4 });
+  const sy = useSpring(y, { stiffness: 200, damping: 16, mass: 0.4 });
+  const onMove = (e: React.MouseEvent) => {
+    const el = ref.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    x.set((e.clientX - (r.left + r.width / 2)) * strength);
+    y.set((e.clientY - (r.top + r.height / 2)) * strength);
+  };
+  const reset = () => { x.set(0); y.set(0); };
+  return (
+    <motion.div ref={ref} onMouseMove={onMove} onMouseLeave={reset}
+      style={{ x: sx, y: sy, display: "inline-flex" }}>
+      {children}
+    </motion.div>
+  );
+}
+
+// refined violet->white headline gradient (shared so every word matches)
+const HERO_GRAD = "linear-gradient(110deg,#f8fafc 0%,#e9d5ff 26%,#a78bfa 46%,#7c3aed 62%,#a78bfa 80%,#f8fafc 100%)";
+
+// each WORD carries its own gradient (so background-clip never breaks -> no
+// invisible words) and flips up in 3D, staggered.
+function KineticLine({ text, delay = 0, align = "center" }: { text: string; delay?: number; align?: "center" | "flex-start" }) {
+  const words = text.split(" ");
+  return (
+    <span style={{ display: "inline-flex", flexWrap: "wrap", justifyContent: align, columnGap: ".28em", rowGap: ".05em", perspective: "800px" }}>
+      {words.map((w, i) => (
+        <motion.span key={i}
+          style={{
+            display: "inline-block", transformOrigin: "50% 100%", willChange: "transform",
+            background: HERO_GRAD, backgroundSize: "240% auto",
+            WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent",
+            animation: "heroShimmer 9s linear infinite",
+          }}
+          initial={{ opacity: 0, y: "0.45em", rotateX: -55, filter: "blur(6px)" }}
+          animate={{ opacity: 1, y: 0, rotateX: 0, filter: "blur(0px)" }}
+          transition={{ delay: delay + i * 0.09, duration: 0.85, ease: [0.2, 0.85, 0.25, 1] }}>
+          {w}
+        </motion.span>
+      ))}
+    </span>
+  );
+}
+
+// floating "live performance" product card — gives the hero real product depth.
+// Tilts with the shared parallax, draws its equity curve when the slide is active.
+function HeroPreviewCard({ active }: { active: boolean }) {
+  const t = useT();
+  const bars = [38, 52, 44, 66, 58, 78, 70, 92];
+  return (
+    <motion.div
+      initial={{ opacity:0, y:30, rotateY:-6, rotateX:2 }}
+      animate={{ opacity:1, y:0, rotateY:-6, rotateX:2 }}
+      transition={{ duration:0.7, delay:0.5, ease:[0.22, 1, 0.36, 1] }}
+      style={{ position:"relative", width:"min(420px,100%)", transformStyle:"preserve-3d", transformPerspective:1200, willChange:"transform" }}>
+      {/* ambient glow behind the card */}
+      <div style={{ position:"absolute", inset:"-14% -10% -22%", borderRadius:32, background:`radial-gradient(60% 60% at 70% 20%,${VIO}30,transparent 70%),radial-gradient(50% 50% at 20% 90%,${CYN}1f,transparent 70%)`, filter:"blur(34px)", pointerEvents:"none", zIndex:0 }} />
+
+      <div style={{ position:"relative", zIndex:1, borderRadius:22, padding:"clamp(16px,2.4vw,22px)",
+        background:"linear-gradient(165deg,rgba(20,18,40,.82),rgba(8,8,20,.92))",
+        border:"1px solid rgba(255,255,255,.09)", backdropFilter:"blur(22px)", WebkitBackdropFilter:"blur(22px)",
+        boxShadow:`0 40px 90px -30px rgba(0,0,0,.8),0 0 60px ${VIO}1c,inset 0 1px 0 rgba(255,255,255,.08)`, animation:"tmFloat 7s ease-in-out infinite" }}>
+
+        {/* header */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+            <span style={{ width:7, height:7, borderRadius:"50%", background:GRN, boxShadow:`0 0 9px ${GRN}`, animation:"tmPulse 1.6s infinite" }} />
+            <span style={{ fontSize:".62rem", fontFamily:"monospace", letterSpacing:".2em", color:"rgba(148,163,184,.7)" }}>{t("lp_hero_card_label")}</span>
+          </div>
+          <span style={{ fontSize:".66rem", fontWeight:700, fontFamily:"monospace", color:GRN, padding:"3px 9px", borderRadius:7, background:`${GRN}14`, border:`1px solid ${GRN}33` }}>+24.8%</span>
+        </div>
+
+        {/* equity value */}
+        <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:14 }}>
+          <span style={{ fontSize:"clamp(1.7rem,4vw,2.2rem)", fontWeight:800, letterSpacing:"-.04em", color:"#f1f5f9", lineHeight:1 }}>$48,210</span>
+          <span style={{ fontSize:".7rem", fontFamily:"monospace", color:"rgba(100,116,139,.7)" }}>EQUITY</span>
+        </div>
+
+        {/* equity curve */}
+        <svg viewBox="0 0 320 110" preserveAspectRatio="none" style={{ width:"100%", height:96, display:"block", overflow:"visible" }}>
+          <defs>
+            <linearGradient id="heroAreaFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={VIO} stopOpacity=".34" />
+              <stop offset="100%" stopColor={VIO} stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="heroLineGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={CYN} />
+              <stop offset="100%" stopColor={VIO} />
+            </linearGradient>
+          </defs>
+          <motion.path
+            d="M0,92 C42,86 60,70 92,72 C128,74 150,44 184,50 C220,56 246,16 320,8 L320,110 L0,110 Z"
+            fill="url(#heroAreaFill)"
+            initial={{ opacity: 0 }} animate={active ? { opacity: 1 } : { opacity: 0 }} transition={{ duration: 1, delay: .7 }} />
+          <motion.path
+            d="M0,92 C42,86 60,70 92,72 C128,74 150,44 184,50 C220,56 246,16 320,8"
+            fill="none" stroke="url(#heroLineGrad)" strokeWidth="2.4" strokeLinecap="round"
+            initial={{ pathLength: 0 }} animate={active ? { pathLength: 1 } : { pathLength: 0 }} transition={{ duration: 1.6, delay: .55, ease: [0.4, 0, 0.2, 1] }} />
+        </svg>
+
+        {/* mini volume bars + stat tiles */}
+        <div style={{ display:"flex", alignItems:"flex-end", gap:5, height:34, margin:"16px 0 16px" }}>
+          {bars.map((h, i) => (
+            <motion.div key={i}
+              initial={{ height: 0 }} animate={active ? { height: `${h}%` } : { height: 0 }}
+              transition={{ duration: .6, delay: .9 + i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+              style={{ flex:1, borderRadius:3, background:i === bars.length-1 ? `linear-gradient(${CYN},${VIO})` : "rgba(139,92,246,.28)" }} />
+          ))}
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+          {[["68%", t("lp_hero_card_winrate")], ["1.9R", t("lp_hero_card_avg")]].map(([v, k], i) => (
+            <div key={i} style={{ padding:"10px 12px", borderRadius:12, background:"rgba(255,255,255,.03)", border:"1px solid rgba(255,255,255,.06)" }}>
+              <div style={{ fontSize:"1.05rem", fontWeight:700, color:"#f1f5f9", letterSpacing:"-.02em" }}>{v}</div>
+              <div style={{ fontSize:".56rem", fontFamily:"monospace", letterSpacing:".08em", color:"rgba(100,116,139,.6)", marginTop:3 }}>{k}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // SLIDE 1 — HERO
 // ═════════════════════════════════════════════════════════════════════════════
 function SlideHero({ onLaunch, onNext, active }: { onLaunch: (plan?: string, billing?: string)=>void; onNext?: ()=>void; active: boolean }) {
   const t = useT();
-  const [spot, setSpot] = useState({ x:50, y:45 });
   const mouse = useRef({ x:50, y:45 });
+  const spot = useRef({ x:50, y:45 });
   const ref = useRef<HTMLElement>(null);
+  const spotRef = useRef<HTMLDivElement>(null);   // spotlight layer
+  const tiltRef = useRef<HTMLDivElement>(null);   // parallax content wrapper
+  // ref-driven parallax — eases toward the cursor each frame WITHOUT re-rendering
+  // (the old setState-every-16ms re-rendered the whole hero + product card 60×/s).
   useEffect(() => {
     const el = ref.current; if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const fn = (e: MouseEvent) => {
       const r = el.getBoundingClientRect();
       mouse.current = { x:((e.clientX-r.left)/r.width)*100, y:((e.clientY-r.top)/r.height)*100 };
     };
     el.addEventListener("mousemove", fn, { passive:true });
-    const id = setInterval(() => setSpot(p=>({ x:p.x+(mouse.current.x-p.x)*.07, y:p.y+(mouse.current.y-p.y)*.07 })),16);
-    return () => { el.removeEventListener("mousemove", fn); clearInterval(id); };
+    let raf = 0;
+    const loop = () => {
+      const s = spot.current;
+      s.x += (mouse.current.x - s.x) * .07;
+      s.y += (mouse.current.y - s.y) * .07;
+      if (spotRef.current) spotRef.current.style.background = `radial-gradient(700px circle at ${s.x}% ${s.y}%,rgba(139,92,246,.11) 0%,transparent 55%)`;
+      if (tiltRef.current) tiltRef.current.style.transform = `rotateX(${(s.y-45)*-0.07}deg) rotateY(${(s.x-50)*0.07}deg)`;
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => { el.removeEventListener("mousemove", fn); cancelAnimationFrame(raf); };
   },[]);
 
   return (
     <Slide id="slide-hero" bg="#05060f">
-      <section ref={ref} style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+      <section ref={ref} style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", perspective:"1400px" }}>
         {/* dot grid */}
         <div style={{ position:"absolute", inset:0, backgroundImage:"radial-gradient(rgba(148,163,184,.065) 1px,transparent 1px)", backgroundSize:"30px 30px", maskImage:"radial-gradient(ellipse 80% 70% at 50% 50%,black 30%,transparent 100%)", pointerEvents:"none" }} />
         {/* spotlight */}
-        <div style={{ position:"absolute", inset:0, pointerEvents:"none", transition:"background .1s ease", background:`radial-gradient(700px circle at ${spot.x}% ${spot.y}%,rgba(139,92,246,.11) 0%,transparent 55%)` }} />
+        <div ref={spotRef} style={{ position:"absolute", inset:0, pointerEvents:"none", background:`radial-gradient(700px circle at 50% 45%,rgba(139,92,246,.11) 0%,transparent 55%)` }} />
         {/* orbs */}
         <motion.div animate={{ x:[0,40,-20,0], y:[0,-28,18,0] }} transition={{ duration:20, repeat:Infinity, ease:"easeInOut" }} style={{ position:"absolute", width:640, height:640, borderRadius:"50%", top:"-20%", right:"-8%", background:"radial-gradient(circle,rgba(139,92,246,.07) 0%,transparent 70%)", filter:"blur(40px)", pointerEvents:"none" }} />
         <motion.div animate={{ x:[0,-30,12,0], y:[0,36,-14,0] }} transition={{ duration:28, repeat:Infinity, ease:"easeInOut" }} style={{ position:"absolute", width:480, height:480, borderRadius:"50%", bottom:"-10%", left:"-6%", background:"radial-gradient(circle,rgba(34,211,238,.055) 0%,transparent 70%)", filter:"blur(48px)", pointerEvents:"none" }} />
 
-        <div style={{ ...inner, ...px, textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center", gap:0, position:"relative", zIndex:10 }}>
-          {/* pill */}
-          <motion.div {...enter(.1)} style={{ display:"inline-flex", alignItems:"center", gap:7, marginBottom:28, padding:"5px 16px", borderRadius:100, border:`1px solid ${CYN}22`, background:`${CYN}08`, fontSize:".65rem", fontFamily:"monospace", letterSpacing:".22em", color:`${CYN}88` }}>
-            <span style={{ width:5, height:5, borderRadius:"50%", background:CYN, boxShadow:`0 0 7px ${CYN}`, animation:"tmPulse 1.8s infinite", flexShrink:0 }} />
-            {t("ai_powered_trading")}
-          </motion.div>
+        {/* film grain — matte premium texture */}
+        <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:5, opacity:.04, mixBlendMode:"overlay", backgroundImage:NOISE, backgroundSize:"160px 160px" }} />
 
-          {/* logo */}
-          <motion.div {...enter(.18)} transition={{ delay:.18, duration:.7, type:"spring", stiffness:160 } as never}
-            style={{ width:88, height:88, borderRadius:24, marginBottom:28, border:`1px solid ${VIO}35`, background:"rgba(10,8,26,0.9)", overflow:"hidden", boxShadow:`0 0 60px ${VIO}22,inset 0 1px 0 rgba(255,255,255,.07)` }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.jpg" alt="TradeMind" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-          </motion.div>
+        {/* cinematic edge vignette for depth */}
+        <div style={{ position:"absolute", inset:0, pointerEvents:"none", zIndex:6, background:"radial-gradient(120% 90% at 50% 35%,transparent 55%,rgba(2,2,8,.6) 100%)" }} />
 
-          {/* headline */}
-          <motion.h1 {...enter(.26)}
-            style={{ margin:"0 0 18px", fontWeight:800, letterSpacing:"-.045em", lineHeight:1.06,
-              fontSize:"clamp(2.6rem,7.5vw,5.2rem)",
-              background:"linear-gradient(135deg, #f8fafc 0%, #bfdbfe 18%, #818cf8 36%, #7c3aed 54%, #4c1d95 68%, #7c3aed 80%, #bfdbfe 92%, #f8fafc 100%)",
-              backgroundSize:"300% auto",
-              WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent",
-              animation:"heroShimmer 8s linear infinite" }}>
-            {t("lp_hero_headline_1")}<br />{t("lp_hero_headline_2")}
-          </motion.h1>
-
-          <motion.p {...enter(.34)} style={{ margin:"0 0 36px", fontSize:"clamp(.9rem,1.8vw,1.1rem)", color:"rgba(148,163,184,.56)", lineHeight:1.72, maxWidth:520 }}>
-            {t("lp_hero_subtitle")}
-          </motion.p>
-
-          {/* CTAs */}
-          <motion.div {...enter(.42)} style={{ display:"flex", gap:12, flexWrap:"wrap", justifyContent:"center", marginBottom:44 }}>
-            <motion.button whileHover={{ scale:1.05, boxShadow:`0 0 52px ${VIO}52` }} whileTap={{ scale:.97 }}
-              onClick={() => onLaunch()}
-              style={{ height:52, padding:"0 36px", background:`linear-gradient(135deg,${VIO}48,${VIO}26)`, border:`1px solid ${VIO}68`, borderRadius:13, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:10, fontSize:".85rem", fontFamily:"monospace", letterSpacing:".17em", color:"#e9d5ff", fontWeight:700, boxShadow:`0 0 28px ${VIO}28`, transition:"box-shadow .25s" }}>
-              {t("initialize_system")}
-              <motion.svg animate={{ x:[0,4,0] }} transition={{ duration:1.4, repeat:Infinity }} width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M2 7h10M8 3l4 4-4 4" stroke="#e9d5ff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-              </motion.svg>
-            </motion.button>
-            <motion.button whileHover={{ borderColor:"rgba(255,255,255,.15)" }} whileTap={{ scale:.97 }}
-              onClick={()=>onNext?.()}
-              style={{ height:52, padding:"0 28px", background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.08)", borderRadius:13, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:8, fontSize:".85rem", color:"rgba(148,163,184,.6)", transition:"border-color .2s" }}>
-              {t("lp_hero_learn_more")}
-            </motion.button>
-          </motion.div>
-
-          {/* stats strip */}
-          <motion.div {...enter(.52)} style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", padding:"18px 32px", borderRadius:14, background:"rgba(255,255,255,.02)", border:"1px solid rgba(255,255,255,.05)", gap:0 }}>
-            {[["120+","lp_stat_traders"],["3 000+","lp_stat_trades"],["24/7","lp_stat_support"]].map(([v,k],i,a)=>(
-              <div key={i} style={{ textAlign:"center", padding:"0 20px", borderRight:i<a.length-1?"1px solid rgba(255,255,255,.05)":"none" }}>
-                <div style={{ fontSize:"1.3rem", fontWeight:700, letterSpacing:"-.03em", color:"#f1f5f9", lineHeight:1 }}>{v}</div>
-                <div style={{ fontSize:".62rem", fontFamily:"monospace", letterSpacing:".07em", color:"rgba(100,116,139,.5)", marginTop:4 }}>{t(k).toUpperCase()}</div>
-              </div>
-            ))}
-          </motion.div>
+        {/* giant editorial wordmark anchored to the baseline */}
+        <div aria-hidden style={{ position:"absolute", left:0, right:0, bottom:"-2.2vw", zIndex:2, pointerEvents:"none", textAlign:"center", overflow:"hidden", lineHeight:.8 }}>
+          <span style={{ display:"inline-block", fontSize:"clamp(4rem,20vw,17rem)", fontWeight:900, letterSpacing:"-.05em",
+            background:"linear-gradient(180deg,rgba(168,148,255,.16) 0%,rgba(139,92,246,.05) 55%,transparent 100%)",
+            WebkitBackgroundClip:"text", backgroundClip:"text", WebkitTextFillColor:"transparent",
+            maskImage:"linear-gradient(180deg,#000 30%,transparent 96%)", WebkitMaskImage:"linear-gradient(180deg,#000 30%,transparent 96%)" }}>
+            TRADEMIND
+          </span>
         </div>
+
+        {/* editorial split layout — copy left, live product card right */}
+        <div ref={tiltRef} style={{ ...px, width:"100%", maxWidth:1180, display:"flex", flexWrap:"wrap", alignItems:"center", justifyContent:"center", gap:"clamp(32px,5vw,64px)", position:"relative", zIndex:10, paddingBottom:"clamp(48px,9vw,110px)",
+          transformStyle:"preserve-3d", willChange:"transform" }}>
+
+          {/* ── left: copy ── */}
+          <div style={{ flex:"1 1 440px", minWidth:300, textAlign:"left", display:"flex", flexDirection:"column", alignItems:"flex-start" }}>
+            {/* pill */}
+            <motion.div {...enter(.1)} style={{ display:"inline-flex", alignItems:"center", gap:7, marginBottom:26, padding:"5px 16px", borderRadius:100, border:`1px solid ${CYN}22`, background:`${CYN}08`, backdropFilter:"blur(12px)", WebkitBackdropFilter:"blur(12px)", fontSize:".65rem", fontFamily:"monospace", letterSpacing:".22em", color:`${CYN}88` }}>
+              <span style={{ width:5, height:5, borderRadius:"50%", background:CYN, boxShadow:`0 0 7px ${CYN}`, animation:"tmPulse 1.8s infinite", flexShrink:0 }} />
+              {t("ai_powered_trading")}
+            </motion.div>
+
+            {/* headline — per-word 3D kinetic reveal; gradient lives on each word */}
+            <h1
+              style={{ margin:"0 0 22px", fontWeight:800, letterSpacing:"-.045em", lineHeight:1.04,
+                fontSize:"clamp(2.5rem,6vw,4.6rem)", transform:"translateZ(45px)", textAlign:"left" }}>
+              <span style={{ display:"block" }}><KineticLine text={t("lp_hero_headline_1")} delay={.18} align="flex-start" /></span>
+              <span style={{ display:"block" }}><KineticLine text={t("lp_hero_headline_2")} delay={.30} align="flex-start" /></span>
+            </h1>
+
+            <motion.p {...enter(.34)} style={{ margin:"0 0 34px", fontSize:"clamp(.92rem,1.5vw,1.12rem)", color:"rgba(148,163,184,.6)", lineHeight:1.7, maxWidth:480 }}>
+              {t("lp_hero_subtitle")}
+            </motion.p>
+
+            {/* CTAs */}
+            <motion.div {...enter(.42)} style={{ display:"flex", gap:12, flexWrap:"wrap", justifyContent:"flex-start", marginBottom:40 }}>
+              <Magnetic strength={0.45}>
+                <motion.button whileHover={{ scale:1.05, boxShadow:`0 0 52px ${VIO}52` }} whileTap={{ scale:.97 }}
+                  onClick={() => onLaunch()}
+                  style={{ height:52, padding:"0 36px", background:`linear-gradient(135deg,${VIO}48,${VIO}26)`, border:`1px solid ${VIO}68`, borderRadius:13, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:10, fontSize:".85rem", fontFamily:"monospace", letterSpacing:".17em", color:"#e9d5ff", fontWeight:700, boxShadow:`0 0 28px ${VIO}28`, transition:"box-shadow .25s" }}>
+                  {t("initialize_system")}
+                  <motion.svg animate={{ x:[0,4,0] }} transition={{ duration:1.4, repeat:Infinity }} width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M2 7h10M8 3l4 4-4 4" stroke="#e9d5ff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                  </motion.svg>
+                </motion.button>
+              </Magnetic>
+              <motion.button whileHover={{ borderColor:"rgba(255,255,255,.15)" }} whileTap={{ scale:.97 }}
+                onClick={()=>onNext?.()}
+                style={{ height:52, padding:"0 28px", background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.08)", borderRadius:13, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:8, fontSize:".85rem", color:"rgba(148,163,184,.6)", transition:"border-color .2s" }}>
+                {t("lp_hero_learn_more")}
+              </motion.button>
+            </motion.div>
+
+            {/* stats strip */}
+            <motion.div {...enter(.52)} style={{ display:"inline-flex", flexWrap:"wrap", justifyContent:"flex-start", padding:"16px 28px", borderRadius:14, background:"rgba(255,255,255,.025)", border:"1px solid rgba(255,255,255,.06)", backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)", boxShadow:"inset 0 1px 0 rgba(255,255,255,.04)", gap:0 }}>
+              {[["130+","lp_stat_traders"],["3 000+","lp_stat_trades"],["24/7","lp_stat_support"]].map(([v,k],i,a)=>(
+                <div key={i} style={{ textAlign:"center", padding:"0 20px", borderRight:i<a.length-1?"1px solid rgba(255,255,255,.05)":"none" }}>
+                  <div style={{ fontSize:"1.3rem", fontWeight:700, letterSpacing:"-.03em", color:"#f1f5f9", lineHeight:1 }}>{v}</div>
+                  <div style={{ fontSize:".62rem", fontFamily:"monospace", letterSpacing:".07em", color:"rgba(100,116,139,.5)", marginTop:4 }}>{t(k).toUpperCase()}</div>
+                </div>
+              ))}
+            </motion.div>
+          </div>
+
+          {/* ── right: live product card ── */}
+          <div style={{ flex:"0 1 420px", minWidth:300, display:"flex", justifyContent:"center" }}>
+            <HeroPreviewCard active={active} />
+          </div>
+        </div>
+
       </section>
     </Slide>
   );
@@ -2017,6 +2179,9 @@ export default function HomePage() {
   const onDone = useCallback(() => {
     const params = new URLSearchParams();
     if (launchPlan) { params.set("upgrade_plan", launchPlan); if (launchBilling) params.set("billing", launchBilling); }
+    // signal the dashboard to play its one-shot "warp arrival" entrance,
+    // continuing the boot dive instead of hard-cutting to the app
+    try { sessionStorage.setItem("tm_enter", "1"); } catch {}
     router.push("/app" + (params.toString() ? `?${params}` : ""));
   }, [router, launchPlan, launchBilling]);
 
@@ -2088,6 +2253,7 @@ export default function HomePage() {
       <AnimatePresence>
         {booting && (
           <motion.div key="boot" initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+            transition={{ duration:0.5, ease:[0.22, 1, 0.36, 1] }}
             style={{ position:"fixed", inset:0, zIndex:9999 }}>
             <BootScreen onDone={onDone} />
           </motion.div>
@@ -2163,6 +2329,11 @@ export default function HomePage() {
         @keyframes tmDash      { to { stroke-dashoffset: -56; } }
         @keyframes tmDashRev   { to { stroke-dashoffset:  56; } }
         @keyframes tmNode      { 0%,100% { opacity:.3; } 50% { opacity:1; } }
+        @keyframes tmBootBreath { 0%,100% { opacity:.55; } 50% { opacity:.9; } }
+        @keyframes tmBootDust {
+          0%,100% { transform: translate3d(0,0,0); opacity: var(--o); }
+          50%     { transform: translate3d(var(--dx), var(--dy), 0); opacity: calc(var(--o) * 2); }
+        }
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
         }

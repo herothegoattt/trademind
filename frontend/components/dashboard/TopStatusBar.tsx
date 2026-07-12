@@ -57,6 +57,7 @@ export function TopStatusBar() {
   return (
     <>
       <div
+        data-entrance="bar"
         className="fixed top-0 left-0 md:left-56 right-0 z-50 flex items-center h-16 px-4 md:px-5"
         style={{
           background: "var(--bg-bar)",

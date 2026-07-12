@@ -54,11 +54,6 @@ const navGroups = [
       { section: "Investing",      path: "/investing",      Icon: TrendingUp,    labelKey: "section_investing"      },
       { section: "Analytics Lab",  path: "/analytics-lab",  Icon: FlaskConical,  labelKey: "section_analytics_lab"  },
       { section: "Decision Errors",path: "/decision-errors",Icon: AlertTriangle, labelKey: "decision_errors"        },
-    ],
-  },
-  {
-    label: "Training",
-    items: [
       { section: "Backtesting",    path: "/backtesting",    Icon: BarChart2,     labelKey: "section_backtesting"    },
     ],
   },
@@ -166,6 +161,7 @@ export function SidebarNav() {
     <>
       {/* ── Desktop ─────────────────────────────────────────── */}
       <nav
+        data-entrance="rail"
         className="hidden md:flex fixed inset-y-0 left-0 z-20 w-56 flex-col"
         style={{
           background: "linear-gradient(180deg, #06091180 0%, #07091480 100%), #060810",
@@ -293,6 +289,7 @@ export function SidebarNav() {
 
       {/* ── Mobile bottom nav ───────────────────────────────── */}
       <nav
+        data-entrance="dock"
         className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex"
         style={{
           background: "rgba(6,8,16,0.97)",

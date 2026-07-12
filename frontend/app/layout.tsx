@@ -4,6 +4,7 @@ import Script from "next/script";
 import { PostHogProvider } from "../components/posthog/PostHogProvider";
 import { GoogleAuthProvider } from "../components/providers/GoogleAuthProvider";
 import { OnboardingFlow } from "../components/OnboardingFlow";
+import { PageCurtain } from "../components/PageCurtain";
 import type { Metadata, Viewport } from "next";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -163,6 +164,7 @@ export default function RootLayout({
         <PostHogProvider>
           <GoogleAuthProvider>
             {children}
+            <PageCurtain />
             <OnboardingFlow />
           </GoogleAuthProvider>
         </PostHogProvider>

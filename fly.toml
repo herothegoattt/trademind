@@ -1,0 +1,40 @@
+app = "trademind-backend"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile.backend"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+
+[env]
+  DATABASE_URL = "sqlite:////data/trademind.db"
+  DEBUG = "false"
+  CORS_ORIGINS = "https://trademindtech.com,https://www.trademindtech.com,https://trademind-frontend.vercel.app"
+  FRONTEND_URL = "https://trademindtech.com"
+
+[[mounts]]
+  source = "trademind_data"
+  destination = "/data"
+
+[[services]]
+  http_checks = []
+  internal_port = 8000
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.ports]]
+    port = 8000
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 10

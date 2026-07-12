@@ -2,8 +2,8 @@ const path = require('path');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Required for Docker/Azure standalone deployment
-  output: 'standalone',
+  // standalone for Docker/Fly.io; Vercel ignores this
+  output: process.env.VERCEL ? undefined : 'standalone',
 
   reactStrictMode: false,
   eslint: { ignoreDuringBuilds: true },
