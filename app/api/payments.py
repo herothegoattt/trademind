@@ -103,6 +103,7 @@ def create_checkout_session(
                 "custom_price": None,
                 "product_options": {
                     "enabled_variants": [int(variant_id)],
+                    "redirect_url": body.success_url,
                 },
                 "checkout_data": {
                     "email": current_user.email,
@@ -113,8 +114,6 @@ def create_checkout_session(
                         "billing": body.billing,
                     },
                 },
-                "success_url": body.success_url,
-                "cancel_url": body.cancel_url,
                 "expires_at": None,
                 "preview": False,
                 "test_mode": settings.debug,
