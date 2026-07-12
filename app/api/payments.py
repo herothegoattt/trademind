@@ -112,7 +112,7 @@ def create_checkout_session(
                     },
                 },
                 "preview": False,
-                "test_mode": settings.debug,
+                "test_mode": False,
             },
             "relationships": {
                 "store": {
