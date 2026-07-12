@@ -422,7 +422,7 @@ function SlideHero({ onLaunch, onNext, active }: { onLaunch: (plan?: string, bil
 
             {/* stats strip */}
             <motion.div {...enter(.52)} style={{ display:"inline-flex", flexWrap:"wrap", justifyContent:"flex-start", padding:"16px 28px", borderRadius:14, background:"rgba(255,255,255,.025)", border:"1px solid rgba(255,255,255,.06)", backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)", boxShadow:"inset 0 1px 0 rgba(255,255,255,.04)", gap:0 }}>
-              {[["130+","lp_stat_traders"],["3 000+","lp_stat_trades"],["24/7","lp_stat_support"]].map(([v,k],i,a)=>(
+              {[["210+","lp_stat_traders"],["3 000+","lp_stat_trades"],["24/7","lp_stat_support"]].map(([v,k],i,a)=>(
                 <div key={i} style={{ textAlign:"center", padding:"0 20px", borderRight:i<a.length-1?"1px solid rgba(255,255,255,.05)":"none" }}>
                   <div style={{ fontSize:"1.3rem", fontWeight:700, letterSpacing:"-.03em", color:"#f1f5f9", lineHeight:1 }}>{v}</div>
                   <div style={{ fontSize:".62rem", fontFamily:"monospace", letterSpacing:".07em", color:"rgba(100,116,139,.5)", marginTop:4 }}>{t(k).toUpperCase()}</div>
