@@ -17,9 +17,9 @@ services:
       - key: SECRET_KEY
         value: 28da456567720e9bac4454d4c8b0df54898a3be99a42abc5809cae1d33d932a4
       - key: CORS_ORIGINS
-        value: https://frontend-five-alpha-13.vercel.app,https://trademindtech.com,https://www.trademindtech.com
+        value: https://trademindtech.com,https://www.trademindtech.com
       - key: FRONTEND_URL
-        value: https://frontend-five-alpha-13.vercel.app
+        value: https://trademindtech.com
       - key: DEBUG
         value: false
       - key: ANTHROPIC_API_KEY
