@@ -98,9 +98,6 @@ def create_checkout_session(
         "data": {
             "type": "checkouts",
             "attributes": {
-                "store_id": int(settings.lemonsqueezy_store_id),
-                "variant_id": int(variant_id),
-                "custom_price": None,
                 "product_options": {
                     "enabled_variants": [int(variant_id)],
                     "redirect_url": body.success_url,
@@ -114,9 +111,22 @@ def create_checkout_session(
                         "billing": body.billing,
                     },
                 },
-                "expires_at": None,
                 "preview": False,
                 "test_mode": settings.debug,
+            },
+            "relationships": {
+                "store": {
+                    "data": {
+                        "type": "stores",
+                        "id": str(settings.lemonsqueezy_store_id),
+                    },
+                },
+                "variant": {
+                    "data": {
+                        "type": "variants",
+                        "id": str(variant_id),
+                    },
+                },
             },
         }
     }
