@@ -282,27 +282,6 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
       return;
     }
 
-    // Admin bypass — set plan directly without payment
-    if (isAdmin && user) {
-      setConfirming(true);
-      try {
-        const res = await fetch(`/api/v1/admin/users/${user.id}/plan`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localToken}` },
-          body: JSON.stringify({ plan: selected }),
-        });
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Failed to set plan");
-        onUpgrade(selected);
-        const planDef = PLAN_DEFS.find(p => p.id === selected)!;
-        setCongratsPlan(planDef);
-      } catch (e: any) {
-        setError(e.message || "Failed to set plan");
-      } finally {
-        setConfirming(false);
-      }
-      return;
-    }
-
     // Downgrade = show portal to cancel
     if (isDowngrade) {
       setConfirming(true);
