@@ -63,20 +63,20 @@ async function fetchKlines(sym: string, interval: string, limit: number): Promis
     return withVol >= Math.ceil(raw.length * 0.2); // at least 20% of candles have volume
   };
 
-  // Try spot, futures, then backend proxy
-  let res = await tryFetch(BINANCE);
+  // Try futures (globally accessible), then spot, then binance.us
+  let res = await tryFetch(BINANCE_FUTURES);
   if (res) {
     const raw: any[] = await res.json();
     if (hasRealVolume(raw)) return parseKlines(raw);
   }
 
-  res = await tryFetch(BINANCE_FUTURES);
+  res = await tryFetch(BINANCE);
   if (res) {
     const raw: any[] = await res.json();
     if (hasRealVolume(raw)) return parseKlines(raw);
   }
 
-  // Fallback via backend proxy (tries spot → futures → binance.us)
+  // Fallback via backend proxy
   if (BACKEND) {
     const proxyUrl = `${BACKEND}/api/v1/binance/klines?symbol=${sym}&interval=${interval}&limit=${limit}`;
     const proxyRes = await fetch(proxyUrl, { headers: { "Cache-Control": "no-cache" } });
@@ -93,7 +93,7 @@ async function fetchKlines(sym: string, interval: string, limit: number): Promis
 async function fetchAggTrades(sym: string, startMs: number, endMs: number) {
   const out: { p: number; q: number; sell: boolean }[] = [];
   let from = startMs;
-  const bases = [BINANCE, BINANCE_FUTURES, BINANCE_US];
+  const bases = [BINANCE_FUTURES, BINANCE, BINANCE_US];
   let bi = 0;
   let triedBackend = false;
 

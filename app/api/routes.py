@@ -417,8 +417,8 @@ async def _proxy_binance(
     path: str,
     params: dict,
 ):
-    """Try Binance spot, then futures, then Binance.US."""
-    for base in (BINANCE_SPOT, BINANCE_FUTURES, BINANCE_US):
+    """Try Binance futures (globally accessible), then spot, then Binance.US."""
+    for base in (BINANCE_FUTURES, BINANCE_SPOT, BINANCE_US):
         try:
             resp = await client.get(
                 f"{base}/{path}",
