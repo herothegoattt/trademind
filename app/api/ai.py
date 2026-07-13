@@ -16,6 +16,8 @@ from app.services.ai_engine import chat, analyze_trading_error, generate_trading
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["ai"])
 
+ADMIN_EMAIL = "rem.vafin.08@gmail.com"
+
 # ─── Per-plan daily AI prompt limits ─────────────────────────────────────────
 PLAN_AI_LIMITS: dict[str, int | None] = {
     "core":  3,
@@ -25,11 +27,14 @@ PLAN_AI_LIMITS: dict[str, int | None] = {
 
 
 def _check_and_increment_quota(user: User, db: Session) -> dict:
-    """
-    Raises HTTP 429 if the user has exhausted their 24-hour AI quota.
+    """Raises HTTP 429 if the user has exhausted their 24-hour AI quota.
+
     Uses a rolling 24h window starting from the first prompt of each period.
-    Returns quota info dict on success.
+    Admin users bypass the quota entirely.
     """
+    if user.email.strip().lower() == ADMIN_EMAIL:
+        return {"used": 0, "limit": None, "resets_at": None}
+
     plan = getattr(user, "plan", "core") or "core"
     limit = PLAN_AI_LIMITS.get(plan, 3)
 
@@ -180,6 +185,8 @@ def get_quota(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Return the user's current daily AI quota status (read-only, no increment)."""
+    if current_user.email.strip().lower() == ADMIN_EMAIL:
+        return {"plan": "apex", "quota_used": 0, "quota_limit": None, "quota_remaining": None, "resets_at": None, "period": "daily"}
     plan = getattr(current_user, "plan", "core") or "core"
     limit = PLAN_AI_LIMITS.get(plan, 3)
     used = getattr(current_user, "ai_queries_this_month", 0) or 0

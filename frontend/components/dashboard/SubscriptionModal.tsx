@@ -318,7 +318,7 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
         body: JSON.stringify({
           plan: selected,
           billing,
-          success_url: `${window.location.origin}/app?plan_success=1`,
+          success_url: `${window.location.origin}/app?plan_success=1&plan=${selected}&billing=${billing}`,
           cancel_url: window.location.href,
         }),
       });
@@ -459,29 +459,45 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
                 </div>
               </div>
 
-              {/* Plan cards */}
-              <div className="flex-1 overflow-y-auto px-7 py-6">
-                <div className="grid grid-cols-3 gap-4">
-                  {PLAN_DEFS.map((plan) => {
-                    const Icon      = plan.icon;
-                    const isActive  = selected === plan.id;
-                    const isCurrent = currentPlan === plan.id;
-                    const price     = plan.price === 0 ? 0 : Math.round(plan.price * discount);
+        {/* Admin notice */}
+        {isAdmin && (
+          <div className="mx-7 mt-4 mb-2 px-4 py-3 rounded-xl text-sm flex items-center gap-3"
+            style={{
+              background: "rgba(167,139,250,0.08)",
+              border: "1px solid rgba(167,139,250,0.25)",
+            }}
+          >
+            <Crown className="w-5 h-5 text-violet-400 flex-shrink-0" />
+            <div>
+              <span className="font-semibold text-violet-300">Admin Access</span>
+              <span className="text-gray-400 ml-1">— you have full access to all plans for free</span>
+            </div>
+          </div>
+        )}
 
-                    return (
-                      <motion.div
-                        key={plan.id}
-                        onClick={() => setSelected(plan.id)}
-                        whileHover={{ y: -2 }}
-                        transition={{ duration: 0.15 }}
-                        className="relative flex flex-col rounded-2xl cursor-pointer"
-                        style={{
-                          background: isActive ? plan.activeBg : plan.bg,
-                          border: `1px solid ${isActive ? plan.activeBorder : plan.border}`,
-                          padding: "20px",
-                          transition: "background 0.2s, border-color 0.2s",
-                        }}
-                      >
+        {/* Plan cards */}
+        <div className="flex-1 overflow-y-auto px-7 py-6">
+          <div className="grid grid-cols-3 gap-4">
+            {PLAN_DEFS.map((plan) => {
+              const Icon      = plan.icon;
+              const isActive  = selected === plan.id;
+              const isCurrent = currentPlan === plan.id || isAdmin;
+              const price     = plan.price === 0 ? 0 : Math.round(plan.price * discount);
+
+              return (
+                <motion.div
+                  key={plan.id}
+                  onClick={() => { if (!isAdmin) setSelected(plan.id); }}
+                  whileHover={{ y: isAdmin ? 0 : -2 }}
+                  transition={{ duration: 0.15 }}
+                  className={`relative flex flex-col rounded-2xl ${isAdmin ? "" : "cursor-pointer"}`}
+                  style={{
+                    background: isActive ? plan.activeBg : plan.bg,
+                    border: `1px solid ${isActive ? plan.activeBorder : plan.border}`,
+                    padding: "20px",
+                    transition: "background 0.2s, border-color 0.2s",
+                  }}
+                >
                         {/* Badge */}
                         {(plan.badgeKey || isCurrent) && (
                           <div
@@ -527,7 +543,9 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
 
                         {/* Price */}
                         <div className="mb-5">
-                          {plan.price === 0 ? (
+                          {isAdmin ? (
+                            <div className="text-lg font-bold" style={{ color: "#22d3ee" }}>✓ Included</div>
+                          ) : plan.price === 0 ? (
                             <div className="text-2xl font-bold" style={{ color: plan.color }}>{t('plan_free_label')}</div>
                           ) : (
                             <div className="flex items-end gap-1">
@@ -535,7 +553,7 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
                               <span className="text-xs text-gray-500 mb-1">/ mo</span>
                             </div>
                           )}
-                          {billing === "annual" && plan.price > 0 && (
+                          {!isAdmin && billing === "annual" && plan.price > 0 && (
                             <div className="text-[10px] text-gray-500 mt-0.5">
                               {t('billed_annually').replace('{amount}', String(Math.round(price * 12)))}
                             </div>
@@ -553,7 +571,7 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
                               <span className="text-xs text-gray-300 leading-relaxed">{t(k)}</span>
                             </div>
                           ))}
-                          {plan.missingKeys.map((k) => (
+                          {(isAdmin ? [] : plan.missingKeys).map((k) => (
                             <div key={k} className="flex items-start gap-2 opacity-35">
                               <div className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 flex items-center justify-center">
                                 <div className="w-2.5 h-px bg-gray-600" />
@@ -573,7 +591,7 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
                               color: isActive ? plan.color : "rgba(100,116,139,0.6)",
                             }}
                           >
-                            {isCurrent ? t('active_badge') : isActive ? t('selected_badge') : t('select_badge')}
+                            {isCurrent ? (isAdmin ? 'Active ✓' : t('active_badge')) : isActive ? t('selected_badge') : t('select_badge')}
                           </div>
                         </div>
                       </motion.div>
@@ -588,7 +606,7 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
                 style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
               >
                 {/* Promo code row */}
-                {selected !== "core" && !isSame && (
+                {!isAdmin && selected !== "core" && !isSame && (
                   <div className="px-7 py-3 flex items-center gap-2"
                     style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                     <Ticket className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
@@ -645,13 +663,15 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
                 <div className="flex items-center justify-between px-7 py-4">
                   <div className="flex items-center gap-3">
                     <div className="text-xs text-gray-600">{t('cancel_anytime')}</div>
-                    <button
-                      onClick={() => setReferralOpen(true)}
-                      className="flex items-center gap-1.5 text-[10px] text-gray-600 hover:text-violet-400 transition-colors"
-                    >
-                      <Gift className="w-3 h-3" />
-                      Earn credits
-                    </button>
+                    {!isAdmin && (
+                      <button
+                        onClick={() => setReferralOpen(true)}
+                        className="flex items-center gap-1.5 text-[10px] text-gray-600 hover:text-violet-400 transition-colors"
+                      >
+                        <Gift className="w-3 h-3" />
+                        Earn credits
+                      </button>
+                    )}
                   </div>
                   <div className="flex gap-2.5">
                     <button
@@ -659,35 +679,37 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
                       className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-gray-200 transition-colors"
                       style={{ border: "1px solid rgba(255,255,255,0.07)" }}
                     >
-                      {t('cancel')}
+                      {isAdmin ? "Close" : t('cancel')}
                     </button>
-                    <button
-                      onClick={handleConfirm}
-                      disabled={isSame || confirming}
-                      className="px-5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-                      style={{
-                        background: isSame
-                          ? "rgba(255,255,255,0.05)"
-                          : isDowngrade
-                            ? "rgba(239,68,68,0.15)"
-                            : "linear-gradient(135deg, rgba(139,92,246,0.7), rgba(6,182,212,0.7))",
-                        border: isSame
-                          ? "1px solid rgba(255,255,255,0.08)"
-                          : isDowngrade
-                            ? "1px solid rgba(239,68,68,0.3)"
-                            : "1px solid rgba(139,92,246,0.4)",
-                        color: isSame ? "#4b5563" : isDowngrade ? "#f87171" : "#fff",
-                      }}
-                    >
-                      {confirming && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      {confirming
-                        ? t('processing_text')
-                        : isSame
-                          ? t('current_plan_btn')
-                          : isDowngrade
-                            ? `${t('downgrade_to')} ${PLAN_DEFS.find(p => p.id === selected)?.name}`
-                            : `${t('upgrade_to_plan')} ${PLAN_DEFS.find(p => p.id === selected)?.name}`}
-                    </button>
+                    {!isAdmin && (
+                      <button
+                        onClick={handleConfirm}
+                        disabled={isSame || confirming}
+                        className="px-5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                        style={{
+                          background: isSame
+                            ? "rgba(255,255,255,0.05)"
+                            : isDowngrade
+                              ? "rgba(239,68,68,0.15)"
+                              : "linear-gradient(135deg, rgba(139,92,246,0.7), rgba(6,182,212,0.7))",
+                          border: isSame
+                            ? "1px solid rgba(255,255,255,0.08)"
+                            : isDowngrade
+                              ? "1px solid rgba(239,68,68,0.3)"
+                              : "1px solid rgba(139,92,246,0.4)",
+                          color: isSame ? "#4b5563" : isDowngrade ? "#f87171" : "#fff",
+                        }}
+                      >
+                        {confirming && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {confirming
+                          ? t('processing_text')
+                          : isSame
+                            ? t('current_plan_btn')
+                            : isDowngrade
+                              ? `${t('downgrade_to')} ${PLAN_DEFS.find(p => p.id === selected)?.name}`
+                              : `${t('upgrade_to_plan')} ${PLAN_DEFS.find(p => p.id === selected)?.name}`}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

@@ -46,9 +46,13 @@ function DashboardInner() {
     if (searchParams.get("plan_success") === "1") {
       setPlanSuccess(true);
       const sessionId = searchParams.get("session_id") || undefined;
+      const planParam = searchParams.get("plan") || undefined;
+      const billingParam = searchParams.get("billing") || undefined;
       const url = new URL(window.location.href);
       url.searchParams.delete("plan_success");
       url.searchParams.delete("session_id");
+      url.searchParams.delete("plan");
+      url.searchParams.delete("billing");
       window.history.replaceState({}, "", url.toString());
 
       (async () => {
@@ -57,23 +61,37 @@ function DashboardInner() {
           (typeof window !== "undefined" ? localStorage.getItem("access_token") : null);
         if (!token) return;
         const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-        // Up to 5 attempts: authoritatively sync from provider, then refresh user.
-        for (let attempt = 0; attempt < 5; attempt++) {
+        let activated = false;
+        // Up to 10 attempts with increasing delay: authoritatively sync from provider.
+        for (let attempt = 0; attempt < 10; attempt++) {
           try {
             const res = await fetch("/api/v1/payments/confirm", {
               method: "POST",
               headers,
-              body: JSON.stringify({ session_id: sessionId }),
+              body: JSON.stringify({
+                session_id: sessionId,
+                plan: planParam || undefined,
+                billing: billingParam || undefined,
+              }),
             });
             if (res.ok) {
               const data = await res.json().catch(() => null);
-              await fetchCurrentUser();
-              if (data?.activated || (data?.plan && data.plan !== "core")) break;
+              if (data?.activated || (data?.plan && data.plan !== "core")) {
+                activated = true;
+                await fetchCurrentUser();
+                break;
+              }
             }
           } catch {
             /* transient — retry */
           }
-          await new Promise((r) => setTimeout(r, 1500));
+          await new Promise((r) => setTimeout(r, Math.min(1000 * (attempt + 1), 3000)));
+        }
+        // Final sync regardless of confirm result
+        await fetchCurrentUser();
+        // Auto-hide success banner after 8 seconds even if activation stalled
+        if (!activated) {
+          setTimeout(() => setPlanSuccess(false), 8000);
         }
       })();
     }

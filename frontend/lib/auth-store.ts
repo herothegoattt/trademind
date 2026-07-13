@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import posthog from "posthog-js";
+import { ADMIN_EMAIL } from "./admin";
 
 function identifyUser(user: { id: number; email: string; name?: string }) {
   if (typeof window === "undefined") return;
@@ -9,6 +10,15 @@ function identifyUser(user: { id: number; email: string; name?: string }) {
     email: user.email,
     name: user.name ?? undefined,
   });
+}
+
+// Force plan="apex" for admin — never rely on the backend alone.
+function _ensureAdminPlan<T extends { email?: string; plan?: string } | null>(user: T): T {
+  if (!user) return user;
+  if (user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    return { ...user, plan: "apex" as Plan };
+  }
+  return user;
 }
 
 export type Plan = "core" | "edge" | "apex";
@@ -104,7 +114,7 @@ export const useAuthStore = create<AuthState>()(
           if (!access_token) throw new Error("No token returned from server");
 
           get().setToken(access_token);
-          set({ user: userData as User, isAuthenticated: true, isLoading: false });
+          set({ user: _ensureAdminPlan(userData as User), isAuthenticated: true, isLoading: false });
           // Eligible for the product tour: only a fresh sign-up sets this flag,
           // so existing users who merely log in never see the tour again.
           try {
@@ -155,7 +165,7 @@ export const useAuthStore = create<AuthState>()(
 
           if (userResponse && userResponse.ok) {
             const userData = await userResponse.json();
-            set({ user: userData, isAuthenticated: true, isLoading: false });
+            set({ user: _ensureAdminPlan(userData), isAuthenticated: true, isLoading: false });
             identifyUser(userData);
             posthog.capture("logged_in", { email: userData.email });
             return;
@@ -193,7 +203,7 @@ export const useAuthStore = create<AuthState>()(
 
           const { access_token: jwt, user: userData } = await res.json();
           get().setToken(jwt);
-          set({ user: userData, isAuthenticated: true, isLoading: false });
+          set({ user: _ensureAdminPlan(userData), isAuthenticated: true, isLoading: false });
           identifyUser(userData);
           posthog.capture("logged_in", { method: "google", email: userData.email });
         } catch (error) {
@@ -226,7 +236,7 @@ export const useAuthStore = create<AuthState>()(
 
           if (response.ok) {
             const user = await response.json();
-            set({ user, isAuthenticated: true, token, isLoading: false });
+            set({ user: _ensureAdminPlan(user), isAuthenticated: true, token, isLoading: false });
             identifyUser(user);
             return;
           }
@@ -283,6 +293,10 @@ export const useAuthStore = create<AuthState>()(
         if (!state.token && typeof window !== "undefined") {
           const t = localStorage.getItem("access_token");
           if (t) state.token = t;
+        }
+        // Ensure admin plan on rehydration — never trust stale persisted data.
+        if (state.user) {
+          state.user = _ensureAdminPlan(state.user) as any;
         }
         // A persisted token means the user was logged in — mark them authenticated
         // right away so reloads never bounce to /login. fetchCurrentUser() then

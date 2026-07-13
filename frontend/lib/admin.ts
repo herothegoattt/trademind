@@ -2,6 +2,11 @@
 
 export const ADMIN_EMAIL = "rem.vafin.08@gmail.com";
 
+export function isAdminUser(email?: string | null): boolean {
+  if (!email) return false;
+  return email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+}
+
 export const PLANS = ["core", "edge", "apex"] as const;
 export type Plan = (typeof PLANS)[number];
 

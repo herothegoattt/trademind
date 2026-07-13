@@ -4,6 +4,7 @@ import { ReactNode, useState } from "react";
 import { motion } from "framer-motion";
 import { Lock, Zap, Crown, ChevronRight } from "lucide-react";
 import { useAuthStore } from "@/lib/auth-store";
+import { isAdminUser } from "@/lib/admin";
 import type { Plan } from "@/lib/auth-store";
 
 type Feature =
@@ -93,10 +94,11 @@ interface FeatureGateProps {
 }
 
 export function FeatureGate({ feature, children, inline = false }: FeatureGateProps) {
-  const plan = (useAuthStore((s) => s.user?.plan) as Plan) || "core";
+  const user = useAuthStore((s) => s.user);
+  const plan = (user?.plan as Plan) || "core";
   const cfg = GATE[feature];
 
-  if (planMeetsMinimum(plan, cfg.minPlan)) {
+  if (isAdminUser(user?.email) || planMeetsMinimum(plan, cfg.minPlan)) {
     return <>{children}</>;
   }
 

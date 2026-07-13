@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     lemonsqueezy_api_key: str | None = None
     lemonsqueezy_store_id: str | None = None
     lemonsqueezy_webhook_secret: str | None = None
+    lemonsqueezy_test_mode: bool = True  # bypass LS checkout, activate plans directly
     # Lemon Squeezy Variant IDs — set these in .env after creating products in Lemon Squeezy Dashboard
     ls_variant_edge_monthly: str | None = None
     ls_variant_edge_annual: str | None = None

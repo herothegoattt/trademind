@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { Lock, Zap, Crown } from "lucide-react";
 import { useAuthStore } from "../../lib/auth-store";
+import { isAdminUser } from "../../lib/admin";
 import { SubscriptionModal } from "../dashboard/SubscriptionModal";
 import type { Plan } from "../../lib/auth-store";
 
@@ -38,7 +39,7 @@ export function UpgradeGate({
   const requiredIdx = PLAN_ORDER.indexOf(requiredPlan);
   const hasAccess   = currentIdx >= requiredIdx;
 
-  if (hasAccess) return <>{children}</>;
+  if (isAdminUser(user?.email) || hasAccess) return <>{children}</>;
 
   const PlanIcon = requiredPlan === "apex" ? Crown : Zap;
   const planColor = requiredPlan === "apex" ? "#a78bfa" : "#22d3ee";
@@ -120,6 +121,8 @@ export function PlanBadge({ plan }: { plan: Plan }) {
   const color = plan === "apex" ? "#a78bfa" : "#22d3ee";
   const label = plan === "apex" ? "Apex" : "Edge";
   const Icon  = plan === "apex" ? Crown : Zap;
+
+  if (isAdminUser(user?.email)) return null;
 
   return (
     <>

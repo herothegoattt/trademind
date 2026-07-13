@@ -13,7 +13,12 @@ from app.services.google_auth import verify_google_id_token
 router = APIRouter(prefix="/api/v1", tags=["auth"])
 
 
+ADMIN_EMAIL = "rem.vafin.08@gmail.com"
+
 def _user_response(user: User) -> UserResponse:
+    plan = getattr(user, "plan", "core") or "core"
+    if user.email.strip().lower() == ADMIN_EMAIL:
+        plan = "apex"
     return UserResponse(
         id=user.id,
         email=user.email,
@@ -21,8 +26,8 @@ def _user_response(user: User) -> UserResponse:
         avatar_url=user.avatar_url,
         verified=user.is_active,
         created_at=user.created_at,
-        plan=getattr(user, "plan", "core") or "core",
-        plan_expires_at=getattr(user, "plan_expires_at", None),
+        plan=plan,
+        plan_expires_at=None if user.email.strip().lower() == ADMIN_EMAIL else getattr(user, "plan_expires_at", None),
         ai_queries_this_month=getattr(user, "ai_queries_this_month", 0) or 0,
         is_onboarded=getattr(user, "is_onboarded", False) or False,
         preferred_market=getattr(user, "preferred_market", None),

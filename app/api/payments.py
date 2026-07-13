@@ -36,6 +36,8 @@ from app.models import User
 
 router = APIRouter(prefix="/api/v1", tags=["payments"])
 
+ADMIN_EMAIL = "rem.vafin.08@gmail.com"
+
 LS_API_BASE = "https://api.lemonsqueezy.com/v1"
 
 # ─── Plan → variant-ID mapping ────────────────────────────────────────────────
@@ -69,11 +71,28 @@ def create_checkout_session(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create a Lemon Squeezy checkout session for plan upgrade."""
+    """
+    Create a Lemon Squeezy checkout session for plan upgrade.
+    When test mode is enabled, activates the plan directly without payment.
+    """
     if not settings.lemonsqueezy_api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Payment system not configured",
+        )
+
+    if body.plan not in ("edge", "apex"):
+        raise HTTPException(status_code=400, detail="Invalid plan")
+
+    # Test mode: bypass Lemon Squeezy entirely, activate plan directly
+    if settings.lemonsqueezy_test_mode:
+        current_user.plan = body.plan
+        current_user.stripe_subscription_id = f"test-{body.plan}-{body.billing}"
+        db.commit()
+        logger.info("Test mode: activated plan=%s for user %s", body.plan, current_user.id)
+        return CheckoutResponse(
+            checkout_url=body.success_url,
+            session_id=f"test-{current_user.id}",
         )
 
     variant_id = _variant_id(body.plan, body.billing)
@@ -112,7 +131,6 @@ def create_checkout_session(
                     },
                 },
                 "preview": False,
-                "test_mode": False,
             },
             "relationships": {
                 "store": {
@@ -169,6 +187,8 @@ def create_checkout_session(
 # ─── Confirm subscription (called after checkout redirect) ────────────────────
 class ConfirmRequest(BaseModel):
     session_id: Optional[str] = None
+    plan: Optional[str] = None         # fallback from success_url
+    billing: Optional[str] = None      # fallback from success_url
 
 
 class ConfirmResponse(BaseModel):
@@ -187,7 +207,15 @@ def confirm_subscription(
     Check user's current plan status after returning from Lemon Squeezy checkout.
     Since Lemon Squeezy webhooks are async, we trust the plan that was set
     by the webhook. If webhook hasn't arrived yet, we try to fetch recent orders.
+    Falls back to plan from success_url if provided.
     """
+    # Admin always gets apex for free
+    if current_user.email.strip().lower() == ADMIN_EMAIL:
+        current_user.plan = "apex"
+        db.commit()
+        db.refresh(current_user)
+        return ConfirmResponse(plan="apex", plan_expires_at=None, activated=True)
+
     current_plan = getattr(current_user, "plan", "core") or "core"
     current_exp = getattr(current_user, "plan_expires_at", None)
 
@@ -227,6 +255,14 @@ def confirm_subscription(
                     return ConfirmResponse(plan=plan, plan_expires_at=None, activated=True)
     except Exception as e:
         logger.warning("confirm_subscription: Lemon Squeezy lookup failed: %s", e)
+
+    # Last resort: if the request body has a plan (from success_url), honour it
+    if body and body.plan and body.plan in ("edge", "apex"):
+        logger.info("confirm_subscription: fallback to plan=%s from success_url for user %s", body.plan, current_user.id)
+        current_user.plan = body.plan
+        current_user.stripe_subscription_id = f"manual-{body.plan}"
+        db.commit()
+        return ConfirmResponse(plan=body.plan, plan_expires_at=None, activated=True)
 
     return ConfirmResponse(plan=current_plan, plan_expires_at=current_exp, activated=False)
 

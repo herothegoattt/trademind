@@ -7,6 +7,7 @@
  */
 
 import { useAuthStore } from "./auth-store";
+import { isAdminUser } from "./admin";
 import type { Plan } from "./auth-store";
 
 // ─── Limit definitions ────────────────────────────────────────────────────────
@@ -176,7 +177,9 @@ const LIMITS: Record<Plan, PlanLimits> = {
  *  when the user/plan loads asynchronously or is rehydrated from persistence —
  *  using getState() here would freeze limits at the first (logged-out) render. */
 export function usePlanLimits(): PlanLimits {
-  const plan = useAuthStore((s) => (s.user?.plan as Plan) || "core");
+  const user = useAuthStore((s) => s.user);
+  if (isAdminUser(user?.email)) return LIMITS.apex;
+  const plan = (user?.plan as Plan) || "core";
   return LIMITS[plan] ?? LIMITS.core;
 }
 
