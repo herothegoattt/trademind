@@ -11,6 +11,7 @@ import {
  * Stocks/forex/etc. have no free tick source → rejected with 400 (UI falls back
  * to OHLCV-only VWAP/Profile from /api/backtesting/ohlcv).
  */
+export const dynamic = "force-dynamic";
 
 const BINANCE = "https://api.binance.com/api/v3";
 const BINANCE_US = "https://api.binance.us/api/v3";
@@ -155,7 +156,7 @@ export async function GET(req: NextRequest) {
     // Use the most common per-bar tick as the shared display tick.
     const tickSize = (footprint[footprint.length - 1] as any)?.tick ?? 0;
 
-    return NextResponse.json({
+    const resp = NextResponse.json({
       symbol: symbolRaw,
       binanceSymbol: sym,
       interval: intervalKey,
@@ -167,6 +168,8 @@ export async function GET(req: NextRequest) {
       imbalances,
       tickSize,
     });
+    resp.headers.set("Cache-Control", "no-store, max-age=0");
+    return resp;
   } catch (err: any) {
     const msg = err?.message ?? "Order-flow data unavailable";
     return NextResponse.json({ detail: String(msg).slice(0, 200) }, { status: 502 });
