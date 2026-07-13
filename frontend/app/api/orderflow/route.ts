@@ -13,6 +13,7 @@ import {
  */
 
 const BINANCE = "https://api.binance.com/api/v3";
+const BINANCE_US = "https://api.binance.us/api/v3";
 
 // Interval → Binance string + seconds per bar
 const INTERVAL: Record<string, { binance: string; secs: number }> = {
@@ -35,9 +36,20 @@ function toBinanceSymbol(raw: string): string | null {
 interface Kline { t: number; o: number; h: number; l: number; c: number; v: number; takerBuy: number; }
 
 async function fetchKlines(sym: string, interval: string, limit: number): Promise<Kline[]> {
-  const url = `${BINANCE}/klines?symbol=${sym}&interval=${interval}&limit=${limit}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Binance klines ${res.status}`);
+  const tryFetch = async (base: string) => {
+    const url = `${base}/klines?symbol=${sym}&interval=${interval}&limit=${limit}`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) {
+      if (res.status === 451) return null; // geo-restricted → try alternate
+      throw new Error(`Binance klines ${res.status}`);
+    }
+    return res;
+  };
+
+  let res = await tryFetch(BINANCE);
+  if (!res) res = await tryFetch(BINANCE_US);
+  if (!res) throw new Error("Binance klines 451 — geo-restricted. Try a VPN or use a US-based server.");
+
   const raw: any[] = await res.json();
   return raw.map((k) => ({
     t: Math.floor(k[0] / 1000),
@@ -51,10 +63,17 @@ async function fetchKlines(sym: string, interval: string, limit: number): Promis
 async function fetchAggTrades(sym: string, startMs: number, endMs: number) {
   const out: { p: number; q: number; sell: boolean }[] = [];
   let from = startMs;
+  let useBase = BINANCE;
+  const tryFetch = () =>
+    fetch(`${useBase}/aggTrades?symbol=${sym}&startTime=${from}&endTime=${endMs}&limit=1000`, { cache: "no-store" });
+
   // Hard cap on pages so a busy window can't hang the request.
   for (let page = 0; page < 12 && from < endMs; page++) {
-    const url = `${BINANCE}/aggTrades?symbol=${sym}&startTime=${from}&endTime=${endMs}&limit=1000`;
-    const res = await fetch(url, { cache: "no-store" });
+    let res = await tryFetch();
+    if (!res.ok && res.status === 451) {
+      useBase = BINANCE_US;
+      res = await tryFetch();
+    }
     if (!res.ok) throw new Error(`Binance aggTrades ${res.status}`);
     const raw: any[] = await res.json();
     if (!raw.length) break;
