@@ -407,8 +407,31 @@ async def delete_trade(
 # ---------------------------------------------------------------------------
 import httpx
 
-BINANCE = "https://api.binance.com/api/v3"
+BINANCE_SPOT = "https://api.binance.com/api/v3"
+BINANCE_FUTURES = "https://fapi.binance.com/fapi/v1"
 BINANCE_US = "https://api.binance.us/api/v3"
+
+
+async def _proxy_binance(
+    client: httpx.AsyncClient,
+    path: str,
+    params: dict,
+):
+    """Try Binance spot, then futures, then Binance.US."""
+    for base in (BINANCE_SPOT, BINANCE_FUTURES, BINANCE_US):
+        try:
+            resp = await client.get(
+                f"{base}/{path}",
+                params=params,
+                headers={"Cache-Control": "no-cache"},
+            )
+            if resp.status_code == 451:
+                continue
+            resp.raise_for_status()
+            return JSONResponse(content=resp.json())
+        except httpx.HTTPStatusError:
+            continue
+    raise HTTPException(status_code=502, detail="Binance data unavailable")
 
 
 @router.get("/binance/klines")
@@ -418,20 +441,10 @@ async def binance_klines(
     limit: int = 48,
 ):
     async with httpx.AsyncClient(timeout=15.0) as client:
-        for base in (BINANCE, BINANCE_US):
-            try:
-                resp = await client.get(
-                    f"{base}/klines",
-                    params={"symbol": symbol, "interval": interval, "limit": limit},
-                    headers={"Cache-Control": "no-cache"},
-                )
-                if resp.status_code == 451:
-                    continue
-                resp.raise_for_status()
-                return JSONResponse(content=resp.json())
-            except httpx.HTTPStatusError:
-                continue
-    raise HTTPException(status_code=502, detail="Binance klines unavailable")
+        return await _proxy_binance(
+            client, "klines",
+            {"symbol": symbol, "interval": interval, "limit": limit},
+        )
 
 
 @router.get("/binance/aggTrades")
@@ -442,17 +455,7 @@ async def binance_agg_trades(
     limit: int = 1000,
 ):
     async with httpx.AsyncClient(timeout=15.0) as client:
-        for base in (BINANCE, BINANCE_US):
-            try:
-                resp = await client.get(
-                    f"{base}/aggTrades",
-                    params={"symbol": symbol, "startTime": startTime, "endTime": endTime, "limit": limit},
-                    headers={"Cache-Control": "no-cache"},
-                )
-                if resp.status_code == 451:
-                    continue
-                resp.raise_for_status()
-                return JSONResponse(content=resp.json())
-            except httpx.HTTPStatusError:
-                continue
-    raise HTTPException(status_code=502, detail="Binance aggTrades unavailable")
+        return await _proxy_binance(
+            client, "aggTrades",
+            {"symbol": symbol, "startTime": startTime, "endTime": endTime, "limit": limit},
+        )
