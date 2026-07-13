@@ -272,25 +272,30 @@ export function useLiveOrderFlow(ticker: string, interval: string, enabled: bool
         if (bRes.ok) {
           const json = await bRes.json();
           if (disposed) return;
-          tickRef.current = json.tickSize || 0;
-          cs = json.candles ?? [];
-          ds = json.deltas ?? [];
-          fp = json.footprint ?? [];
-          if (!tickRef.current && cs.length) {
-            const recent = cs.slice(-20);
-            tickRef.current = niceTick(Math.max(...recent.map((c) => c.high)) - Math.min(...recent.map((c) => c.low)));
+          const raw = (json.candles ?? []) as OHLCVBar[];
+          const hasVol = raw.filter((c: OHLCVBar) => c.volume > 0).length >= Math.ceil(raw.length * 0.2);
+          if (hasVol) {
+            // Real Binance data with actual volume
+            tickRef.current = json.tickSize || 0;
+            cs = raw;
+            ds = json.deltas ?? [];
+            fp = json.footprint ?? [];
+            if (!tickRef.current && cs.length) {
+              const recent = cs.slice(-20);
+              tickRef.current = niceTick(Math.max(...recent.map((c) => c.high)) - Math.min(...recent.map((c) => c.low)));
+            }
+            // Seed footprint cells
+            for (const fb of fp) {
+              const bar = barsRef.current.get(fb.time);
+              if (!bar) continue;
+              const m = new Map<number, FootprintCell>();
+              for (const cell of fb.cells) m.set(cell.price, { price: cell.price, buy: cell.buy, sell: cell.sell });
+              bar.fp = m;
+            }
           }
-          // Seed footprint cells
-          for (const fb of fp) {
-            const bar = barsRef.current.get(fb.time);
-            if (!bar) continue;
-            const m = new Map<number, FootprintCell>();
-            for (const cell of fb.cells) m.set(cell.price, { price: cell.price, buy: cell.buy, sell: cell.sell });
-            bar.fp = m;
-          }
-        } else {
-          // Binance unavailable (geo-restriction) — seed from Yahoo OHLCV.
-          // The WebSocket will fill in real footprint once connected.
+        }
+        // Binance unavailable (geo-restriction) or stale → seed from Yahoo OHLCV.
+        if (!cs.length) {
           const yRes = await fetch(`/api/backtesting/ohlcv?symbol=${encodeURIComponent(restSymbol)}&interval=${interval}&period=1mo`);
           if (yRes.ok) {
             const json = await yRes.json();

@@ -562,22 +562,26 @@ export default function OrderFlowLab() {
     const id = ++reqId.current;
     setStaticLoading(true); setStaticError(null);
     try {
-      let binanceFailed = false;
+      let useYahoo = !isCryptoTicker(tk);
       if (isCryptoTicker(tk)) {
         const bRes = await fetch(`/api/orderflow?symbol=${encodeURIComponent(tk)}&interval=${iv}&bars=90&footprintBars=12`);
         if (bRes.ok) {
           const json = await bRes.json();
-          if (id !== reqId.current) return;
-          setStaticData({
-            candles: json.candles, deltas: json.deltas, deltaCumulative: json.deltaCumulative,
-            footprint: json.footprint, imbalances: json.imbalances, tickSize: json.tickSize, real: true,
-          });
-          return;
+          const raw = json.candles ?? [];
+          const hasVol = raw.filter((c: any) => c.volume > 0).length >= Math.ceil(raw.length * 0.2);
+          if (hasVol) {
+            if (id !== reqId.current) return;
+            setStaticData({
+              candles: json.candles, deltas: json.deltas, deltaCumulative: json.deltaCumulative,
+              footprint: json.footprint, imbalances: json.imbalances, tickSize: json.tickSize, real: true,
+            });
+            return;
+          }
         }
-        binanceFailed = true;
-        // Binance unavailable (geo-restriction) → fall through to Yahoo OHLCV
+        useYahoo = true;
+        // Binance unavailable / stale → fall through to Yahoo OHLCV
       }
-      if (binanceFailed || !isCryptoTicker(tk)) {
+      if (useYahoo) {
         const yRes = await fetch(`/api/backtesting/ohlcv?symbol=${encodeURIComponent(tk)}&interval=${iv}&period=${OHLCV_PERIOD[iv]}`);
         const yJson = await yRes.json();
         if (!yRes.ok) throw new Error(yJson.detail || "Failed to load data");
