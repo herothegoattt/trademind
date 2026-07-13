@@ -38,9 +38,8 @@ interface Kline { t: number; o: number; h: number; l: number; c: number; v: numb
 
 async function fetchKlines(sym: string, interval: string, limit: number): Promise<Kline[]> {
   const tryFetch = async (base: string) => {
-    const ts = Date.now();
-    const url = `${base}/klines?symbol=${sym}&interval=${interval}&limit=${limit}&_=${ts}`;
-    const res = await fetch(url);
+    const url = `${base}/klines?symbol=${sym}&interval=${interval}&limit=${limit}`;
+    const res = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
     if (!res.ok) {
       if (res.status === 451) return null; // geo-restricted → try alternate
       throw new Error(`Binance klines ${res.status}`);
@@ -66,10 +65,8 @@ async function fetchAggTrades(sym: string, startMs: number, endMs: number) {
   const out: { p: number; q: number; sell: boolean }[] = [];
   let from = startMs;
   let useBase = BINANCE;
-  const tryFetch = () => {
-    const ts = Date.now();
-    return fetch(`${useBase}/aggTrades?symbol=${sym}&startTime=${from}&endTime=${endMs}&limit=1000&_=${ts}`);
-  };
+  const tryFetch = () =>
+    fetch(`${useBase}/aggTrades?symbol=${sym}&startTime=${from}&endTime=${endMs}&limit=1000`);
 
   // Hard cap on pages so a busy window can't hang the request.
   for (let page = 0; page < 12 && from < endMs; page++) {
