@@ -57,8 +57,11 @@ async function fetchKlines(sym: string, interval: string, limit: number): Promis
       takerBuy: +k[9],
     }));
 
-  const hasRealVolume = (raw: any[]) =>
-    raw.length > 0 && raw.some((k: any) => +k[5] > 0);
+  const hasRealVolume = (raw: any[]) => {
+    if (!raw.length) return false;
+    const withVol = raw.filter((k: any) => +k[5] > 0).length;
+    return withVol >= Math.ceil(raw.length * 0.2); // at least 20% of candles have volume
+  };
 
   // Try spot, futures, then backend proxy
   let res = await tryFetch(BINANCE);
