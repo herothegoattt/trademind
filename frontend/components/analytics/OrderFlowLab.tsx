@@ -32,6 +32,7 @@ const CRYPTO: Sym[] = [
   { label: "DOT", ticker: "DOT-USD" }, { label: "ARB", ticker: "ARB-USD" },
   { label: "OP", ticker: "OP-USD" }, { label: "SUI", ticker: "SUI-USD" },
   { label: "INJ", ticker: "INJ-USD" }, { label: "TIA", ticker: "TIA-USD" },
+  { label: "Gold (PAXG)", ticker: "PAXG-USD", name: "PAX Gold — 1:1 к золоту" },
 ];
 const FUTURES: Sym[] = [
   { label: "ES", ticker: "ES=F", name: "S&P 500" }, { label: "NQ", ticker: "NQ=F", name: "Nasdaq 100" },
