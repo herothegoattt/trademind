@@ -263,14 +263,47 @@ export function useLiveOrderFlow(ticker: string, interval: string, enabled: bool
 
     const seed = async () => {
       try {
-        const res = await fetch(`/api/orderflow?symbol=${encodeURIComponent(restSymbol)}&interval=${interval}&bars=${MAX_BARS}&footprintBars=${MAX_FP_BARS}`);
-        const json = await res.json();
-        if (disposed) return;
-        if (!res.ok) throw new Error(json.detail || "Не удалось загрузить order flow");
+        let cs: OHLCVBar[] = [];
+        let ds: number[] = [];
+        let fp: FootprintBar[] = [];
 
-        tickRef.current = json.tickSize || 0;
-        const cs: OHLCVBar[] = json.candles ?? [];
-        const ds: number[] = json.deltas ?? [];
+        // Try Binance route first (works for most crypto).
+        const bRes = await fetch(`/api/orderflow?symbol=${encodeURIComponent(restSymbol)}&interval=${interval}&bars=${MAX_BARS}&footprintBars=${MAX_FP_BARS}`);
+        if (bRes.ok) {
+          const json = await bRes.json();
+          if (disposed) return;
+          tickRef.current = json.tickSize || 0;
+          cs = json.candles ?? [];
+          ds = json.deltas ?? [];
+          fp = json.footprint ?? [];
+          if (!tickRef.current && cs.length) {
+            const recent = cs.slice(-20);
+            tickRef.current = niceTick(Math.max(...recent.map((c) => c.high)) - Math.min(...recent.map((c) => c.low)));
+          }
+          // Seed footprint cells
+          for (const fb of fp) {
+            const bar = barsRef.current.get(fb.time);
+            if (!bar) continue;
+            const m = new Map<number, FootprintCell>();
+            for (const cell of fb.cells) m.set(cell.price, { price: cell.price, buy: cell.buy, sell: cell.sell });
+            bar.fp = m;
+          }
+        } else {
+          // Binance unavailable (geo-restriction) — seed from Yahoo OHLCV.
+          // The WebSocket will fill in real footprint once connected.
+          const yRes = await fetch(`/api/backtesting/ohlcv?symbol=${encodeURIComponent(restSymbol)}&interval=${interval}&period=1mo`);
+          if (yRes.ok) {
+            const json = await yRes.json();
+            if (disposed) return;
+            cs = (json.candles as OHLCVBar[]).slice(-MAX_BARS);
+            ds = cs.map(estimateDeltaFromOHLCV);
+            if (cs.length) {
+              const recent = cs.slice(-20);
+              tickRef.current = niceTick(Math.max(...recent.map((c) => c.high)) - Math.min(...recent.map((c) => c.low)));
+            }
+          }
+        }
+
         for (let i = 0; i < cs.length; i++) {
           const c = cs[i];
           const delta = ds[i] ?? 0;
@@ -280,18 +313,6 @@ export function useLiveOrderFlow(ticker: string, interval: string, enabled: bool
             time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
             volume: c.volume, buy, sell, fp: null, closed: true,
           });
-        }
-        // Seed footprint cells for the recent bars.
-        for (const fb of (json.footprint ?? []) as FootprintBar[]) {
-          const bar = barsRef.current.get(fb.time);
-          if (!bar) continue;
-          const m = new Map<number, FootprintCell>();
-          for (const cell of fb.cells) m.set(cell.price, { price: cell.price, buy: cell.buy, sell: cell.sell });
-          bar.fp = m;
-        }
-        if (!tickRef.current && cs.length) {
-          const recent = cs.slice(-20);
-          tickRef.current = niceTick(Math.max(...recent.map((c) => c.high)) - Math.min(...recent.map((c) => c.low)));
         }
         dirtyRef.current = true;
         flush();

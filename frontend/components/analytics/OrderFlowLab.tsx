@@ -562,21 +562,27 @@ export default function OrderFlowLab() {
     const id = ++reqId.current;
     setStaticLoading(true); setStaticError(null);
     try {
+      let binanceFailed = false;
       if (isCryptoTicker(tk)) {
-        const res = await fetch(`/api/orderflow?symbol=${encodeURIComponent(tk)}&interval=${iv}&bars=90&footprintBars=12`);
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.detail || "Failed to load order flow");
+        const bRes = await fetch(`/api/orderflow?symbol=${encodeURIComponent(tk)}&interval=${iv}&bars=90&footprintBars=12`);
+        if (bRes.ok) {
+          const json = await bRes.json();
+          if (id !== reqId.current) return;
+          setStaticData({
+            candles: json.candles, deltas: json.deltas, deltaCumulative: json.deltaCumulative,
+            footprint: json.footprint, imbalances: json.imbalances, tickSize: json.tickSize, real: true,
+          });
+          return;
+        }
+        binanceFailed = true;
+        // Binance unavailable (geo-restriction) → fall through to Yahoo OHLCV
+      }
+      if (binanceFailed || !isCryptoTicker(tk)) {
+        const yRes = await fetch(`/api/backtesting/ohlcv?symbol=${encodeURIComponent(tk)}&interval=${iv}&period=${OHLCV_PERIOD[iv]}`);
+        const yJson = await yRes.json();
+        if (!yRes.ok) throw new Error(yJson.detail || "Failed to load data");
         if (id !== reqId.current) return;
-        setStaticData({
-          candles: json.candles, deltas: json.deltas, deltaCumulative: json.deltaCumulative,
-          footprint: json.footprint, imbalances: json.imbalances, tickSize: json.tickSize, real: true,
-        });
-      } else {
-        const res = await fetch(`/api/backtesting/ohlcv?symbol=${encodeURIComponent(tk)}&interval=${iv}&period=${OHLCV_PERIOD[iv]}`);
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.detail || "Failed to load data");
-        if (id !== reqId.current) return;
-        const candles: OHLCVBar[] = (json.candles as OHLCVBar[]).slice(-120);
+        const candles: OHLCVBar[] = (yJson.candles as OHLCVBar[]).slice(-120);
         const deltas = candles.map(estimateDeltaFromOHLCV);
         let cum = 0; const deltaCumulative = deltas.map((d) => (cum += d));
         setStaticData({ candles, deltas, deltaCumulative, footprint: [], imbalances: [], tickSize: 0, real: false });
