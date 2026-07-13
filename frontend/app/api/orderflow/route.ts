@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 const BINANCE = "https://api.binance.com/api/v3";
 const BINANCE_US = "https://api.binance.us/api/v3";
+const BACKEND = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "";
 
 // Interval → Binance string + seconds per bar
 const INTERVAL: Record<string, { binance: string; secs: number }> = {
@@ -47,17 +48,35 @@ async function fetchKlines(sym: string, interval: string, limit: number): Promis
     return res;
   };
 
+  const parseKlines = (raw: any[]) =>
+    raw.map((k: any) => ({
+      t: Math.floor(k[0] / 1000),
+      o: +k[1], h: +k[2], l: +k[3], c: +k[4],
+      v: +k[5],
+      takerBuy: +k[9],
+    }));
+
   let res = await tryFetch(BINANCE);
   if (!res) res = await tryFetch(BINANCE_US);
-  if (!res) throw new Error("Binance klines 451 — geo-restricted. Try a VPN or use a US-based server.");
+  if (res) {
+    const raw: any[] = await res.json();
+    if (raw.length) {
+      // Binance US returns all-identical OHLC with volume=0 for low-liquidity
+      // pairs like PAXGUSDT → route through the Render backend (Frankfurt).
+      const first = raw[0];
+      const stale = raw.every((k: any) => +k[1] === +first[1] && +k[5] === 0);
+      if (!stale) return parseKlines(raw);
+    }
+  }
 
-  const raw: any[] = await res.json();
-  return raw.map((k) => ({
-    t: Math.floor(k[0] / 1000),
-    o: +k[1], h: +k[2], l: +k[3], c: +k[4],
-    v: +k[5],
-    takerBuy: +k[9],
-  }));
+  // Fallback via the backend proxy (Render, Frankfurt — full Binance.com access)
+  if (!BACKEND) throw new Error("No backend URL configured for proxy fallback");
+  const proxyUrl = `${BACKEND}/api/v1/binance/klines?symbol=${sym}&interval=${interval}&limit=${limit}`;
+  const proxyRes = await fetch(proxyUrl, { headers: { "Cache-Control": "no-cache" } });
+  if (!proxyRes.ok) throw new Error(`Backend proxy klines ${proxyRes.status}`);
+  const proxyRaw: any[] = await proxyRes.json();
+  if (!proxyRaw.length) throw new Error("No data from backend proxy");
+  return parseKlines(proxyRaw);
 }
 
 /** Page aggTrades across [startMs, endMs) — Binance caps 1000/req. */
@@ -65,17 +84,30 @@ async function fetchAggTrades(sym: string, startMs: number, endMs: number) {
   const out: { p: number; q: number; sell: boolean }[] = [];
   let from = startMs;
   let useBase = BINANCE;
-  const tryFetch = () =>
-    fetch(`${useBase}/aggTrades?symbol=${sym}&startTime=${from}&endTime=${endMs}&limit=1000`);
+  let triedBackend = false;
 
-  // Hard cap on pages so a busy window can't hang the request.
-  for (let page = 0; page < 12 && from < endMs; page++) {
-    let res = await tryFetch();
-    if (!res.ok && res.status === 451) {
-      useBase = BINANCE_US;
-      res = await tryFetch();
+  const doFetch = async () => {
+    if (triedBackend && BACKEND) {
+      return fetch(
+        `${BACKEND}/api/v1/binance/aggTrades?symbol=${sym}&startTime=${from}&endTime=${endMs}&limit=1000`,
+        { headers: { "Cache-Control": "no-cache" } }
+      );
     }
-    if (!res.ok) throw new Error(`Binance aggTrades ${res.status}`);
+    const url = `${useBase}/aggTrades?symbol=${sym}&startTime=${from}&endTime=${endMs}&limit=1000`;
+    return fetch(url);
+  };
+
+  for (let page = 0; page < 12 && from < endMs; page++) {
+    let res = await doFetch();
+    if (!triedBackend && res.status === 451) {
+      useBase = BINANCE_US;
+      res = await doFetch();
+    }
+    if (!res.ok) {
+      // Fall back to backend proxy if direct Binance fails
+      if (!triedBackend && BACKEND) { triedBackend = true; res = await doFetch(); }
+      if (!res.ok) throw new Error(`Binance aggTrades ${res.status}`);
+    }
     const raw: any[] = await res.json();
     if (!raw.length) break;
     for (const a of raw) out.push({ p: +a.p, q: +a.q, sell: a.m === true });

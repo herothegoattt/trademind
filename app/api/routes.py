@@ -6,6 +6,7 @@ All decision/insight endpoints require auth and are scoped by user_id.
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -396,3 +397,62 @@ async def delete_trade(
     db.commit()
     
     return {"message": "Trade deleted successfully"}
+
+
+# ---------------------------------------------------------------------------
+# Binance proxy — Vercel (US) can't fetch real PAXGUSDT data because
+# api.binance.com returns US-limited data from AWS us-east-1.  The backend
+# (Render, Frankfurt) has unrestricted access, so we proxy raw klines &
+# aggTrades through it.
+# ---------------------------------------------------------------------------
+import httpx
+
+BINANCE = "https://api.binance.com/api/v3"
+BINANCE_US = "https://api.binance.us/api/v3"
+
+
+@router.get("/binance/klines")
+async def binance_klines(
+    symbol: str,
+    interval: str = "5m",
+    limit: int = 48,
+):
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for base in (BINANCE, BINANCE_US):
+            try:
+                resp = await client.get(
+                    f"{base}/klines",
+                    params={"symbol": symbol, "interval": interval, "limit": limit},
+                    headers={"Cache-Control": "no-cache"},
+                )
+                if resp.status_code == 451:
+                    continue
+                resp.raise_for_status()
+                return JSONResponse(content=resp.json())
+            except httpx.HTTPStatusError:
+                continue
+    raise HTTPException(status_code=502, detail="Binance klines unavailable")
+
+
+@router.get("/binance/aggTrades")
+async def binance_agg_trades(
+    symbol: str,
+    startTime: int,
+    endTime: int,
+    limit: int = 1000,
+):
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for base in (BINANCE, BINANCE_US):
+            try:
+                resp = await client.get(
+                    f"{base}/aggTrades",
+                    params={"symbol": symbol, "startTime": startTime, "endTime": endTime, "limit": limit},
+                    headers={"Cache-Control": "no-cache"},
+                )
+                if resp.status_code == 451:
+                    continue
+                resp.raise_for_status()
+                return JSONResponse(content=resp.json())
+            except httpx.HTTPStatusError:
+                continue
+    raise HTTPException(status_code=502, detail="Binance aggTrades unavailable")
