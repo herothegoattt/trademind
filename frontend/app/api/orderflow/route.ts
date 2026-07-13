@@ -57,26 +57,23 @@ async function fetchKlines(sym: string, interval: string, limit: number): Promis
       takerBuy: +k[9],
     }));
 
-  const isStale = (raw: any[]) => {
-    if (!raw.length) return false;
-    const first = raw[0];
-    return raw.every((k: any) => +k[1] === +first[1] && +k[5] === 0);
-  };
+  const hasRealVolume = (raw: any[]) =>
+    raw.length > 0 && raw.some((k: any) => +k[5] > 0);
 
-  // Try spot, futures, then backend proxy (which tries spot → futures → binance.us)
+  // Try spot, futures, then backend proxy
   let res = await tryFetch(BINANCE);
   if (res) {
     const raw: any[] = await res.json();
-    if (!isStale(raw)) return parseKlines(raw);
+    if (hasRealVolume(raw)) return parseKlines(raw);
   }
 
   res = await tryFetch(BINANCE_FUTURES);
   if (res) {
     const raw: any[] = await res.json();
-    if (!isStale(raw)) return parseKlines(raw);
+    if (hasRealVolume(raw)) return parseKlines(raw);
   }
 
-  // Fallback via backend proxy
+  // Fallback via backend proxy (tries spot → futures → binance.us)
   if (BACKEND) {
     const proxyUrl = `${BACKEND}/api/v1/binance/klines?symbol=${sym}&interval=${interval}&limit=${limit}`;
     const proxyRes = await fetch(proxyUrl, { headers: { "Cache-Control": "no-cache" } });
@@ -87,11 +84,6 @@ async function fetchKlines(sym: string, interval: string, limit: number): Promis
   }
 
   throw new Error("No real-time data available for this symbol");
-}
-
-/** AggTrades endpoint for a given API base URL. */
-function aggTradeURL(base: string, sym: string, from: number, endMs: number) {
-  return `${base}/aggTrades?symbol=${sym}&startTime=${from}&endTime=${endMs}&limit=1000`;
 }
 
 /** Page aggTrades across [startMs, endMs) — Binance caps 1000/req. */
@@ -109,7 +101,8 @@ async function fetchAggTrades(sym: string, startMs: number, endMs: number) {
         { headers: { "Cache-Control": "no-cache" } }
       );
     }
-    return fetch(aggTradeURL(bases[bi], sym, from, endMs));
+    const url = `${bases[bi]}/aggTrades?symbol=${sym}&startTime=${from}&endTime=${endMs}&limit=1000`;
+    return fetch(url);
   };
 
   for (let page = 0; page < 12 && from < endMs; page++) {
@@ -123,6 +116,11 @@ async function fetchAggTrades(sym: string, startMs: number, endMs: number) {
       if (!res.ok) throw new Error(`Binance aggTrades ${res.status}`);
     }
     const raw: any[] = await res.json();
+    // Try next base if current returned empty trades
+    if (!raw.length && bi + 1 < bases.length) {
+      bi++;
+      continue; // retry this page with the next base
+    }
     if (!raw.length) break;
     for (const a of raw) out.push({ p: +a.p, q: +a.q, sell: a.m === true });
     const lastT = raw[raw.length - 1].T;
