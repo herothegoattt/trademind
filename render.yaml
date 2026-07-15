@@ -22,6 +22,10 @@ services:
         value: https://trademindtech.com
       - key: DEBUG
         value: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        value: TradeMind <noreply@trademind.ai>
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: GEMINI_API_KEY
