@@ -1,6 +1,6 @@
 """Auth routes: register, login, me, logout, Google sign-in."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -9,6 +9,7 @@ from app.schemas.auth import Token, UserCreate, UserLogin, UserResponse, GoogleT
 from app.core.security import hash_password, verify_password, create_access_token
 from app.api.deps import get_current_user
 from app.services.google_auth import verify_google_id_token
+from app.services.email_service import send_welcome_email
 
 router = APIRouter(prefix="/api/v1", tags=["auth"])
 
@@ -37,6 +38,7 @@ def _user_response(user: User) -> UserResponse:
 @router.post("/auth/register", response_model=UserResponse)
 def register(
     data: UserCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> User:
     """Register a new user (email + password)."""
@@ -54,6 +56,9 @@ def register(
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    background_tasks.add_task(send_welcome_email, email, data.name)
+
     return _user_response(user)
 
 
@@ -164,6 +169,7 @@ async def onboarding(
 @router.post("/auth/google-access")
 async def google_login_access_token(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """Sign in with Google access_token (from OAuth2 flow). Returns JWT + user."""
@@ -208,6 +214,7 @@ async def google_login_access_token(
             db.add(user)
             db.commit()
             db.refresh(user)
+            background_tasks.add_task(send_welcome_email, email, name)
 
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User inactive")
@@ -230,6 +237,7 @@ def logout():
 @router.post("/auth/google", response_model=Token)
 async def google_login(
     data: GoogleToken,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> Token:
     """Sign in with Google id_token. Creates user if first time."""
@@ -261,6 +269,7 @@ async def google_login(
             db.add(user)
             db.commit()
             db.refresh(user)
+            background_tasks.add_task(send_welcome_email, email, name)
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User inactive")
     return Token(access_token=create_access_token(str(user.id)))

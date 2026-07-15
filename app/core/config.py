@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     ls_variant_apex_monthly: str | None = None
     ls_variant_apex_annual: str | None = None
 
+    # Resend (transactional emails)
+    resend_api_key: str | None = None
+    resend_from_email: str = "TradeMind <noreply@trademind.ai>"
+
     # Market Data APIs
     oanda_api_key: str | None = None  # OANDA v20 API key (https://developer.oanda.com)
     oanda_account_id: str | None = None  # OANDA account ID (e.g., 101-001-123456-001)
