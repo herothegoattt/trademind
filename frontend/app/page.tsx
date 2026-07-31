@@ -2075,6 +2075,15 @@ function SlideCTA({ active, onLaunch }: { active: boolean; onLaunch: (plan?: str
           <span style={{ width:5, height:5, borderRadius:"50%", background:VIO, boxShadow:`0 0 7px ${VIO}`, animation:"tmPulse 1.8s infinite", flexShrink:0 }} />
           {t("lp_cta_badge")}
         </motion.div>
+        <motion.div initial={{ opacity:0, y:24, scale:.92 }} animate={active?{ opacity:1, y:0, scale:1 }:{}} transition={{ duration:.7, delay:.12 }}
+          style={{ position:"relative", marginBottom:26 }}>
+          <div style={{ position:"absolute", inset:"-14% -10%", background:"radial-gradient(ellipse 60% 50% at 50% 50%,rgba(139,92,246,.28) 0%,transparent 70%)", filter:"blur(22px)", pointerEvents:"none" }} />
+          <motion.div animate={{ y:[0,-10,0] }} transition={{ duration:6, ease:"easeInOut", repeat:Infinity }}
+            style={{ height:"min(36vh, 400px)", width:"auto", maxWidth:"min(86vw, 620px)", position:"relative", margin:"0 auto" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/edge.jpg" alt="" style={{ width:"auto", height:"100%", maxWidth:"100%", display:"block", margin:"0 auto", borderRadius:18, border:"1px solid rgba(255,255,255,.09)", boxShadow:"0 30px 90px rgba(0,0,0,.55)" }} />
+          </motion.div>
+        </motion.div>
         <motion.h2 initial={{ opacity:0, y:28 }} animate={active?{ opacity:1, y:0 }:{}} transition={{ duration:.7, delay:.18 }}
           style={{ margin:"0 0 18px", fontWeight:800, letterSpacing:"-.045em", lineHeight:1.08,
             fontSize:"clamp(2.4rem,6vw,4.8rem)",
