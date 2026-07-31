@@ -10,10 +10,6 @@ services:
     startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 10000
     healthCheckPath: /api/v1/health
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: trademind-db
-          property: connectionString
       - key: SECRET_KEY
         value: 28da456567720e9bac4454d4c8b0df54898a3be99a42abc5809cae1d33d932a4
       - key: CORS_ORIGINS
