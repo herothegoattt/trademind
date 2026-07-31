@@ -33,6 +33,7 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.database import get_db
 from app.models import User
+from app.services.email_service import send_payment_success_email
 
 router = APIRouter(prefix="/api/v1", tags=["payments"])
 
@@ -351,6 +352,7 @@ def _handle_order_created(db: Session, event: dict):
     user.stripe_subscription_id = str(data.get("id", ""))
     db.commit()
     logger.info("User %d upgraded to plan=%s via order", user.id, plan)
+    send_payment_success_email(user.email, user.name or "Trader", plan)
 
 
 def _handle_subscription_created(db: Session, event: dict):
@@ -389,6 +391,7 @@ def _handle_subscription_created(db: Session, event: dict):
 
     db.commit()
     logger.info("User %d subscribed to plan=%s (subscription)", user.id, plan)
+    send_payment_success_email(user.email, user.name or "Trader", plan)
 
 
 def _handle_subscription_updated(db: Session, event: dict):

@@ -1,169 +1,87 @@
 import logging
-import resend
+import os
 
-from app.core.config import settings
+import httpx
 
 logger = logging.getLogger(__name__)
 
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_API_URL = "https://api.resend.com/emails"
+FROM_EMAIL = "TradeMind <onboarding@resend.dev>"
+CDN = "https://4fvmzdl58wa7-f2vdnw7hagltlkxmc-vgbw7jbg4jny.canva-cdn.email"
 
-WELCOME_HTML = """<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background-color:#0f0f1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0">
-    <tr>
-      <td align="center" style="padding:60px 20px;">
-        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
-          <tr>
-            <td align="center" style="padding:0 0 30px;">
-              <table cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:10px;padding:12px 24px;">
-                    <span style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:1px;">TRADEMIND</span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="background:#1a1a2e;border-radius:16px;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:48px 40px 36px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.06);">
-                    <div style="width:64px;height:64px;background:linear-gradient(135deg,#6366f1,#a78bfa);border-radius:16px;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;">
-                      <span style="font-size:32px;line-height:1;">&#x1F4C8;</span>
-                    </div>
-                    <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;letter-spacing:-0.3px;">
-                      Добро пожаловать, {name}!
-                    </h1>
-                    <p style="color:#94a3b8;margin:10px 0 0;font-size:15px;line-height:1.5;">
-                      Ваш аккаунт успешно создан
-                    </p>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:40px;">
-                    <p style="color:#cbd5e1;font-size:15px;line-height:1.7;margin:0 0 24px;">
-                      Рады приветствовать вас в <strong style="color:#e2e8f0;">TradeMind</strong> &mdash; 
-                      AI-платформе для профессионального анализа торговых решений.
-                    </p>
+TEMPLATE_HEAD = """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office"><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="preload" as="image" href="__CDN__/0e15807c475c2e4171f1964abcc5aae9.jpg"><link rel="preload" as="image" href="__CDN__/04bbcb2023758150951da63209bb1e2d.png"><link rel="preload" as="image" href="__CDN__/d29e600c98f933090aafec2cabe052b6.png"><link rel="preload" as="image" href="__CDN__/fe3081d983323fe53e04c80f1d4b576d.png"><link rel="preload" as="image" href="__CDN__/e90990c28945e3c0f8463a2331ec31a4.png"><link rel="preload" as="image" href="__CDN__/25ae68dcb4d13bea0a1d45a6bfeff963.png"><link rel="preload" as="image" href="__CDN__/35558dfcfbfbca9902c30b3108f26c25.jpg"><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="format-detection" content="telephone=no, date=no, address=no, email=no"><meta name="x-apple-disable-message-reformatting"><style>body{margin:0;padding:0}table{mso-table-lspace:0;mso-table-rspace:0}p,span,h1,h2,h3,h4,h5,h6{margin:0;padding:0}p{line-height:inherit}a[x-apple-data-detectors]{color:inherit!important;text-decoration:inherit!important}#MessageViewBody a{color:inherit;text-decoration:none}img+div{display:none}@media (max-width:599px){.ecw{width:100%!important;min-width:0!important}}</style><!--[if mso]><div><noscript><xml><w:WordDocument xmlns:w="urn:schemas-microsoft-com:office:word"><w:DontUseAdvancedTypographyReadingMail/></w:WordDocument><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript></div><![endif]--><!--[if !mso]><!--><style>@media (max-width:450px){.l0-c0,.l0-c1,.l0-c2{display:block!important;width:100%!important}.l0-s0,.l0-s1{display:block!important;width:auto!important;height:16px;font-size:0}}</style><!--<![endif]--><style>@media(max-width:550px){.ers-fs-213{font-size:18.7px!important}.ers-fs-427{font-size:29.4px!important}}</style></head>"""
 
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="background:rgba(99,102,241,0.08);border-radius:12px;padding:20px;border:1px solid rgba(99,102,241,0.15);">
-                          <table width="100%" cellpadding="0" cellspacing="0">
-                            <tr>
-                              <td width="40" valign="top" style="padding:0 16px 0 0;">
-                                <span style="font-size:20px;line-height:1;">&#x1F4DD;</span>
-                              </td>
-                              <td>
-                                <h3 style="color:#e2e8f0;margin:0 0 4px;font-size:15px;font-weight:600;">Дневник сделок</h3>
-                                <p style="color:#94a3b8;margin:0;font-size:14px;line-height:1.5;">
-                                  Записывайте и структурируйте каждую сделку
-                                </p>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding:8px 0;"></td>
-                      </tr>
-                      <tr>
-                        <td style="background:rgba(139,92,246,0.08);border-radius:12px;padding:20px;border:1px solid rgba(139,92,246,0.15);">
-                          <table width="100%" cellpadding="0" cellspacing="0">
-                            <tr>
-                              <td width="40" valign="top" style="padding:0 16px 0 0;">
-                                <span style="font-size:20px;line-height:1;">&#x1F916;</span>
-                              </td>
-                              <td>
-                                <h3 style="color:#e2e8f0;margin:0 0 4px;font-size:15px;font-weight:600;">AI-анализ</h3>
-                                <p style="color:#94a3b8;margin:0;font-size:14px;line-height:1.5;">
-                                  Получайте глубинный разбор ошибок и паттернов
-                                </p>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding:8px 0;"></td>
-                      </tr>
-                      <tr>
-                        <td style="background:rgba(167,139,250,0.08);border-radius:12px;padding:20px;border:1px solid rgba(167,139,250,0.15);">
-                          <table width="100%" cellpadding="0" cellspacing="0">
-                            <tr>
-                              <td width="40" valign="top" style="padding:0 16px 0 0;">
-                                <span style="font-size:20px;line-height:1;">&#x1F3E6;</span>
-                              </td>
-                              <td>
-                                <h3 style="color:#e2e8f0;margin:0 0 4px;font-size:15px;font-weight:600;">Дашборд</h3>
-                                <p style="color:#94a3b8;margin:0;font-size:14px;line-height:1.5;">
-                                  Отслеживайте метрики и прогресс в реальном времени
-                                </p>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                    </table>
+TEMPLATE_HERO = """<body style="width:100%;-webkit-text-size-adjust:100%;text-size-adjust:100%;background-color:#f0f1f5;margin:0;padding:0"><table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#f0f1f5" style="background-color:#f0f1f5"><tbody><tr><td style="background-color:#f0f1f5"><!--[if mso]><center><table align="center" border="0" cellpadding="0" cellspacing="0" width="600"><tbody><tr><td><![endif]--><table align="center" width="600" border="0" cellpadding="0" cellspacing="0" role="presentation" class="ecw" style="max-width:600px;min-height:600px;margin:0 auto;background-color:#000000;width:600px;min-width:600px"><tbody><tr><td style="vertical-align:top"></td></tr><tr><td style="vertical-align:top"><table cellpadding="0" cellspacing="0" border="0" style="width:100%"><tbody><tr><td align="center"><table cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px"><tbody><tr><td style="width:100%"><img src="__CDN__/0e15807c475c2e4171f1964abcc5aae9.jpg" width="600" height="649" style="display:block;width:600px;height:auto;max-width:100%"></td></tr></tbody></table></td></tr></tbody></table></td></tr>"""
 
-                    <div style="text-align:center;margin:36px 0 0;">
-                      <a href="{frontend_url}/app"
-                         style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#ffffff;text-decoration:none;
-                                padding:16px 48px;border-radius:12px;font-size:16px;font-weight:700;letter-spacing:0.3px;
-                                box-shadow:0 4px 14px rgba(99,102,241,0.4);">
-                        Перейти в дашборд
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="background:#111827;padding:24px 40px;text-align:center;border-top:1px solid rgba(255,255,255,0.06);">
-                    <p style="color:#64748b;font-size:13px;margin:0 0 6px;line-height:1.5;">
-                      TradeMind AI &mdash; ваш персональный AI-ассистент в трейдинге
-                    </p>
-                    <p style="color:#475569;font-size:12px;margin:0;">
-                      Если вы не создавали аккаунт, просто проигнорируйте это письмо
-                    </p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>"""
+TEMPLATE_GREETING = """<tr><td style="vertical-align:top;padding:0px 0px 0px 0px"><table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation"><tbody><tr><td style="padding:24px 0 24px 0;vertical-align:top"><table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="color:#000;font-style:normal;font-weight:normal;font-size:16px;line-height:1.4;letter-spacing:0;text-align:left;direction:ltr;border-collapse:collapse;font-family:Arial, Helvetica, sans-serif;white-space:normal;word-wrap:break-word;word-break:break-word"><tbody><tr><td dir="ltr" class="ers-fs-213" style="color:#edf0f2;font-size:21.3px;white-space:pre-wrap;text-align:center;padding:0px 24px 16px;line-height:1.4;mso-line-height-alt:29.8px">__GREETING__<br></td></tr><tr><td style="padding:0px 24px 16px"><table cellpadding="0" cellspacing="0" border="0" style="width:100%"><tbody><tr><td align="center"><!--[if mso]><table cellpadding="0" cellspacing="0" border="0" width="226" style="width:226px"><tbody><tr><td><![endif]--><table cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:226px"><tbody><tr><td style="width:100%"><!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="__BUTTON_URL__" style="height:52px;width:226px;v-text-anchor:middle;" arcsize="49%" fillcolor="#0b00cf"><v:stroke dashstyle="Solid" weight="0px" color="#0b00cf"/><w:anchorlock/><v:textbox inset="0px,0px,0px,0px"><center dir="false" style="color:#edf0f2;font-family:sans-serif;font-size:20.3px;font-weight:700">__BUTTON_TEXT__</center></v:textbox></v:roundrect><![endif]--><!--[if !mso]><!--><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;max-width:100%;border-collapse:separate;border-spacing:0"><tbody><tr><td bgcolor="#0b00cf" style="background-color:#0b00cf;background:linear-gradient(135deg,#0b00cf,#7d85ff);border-radius:25px"><a href="__BUTTON_URL__" target="_blank" style="color:#edf0f2;text-decoration:none;display:block;padding:14px 24px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:20.3px;font-weight:700;line-height:28.4px"><span style="word-break:break-word;color:#edf0f2">__BUTTON_TEXT__</span></a></td></tr></tbody></table><!--<![endif]--></td></tr></tbody></table><!--[if mso]></td></tr></tbody></table><![endif]--></td></tr></tbody></table></td></tr>"""
+
+TEMPLATE_STEPS_HEAD = """<tr><td dir="ltr" style="font-size:14.7px;padding:0px 24px 16px;line-height:22.4px;text-decoration:none">&nbsp;</td></tr><tr><td dir="ltr" class="ers-fs-427" style="color:#a194ff;font-size:42.7px;font-weight:700;letter-spacing:-0.01em;white-space:pre-wrap;text-align:center;padding:0px 24px 16px;line-height:1.4">__HEADING__<br></td></tr>"""
+
+TEMPLATE_STEPS = """<tr><td style="padding:0px 24px 16px"><table border="0" cellpadding="0" cellspacing="0" class="layout-0" align="center" style="display:table;border-spacing:0;border-collapse:separate;width:100%;max-width:100%;table-layout:fixed;margin:0 auto"><tbody><tr><td style="text-align:center;padding:18px 24px"><table border="0" cellpadding="0" cellspacing="0" style="border-spacing:0;border-collapse:separate;width:100%;max-width:462px;table-layout:fixed;margin:0 auto"><tbody><tr>
+<td width="29.29%" style="width:29.29%;box-sizing:border-box;vertical-align:top"><table border="0" cellpadding="0" cellspacing="0" style="border-spacing:0;border-collapse:separate;width:100%;table-layout:fixed"><tbody><tr><td><table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="font-size:16px;line-height:1.4;font-family:Arial,Helvetica,sans-serif"><tbody><tr><td style="padding:0px 0px 16px"><table cellpadding="0" cellspacing="0" border="0" style="width:100%"><tbody><tr><td align="center"><table cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:63px"><tbody><tr><td style="width:100%"><img src="__CDN__/04bbcb2023758150951da63209bb1e2d.png" width="63" height="64" style="display:block;width:63px;height:auto;max-width:100%"></td></tr></tbody></table></td></tr></tbody></table></td></tr><tr><td dir="ltr" style="color:#edf0f2;font-size:16px;text-align:center;padding:0px 0px 16px;line-height:1.4">__STEP1__</td></tr></tbody></table></td></tr></tbody></table></td>
+<td width="28" style="width:28px;font-size:0">&nbsp;</td>
+<td width="30.10%" style="width:30.10%;box-sizing:border-box;vertical-align:top"><table border="0" cellpadding="0" cellspacing="0" style="border-spacing:0;border-collapse:separate;width:100%;table-layout:fixed"><tbody><tr><td><table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="font-size:16px;line-height:1.4;font-family:Arial,Helvetica,sans-serif"><tbody><tr><td style="padding:0px 0px 16px"><table cellpadding="0" cellspacing="0" border="0" style="width:100%"><tbody><tr><td align="center"><table cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:63px"><tbody><tr><td style="width:100%"><img src="__CDN__/d29e600c98f933090aafec2cabe052b6.png" width="63" height="64" style="display:block;width:63px;height:auto;max-width:100%"></td></tr></tbody></table></td></tr></tbody></table></td></tr><tr><td dir="ltr" style="color:#edf0f2;font-size:16px;text-align:center;padding:0px 0px 16px;line-height:1.4">__STEP2__</td></tr></tbody></table></td></tr></tbody></table></td>
+<td width="28" style="width:28px;font-size:0">&nbsp;</td>
+<td width="28.49%" style="width:28.49%;box-sizing:border-box;vertical-align:top"><table border="0" cellpadding="0" cellspacing="0" style="border-spacing:0;border-collapse:separate;width:100%;table-layout:fixed"><tbody><tr><td><table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="font-size:16px;line-height:1.4;font-family:Arial,Helvetica,sans-serif"><tbody><tr><td style="padding:0px 0px 16px"><table cellpadding="0" cellspacing="0" border="0" style="width:100%"><tbody><tr><td align="center"><table cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:63px"><tbody><tr><td style="width:100%"><img src="__CDN__/fe3081d983323fe53e04c80f1d4b576d.png" width="63" height="64" style="display:block;width:63px;height:auto;max-width:100%"></td></tr></tbody></table></td></tr></tbody></table></td></tr><tr><td dir="ltr" style="color:#edf0f2;font-size:16px;text-align:center;padding:0px 0px 16px;line-height:1.4">__STEP3__</td></tr></tbody></table></td></tr></tbody></table></td>
+</tr></tbody></table></td></tr></tbody></table></td></tr>"""
+
+TEMPLATE_ILLUSTRATION = """<tr><td dir="ltr" style="font-size:16px;padding:0px 24px 16px;line-height:1.4;text-decoration:none">&nbsp;</td></tr><tr><td style="padding:0px 24px 16px"><table cellpadding="0" cellspacing="0" border="0" style="width:100%"><tbody><tr><td align="center"><table cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:552px"><tbody><tr><td style="width:100%"><img src="__CDN__/e90990c28945e3c0f8463a2331ec31a4.png" width="552" height="369" style="display:block;width:552px;height:auto;max-width:100%"></td></tr></tbody></table></td></tr></tbody></table></td></tr>"""
+
+TEMPLATE_NEXT = """<tr><td dir="ltr" style="font-size:16px;padding:0px 24px 16px;line-height:1.4;text-decoration:none">&nbsp;</td></tr><tr><td dir="ltr" class="ers-fs-427" style="color:#a194ff;font-size:42.7px;font-weight:700;letter-spacing:-0.01em;white-space:pre-wrap;text-align:center;padding:0px 24px 16px;line-height:1.4">__HEADING__<br></td></tr><tr><td dir="ltr" class="ers-fs-213" style="color:#edf0f2;font-size:21.3px;white-space:pre-wrap;text-align:center;padding:0px 24px 16px;line-height:1.4">__TEXT__<br></td></tr>"""
+
+TEMPLATE_NEED_HAND = """<tr><td dir="ltr" class="ers-fs-213" style="font-size:21.3px;padding:0px 24px 16px;line-height:1.4;text-decoration:none">&nbsp;</td></tr><tr><td style="padding:0px 24px 16px"><table border="0" cellpadding="0" cellspacing="0" class="layout-1" align="center" style="display:table;border-spacing:0;border-collapse:separate;width:100%;max-width:100%;table-layout:fixed;margin:0 auto;background-color:#0b00cf;background:linear-gradient(135deg,#0b00cf,#7d85ff);border-radius:18px"><tbody><tr><td style="text-align:center;padding:44px 32px"><table border="0" cellpadding="0" cellspacing="0" style="border-spacing:0;border-collapse:separate;width:100%;max-width:100%;table-layout:fixed;margin:0 auto"><tbody><tr><td style="width:100%;box-sizing:border-box;vertical-align:top"><table border="0" cellpadding="0" cellspacing="0" style="width:100%;table-layout:fixed"><tbody><tr><td style="padding:13px"><table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="font-size:16px;line-height:1.4;font-family:Arial,Helvetica,sans-serif"><tbody><tr><td dir="ltr" class="ers-fs-427" style="color:#edf0f2;font-size:42.7px;font-weight:700;letter-spacing:-0.01em;text-align:center;padding:0px 0px 16px;line-height:1.4">Need a hand?<br></td></tr><tr><td dir="ltr" class="ers-fs-213" style="color:#edf0f2;font-size:21.3px;text-align:center;padding:0px 0px 16px;line-height:1.4">Check our terms &amp; privacy pages.<br></td></tr><tr><td><table cellpadding="0" cellspacing="0" border="0" style="width:100%"><tbody><tr><td align="center"><table cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:320px"><tbody><tr><td style="width:100%"><!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="__SUPPORT_URL__" style="height:65px;width:320px;v-text-anchor:middle;" arcsize="100%" fillcolor="#000000"><v:stroke dashstyle="Solid" weight="0px" color="#000000"/><w:anchorlock/><v:textbox inset="0px,0px,0px,0px"><center dir="false" style="color:#edf0f2;font-family:sans-serif;font-size:22.9px;font-weight:700">Support</center></v:textbox></v:roundrect><![endif]--><!--[if !mso]><!--><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;max-width:100%;border-collapse:separate;border-spacing:0"><tbody><tr><td bgcolor="#000000" style="background-color:#000000;border-radius:115px"><a href="__SUPPORT_URL__" target="_blank" style="color:#edf0f2;text-decoration:none;display:block;padding:16px 24px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:22.9px;font-weight:700;line-height:32.1px"><span style="word-break:break-word;color:#edf0f2">Support</span></a></td></tr></tbody></table><!--<![endif]--></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr>"""
+
+TEMPLATE_FOOTER = """<tr><td dir="ltr" style="font-size:14.7px;padding:0px 24px 16px;line-height:1.4;text-decoration:none">&nbsp;</td></tr><tr><td style="padding:0px 0px 16px"><table cellpadding="0" cellspacing="0" border="0" style="width:100%"><tbody><tr><td align="center"><table cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px"><tbody><tr><td style="width:100%"><img src="__CDN__/25ae68dcb4d13bea0a1d45a6bfeff963.png" width="600" height="179" style="display:block;width:600px;height:auto;max-width:100%"></td></tr></tbody></table></td></tr></tbody></table></td></tr><tr><td><table cellpadding="0" cellspacing="0" border="0" style="width:100%"><tbody><tr><td align="center"><table cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px"><tbody><tr><td style="width:100%"><img src="__CDN__/35558dfcfbfbca9902c30b3108f26c25.jpg" width="600" height="649" style="display:block;width:600px;height:auto;max-width:100%"></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr><tr><td style="vertical-align:top"><table border="0" cellpadding="0" cellspacing="0" class="layout-2" align="center" style="display:table;border-spacing:0;border-collapse:separate;width:100%;max-width:100%;table-layout:fixed;margin:0 auto;background-color:#000000;background:linear-gradient(180deg,#000000,#1700d2)"><tbody><tr><td style="text-align:center;padding:20px 24px"><table border="0" cellpadding="0" cellspacing="0" style="max-width:368px;margin:0 auto"><tbody><tr><td style="width:100%;box-sizing:border-box;vertical-align:top"><table border="0" cellpadding="0" cellspacing="0" style="width:100%"><tbody><tr><td style="padding:13px"><table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="font-size:16px;line-height:1.4;font-family:Arial,Helvetica,sans-serif"><tbody><tr><td dir="ltr" style="color:#edf0f2;font-size:14.7px;letter-spacing:-0.0025em;text-align:center;padding:0px 0px 16px;line-height:16px"><span style="white-space:pre-wrap">__FOOTER_TEXT__ </span><a href="#" style="color:#edf0f2;text-decoration:underline">unsubscribe</a><span style="white-space:pre-wrap">.</span></td></tr><tr><td dir="ltr" style="font-size:14.7px;letter-spacing:-0.0025em;text-align:center;padding:0px 0px 16px;line-height:16px">&nbsp;</td></tr><tr><td dir="ltr" style="color:#edf0f2;font-size:14.7px;letter-spacing:-0.0025em;text-align:center;padding:0px 0px 16px;line-height:16px">&copy; 2026 TradeMind<br></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table><!--[if mso]></td></tr></tbody></table></center><![endif]--></td></tr></tbody></table></body></html>"""
+
+
+def _send_email(to_email: str, subject: str, html: str) -> bool:
+    if not RESEND_API_KEY:
+        logger.warning("RESEND_API_KEY not configured — skipping email")
+        return False
+    try:
+        resp = httpx.post(RESEND_API_URL, headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        }, json={"from": FROM_EMAIL, "to": [to_email], "subject": subject, "html": html}, timeout=30)
+        resp.raise_for_status()
+        logger.info("Email sent to %s — subject=%s", to_email, subject)
+        return True
+    except Exception as e:
+        logger.error("Failed to send email to %s: %s", to_email, e)
+        return False
+
+
+def _build(template: str, **kw):
+    for k, v in kw.items():
+        template = template.replace(f"__{k}__", str(v))
+    return template
 
 
 def send_welcome_email(to_email: str, name: str) -> bool:
-    if not settings.resend_api_key:
-        logger.warning("RESEND_API_KEY not configured — skipping welcome email")
-        return False
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    tail = _build(TEMPLATE_STEPS_HEAD, HEADING="What to do first")
+    tail += _build(TEMPLATE_STEPS, CDN=CDN, STEP1="Connect your journal", STEP2="Include your broker", STEP3="Log the first trade")
+    tail += _build(TEMPLATE_ILLUSTRATION, CDN=CDN)
+    tail += _build(TEMPLATE_NEXT, HEADING="What's next?", TEXT="Trade on your accounts, include risk-management and professional tools with AI support.")
+    tail += _build(TEMPLATE_NEED_HAND, SUPPORT_URL=f"{frontend_url}/terms")
+    tail += _build(TEMPLATE_FOOTER, CDN=CDN, FOOTER_TEXT="You're receiving this email because you signed up for TradeMind.")
+    html = _build(TEMPLATE_HEAD, CDN=CDN)
+    html += _build(TEMPLATE_HERO, CDN=CDN)
+    html += _build(TEMPLATE_GREETING, GREETING=f"Glad you're here, {name}. The best trading community in the world.", BUTTON_URL=f"{frontend_url}/app", BUTTON_TEXT="Get started")
+    html += tail
+    return _send_email(to_email, "Welcome to TradeMind", html)
 
-    try:
-        resend.api_key = settings.resend_api_key
 
-        params: resend.Emails.SendParams = {
-            "from": settings.resend_from_email,
-            "to": [to_email],
-            "subject": "Добро пожаловать в TradeMind!",
-            "html": WELCOME_HTML.format(
-                name=name or "Trader",
-                frontend_url=settings.frontend_url.rstrip("/"),
-            ),
-        }
-
-        resend.Emails.send(params)
-        logger.info("Welcome email sent to %s", to_email)
-        return True
-
-    except Exception as e:
-        logger.error("Failed to send welcome email to %s: %s", to_email, e)
-        return False
+def send_payment_success_email(to_email: str, name: str, plan: str) -> bool:
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    tail = _build(TEMPLATE_STEPS_HEAD, HEADING="What's included")
+    tail += _build(TEMPLATE_STEPS, CDN=CDN, STEP1="AI trade analysis", STEP2="Trade journal", STEP3="AI recommendations")
+    tail += _build(TEMPLATE_NEXT, HEADING="Start trading", TEXT="Your premium features are ready. Access real-time data, AI analytics, and risk management.")
+    tail += _build(TEMPLATE_NEED_HAND, SUPPORT_URL=f"{frontend_url}/terms")
+    tail += _build(TEMPLATE_FOOTER, CDN=CDN, FOOTER_TEXT="You're receiving this email because you made a purchase on TradeMind.")
+    html = _build(TEMPLATE_HEAD, CDN=CDN)
+    html += _build(TEMPLATE_HERO, CDN=CDN)
+    html += _build(TEMPLATE_GREETING, GREETING=f"You're all set, {name}! Your {plan} plan is now active.", BUTTON_URL=f"{frontend_url}/app", BUTTON_TEXT="Go to dashboard")
+    html += tail
+    return _send_email(to_email, f"TradeMind {plan} — Payment confirmed", html)
