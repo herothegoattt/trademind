@@ -152,7 +152,7 @@ function CyberpunkFrame() {
 /* ── CoreHub ─────────────────────────────────────────────────── */
 export function CoreHub() {
   return (
-    <div className="absolute inset-0 overflow-hidden" style={{ background: "#020308" }}>
+    <div className="absolute inset-0 overflow-hidden" style={{ background: "var(--bg-core)" }}>
       <AICoreBg />
 
       {/* Chat content */}

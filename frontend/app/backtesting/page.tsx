@@ -415,7 +415,7 @@ export default function BacktestingPage() {
 
   /* ══════════════════════════════════════════════════════════════ */
   return (
-    <div className="flex flex-col h-screen select-none" style={{ background: "#070a12" }}>
+    <div className="tm-app flex flex-col h-screen select-none" style={{ background: "#070a12" }}>
 
       {/* ── Top bar ─────────────────────────────────────────────── */}
       <div

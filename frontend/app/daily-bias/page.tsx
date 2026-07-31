@@ -862,7 +862,7 @@ export default function DailyBiasPage() {
 
   return (
     <div
-      className="h-full overflow-y-auto pb-16 md:pb-0 text-white"
+      className="tm-app h-full overflow-y-auto pb-16 md:pb-0 text-white"
       style={{ background: 'linear-gradient(160deg, #020308 0%, #03040f 50%, #020308 100%)' }}
     >
       {/* Ambient glows */}

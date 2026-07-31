@@ -197,8 +197,8 @@ export function ReferralModal({ isOpen, onClose }: ReferralModalProps) {
               style={{
                 maxWidth: 560,
                 maxHeight: "90vh",
-                background: "rgba(6,7,18,0.99)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "var(--bg-modal)",
+                border: "1px solid var(--border)",
                 borderRadius: 24,
                 boxShadow: "0 0 80px rgba(139,92,246,0.1), 0 40px 100px rgba(0,0,0,0.9)",
               }}

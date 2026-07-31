@@ -196,7 +196,7 @@ function DnaSidebar() {
 /* ── Page ────────────────────────────────────────────────────────────────── */
 export default function TraderDNAPage() {
   return (
-    <div className="h-full overflow-y-auto pb-14 md:pb-0 page-bg text-white">
+    <div className="tm-app h-full overflow-y-auto pb-14 md:pb-0 page-bg text-white">
       {/* Header */}
       <div className="sticky top-0 z-20" style={{ background: "rgba(7,10,18,0.94)", borderBottom: "1px solid rgba(192,132,252,0.15)", backdropFilter: "blur(20px)" }}>
         <div className="flex items-center justify-between px-3 py-3 sm:p-6 max-w-7xl mx-auto">

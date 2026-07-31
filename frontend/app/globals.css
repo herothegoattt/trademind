@@ -120,6 +120,10 @@ html.light .tm-app .bg-purple-950\/30 { background-color: rgba(99,102,241,0.08) 
 
 /* Arbitrary dark hex surfaces */
 html.light .tm-app .bg-\[\#09090f\] { background-color: var(--bg-core) !important; }
+html.light .tm-app .bg-\[\#09090f\]\/98 { background-color: var(--bg-core) !important; }
+html.light .tm-app .bg-\[\#09090f\]\/95 { background-color: var(--bg-core) !important; }
+html.light .tm-app .bg-\[\#09090f\]\/90 { background-color: var(--bg-core) !important; }
+html.light .tm-app .bg-\[\#09090f\]\/80 { background-color: var(--bg-core) !important; }
 html.light .tm-app .bg-\[\#0b0e16\],
 html.light .tm-app .bg-\[\#0d1117\],
 html.light .tm-app .bg-\[\#0b0f1a\],
@@ -270,50 +274,85 @@ html.light .tm-app .neon-indigo { color: #6366f1 !important; }
 html.light .tm-app .neon-emerald { color: #059669 !important; }
 html.light .tm-app .neon-amber { color: #d97706 !important; }
 
-/* Inline glass/overlay backgrounds (AI Core chat shell, modals) */
-html.light .tm-app [style*="rgba(2,3,10,0.90)"],
-html.light .tm-app [style*="rgba(2,3,10,0.92)"],
-html.light .tm-app [style*="rgba(3,4,12,0.92)"],
-html.light .tm-app [style*="rgba(3,4,12,0.96)"] { background: var(--bg-glass) !important; }
-html.light .tm-app [style*="rgba(2,3,10,0.98)"],
-html.light .tm-app [style*="rgba(5,7,16,0.98)"] { background: var(--bg-glass-header) !important; }
-html.light .tm-app [style*="rgba(7,9,18,0.98)"],
-html.light .tm-app [style*="rgba(7,9,18,0.97)"],
-html.light .tm-app [style*="rgba(8,10,22,0.97)"],
+/* Inline glass/overlay backgrounds — CSSOM-normalized form (React reserializes
+   style attributes with spaces after commas/colons during hydration) */
+html.light .tm-app [style*="rgba(2, 3, 10, 0.9)"],
+html.light .tm-app [style*="rgba(2, 3, 10, 0.92)"],
+html.light .tm-app [style*="rgba(3, 4, 12, 0.92)"],
+html.light .tm-app [style*="rgba(3, 4, 12, 0.96)"] { background: var(--bg-glass) !important; }
+html.light .tm-app [style*="rgba(2, 3, 10, 0.98)"],
+html.light .tm-app [style*="rgba(5, 7, 16, 0.98)"] { background: var(--bg-glass-header) !important; }
+html.light .tm-app [style*="rgba(7, 9, 18, 0.98)"],
+html.light .tm-app [style*="rgba(7, 9, 18, 0.97)"],
 html.light .tm-app [style*="rgba(8, 10, 22, 0.97)"],
-html.light .tm-app [style*="rgba(8,9,20,0.97)"],
-html.light .tm-app [style*="rgba(6,7,18,0.99)"],
-html.light .tm-app [style*="rgba(6,8,16,0.99)"] { background: var(--bg-modal) !important; }
-html.light .tm-app [style*="rgba(6,8,16,0.97)"] { background: var(--bg-bar) !important; }
+html.light .tm-app [style*="rgba(8, 9, 20, 0.97)"],
+html.light .tm-app [style*="rgba(6, 7, 18, 0.99)"],
+html.light .tm-app [style*="rgba(6, 8, 16, 0.99)"] { background: var(--bg-modal) !important; }
+html.light .tm-app [style*="rgba(6, 8, 16, 0.97)"] { background: var(--bg-bar) !important; }
 html.light .tm-app [style*="#020308"] { background: var(--bg-core) !important; }
+html.light .tm-app [style*="#070a12"] { background: var(--bg) !important; }
+html.light .tm-app [style*="#070A12"] { background: var(--bg) !important; }
 html.light .tm-app [style*="#080815"] { background: var(--bg-modal) !important; }
 html.light .tm-app [style*="#0c0b1a"] { background: var(--card) !important; }
+html.light .tm-app [style*="#0d0f1a"] { background: var(--bg-modal) !important; }
+html.light .tm-app [style*="#0f0f17"] { background: var(--bg-modal) !important; }
+html.light .tm-app [style*="#060612"] { background: var(--bg-modal) !important; }
+html.light .tm-app [style*="#1a1a2e"] { background: var(--card) !important; }
 
 /* Inline text colors that only occur inside the app shell */
 html.light .tm-app [style*="dde3ed"] { color: var(--text-strong) !important; }
 html.light .tm-app [style*="c4cdd8"] { color: var(--text-base) !important; }
 html.light .tm-app [style*="dde4f0"] { color: var(--text-strong) !important; }
-html.light .tm-app [style*="rgba(203,213,225,0.82)"] { color: var(--text-base) !important; }
+html.light .tm-app [style*="rgba(203, 213, 225, 0.82)"] { color: var(--text-base) !important; }
 
 /* Inline white borders → light border */
-html.light .tm-app [style*="rgba(255,255,255,0.048)"],
-html.light .tm-app [style*="rgba(255,255,255,0.04)"] { border-color: var(--border-subtle) !important; }
-html.light .tm-app [style*="rgba(255,255,255,0.055)"],
-html.light .tm-app [style*="rgba(255,255,255,0.06)"],
-html.light .tm-app [style*="rgba(255,255,255,0.07)"],
-html.light .tm-app [style*="rgba(255,255,255,0.08)"] { border-color: var(--border) !important; }
+html.light .tm-app [style*="rgba(255, 255, 255, 0.048)"],
+html.light .tm-app [style*="rgba(255, 255, 255, 0.04)"] { border-color: var(--border-subtle) !important; }
+html.light .tm-app [style*="rgba(255, 255, 255, 0.055)"],
+html.light .tm-app [style*="rgba(255, 255, 255, 0.06)"],
+html.light .tm-app [style*="rgba(255, 255, 255, 0.07)"],
+html.light .tm-app [style*="rgba(255, 255, 255, 0.08)"],
+html.light .tm-app [style*="rgba(255, 255, 255, 0.09)"],
+html.light .tm-app [style*="rgba(255, 255, 255, 0.1)"] { border-color: var(--border) !important; }
 
-/* Inline white-alpha surfaces (React output: `background:rgba(...)`) */
-html.light .tm-app [style*="background:rgba(255,255,255,0.025)"] { background-color: rgba(15,23,42,0.05) !important; }
-html.light .tm-app [style*="background:rgba(255,255,255,0.03)"] { background-color: rgba(15,23,42,0.05) !important; }
-html.light .tm-app [style*="background:rgba(255,255,255,0.035)"] { background-color: rgba(15,23,42,0.055) !important; }
-html.light .tm-app [style*="background:rgba(255,255,255,0.04)"] { background-color: rgba(15,23,42,0.055) !important; }
-html.light .tm-app [style*="background:rgba(255,255,255,0.042)"] { background-color: rgba(15,23,42,0.06) !important; }
-html.light .tm-app [style*="background:rgba(255,255,255,0.05)"] { background-color: rgba(15,23,42,0.065) !important; }
-html.light .tm-app [style*="background:rgba(255,255,255,0.06)"] { background-color: rgba(15,23,42,0.08) !important; }
-html.light .tm-app [style*="background:rgba(255,255,255,0.07)"] { background-color: rgba(15,23,42,0.09) !important; }
-html.light .tm-app [style*="background:rgba(255,255,255,0.08)"] { background-color: rgba(15,23,42,0.1) !important; }
-html.light .tm-app [style*="background:#0f0e1e"] { background-color: rgba(99,102,241,0.16) !important; }
+/* Inline white-alpha surfaces (CSSOM-normalized form) */
+html.light .tm-app [style*="background: rgba(255, 255, 255, 0.025)"],
+html.light .tm-app [style*="background: rgba(255, 255, 255, 0.03)"] { background-color: rgba(15,23,42,0.05) !important; }
+html.light .tm-app [style*="background: rgba(255, 255, 255, 0.035)"] { background-color: rgba(15,23,42,0.055) !important; }
+html.light .tm-app [style*="background: rgba(255, 255, 255, 0.04)"] { background-color: rgba(15,23,42,0.055) !important; }
+html.light .tm-app [style*="background: rgba(255, 255, 255, 0.042)"] { background-color: rgba(15,23,42,0.06) !important; }
+html.light .tm-app [style*="background: rgba(255, 255, 255, 0.05)"] { background-color: rgba(15,23,42,0.065) !important; }
+html.light .tm-app [style*="background: rgba(255, 255, 255, 0.06)"] { background-color: rgba(15,23,42,0.08) !important; }
+html.light .tm-app [style*="background: rgba(255, 255, 255, 0.07)"] { background-color: rgba(15,23,42,0.09) !important; }
+html.light .tm-app [style*="background: rgba(255, 255, 255, 0.08)"] { background-color: rgba(15,23,42,0.1) !important; }
+html.light .tm-app [style*="background: #0f0e1e"] { background-color: rgba(99,102,241,0.16) !important; }
+
+/* Standalone section pages — dark rgba header/card surfaces → light surface */
+html.light .tm-app [style*="rgba(7, 10, 18, 0.85)"],
+html.light .tm-app [style*="rgba(7, 10, 18, 0.94)"],
+html.light .tm-app [style*="rgba(7, 10, 18, 0.95)"],
+html.light .tm-app [style*="rgba(7, 10, 18, 0.99)"],
+html.light .tm-app [style*="rgba(7, 10, 20, 0.9)"],
+html.light .tm-app [style*="rgba(6, 9, 16, 0.85)"],
+html.light .tm-app [style*="rgba(6, 9, 16, 0.96)"],
+html.light .tm-app [style*="rgba(6, 9, 16, 0.97)"],
+html.light .tm-app [style*="rgba(6, 9, 17, 0.92)"],
+html.light .tm-app [style*="rgba(6, 10, 18, 0.85)"],
+html.light .tm-app [style*="rgba(2, 3, 8, 0.92)"],
+html.light .tm-app [style*="rgba(2, 3, 8, 0.94)"],
+html.light .tm-app [style*="rgba(8, 10, 24, 0.97)"],
+html.light .tm-app [style*="rgba(5, 7, 18, 0.98)"],
+html.light .tm-app [style*="rgba(13, 17, 28, 0.95)"],
+html.light .tm-app [style*="rgba(8, 12, 22, 0.9)"],
+html.light .tm-app [style*="rgba(8, 12, 22, 0.98)"],
+html.light .tm-app [style*="rgba(4, 6, 18, 0.9)"],
+html.light .tm-app [style*="rgba(4, 6, 18, 0.98)"] { background: var(--bg-bar) !important; }
+
+/* Light inline text on now-light surfaces → dark text */
+html.light .tm-app [style*="rgba(226, 232, 240, 0.82)"],
+html.light .tm-app [style*="rgba(226, 232, 240, 0.9)"],
+html.light .tm-app [style*="rgba(241, 245, 249, 0.92)"],
+html.light .tm-app [style*="cbd5e1"] { color: var(--text-strong) !important; }
 
 /* AI Core backdrop */
 html.light .ai-core-bg-gradient {

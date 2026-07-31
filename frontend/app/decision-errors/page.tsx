@@ -535,7 +535,7 @@ export default function DecisionErrorsPage() {
 
   return (
     <div
-      className="h-full overflow-y-auto overflow-x-hidden text-white"
+      className="tm-app h-full overflow-y-auto overflow-x-hidden text-white"
       style={{ background: "#070a12" }}
     >
       {/* ── Dot-grid background ──────────────────────────────── */}

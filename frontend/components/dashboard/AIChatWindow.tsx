@@ -131,7 +131,7 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "linear-gradient(180deg, rgba(2,3,10,0.90) 0%, rgba(3,4,12,0.92) 100%)",
+          background: "var(--bg-glass)",
           backdropFilter: "blur(36px)",
           WebkitBackdropFilter: "blur(36px)",
         }}
@@ -158,7 +158,7 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
         className="relative z-10 flex-shrink-0 flex items-center justify-between px-5 py-3.5"
         style={{
           borderBottom: "1px solid rgba(34,211,238,0.09)",
-          background: "linear-gradient(90deg, rgba(2,3,10,0.98) 0%, rgba(5,7,16,0.98) 100%)",
+          background: "var(--bg-glass-header)",
           backdropFilter: "blur(30px)",
           WebkitBackdropFilter: "blur(30px)",
         }}
@@ -257,7 +257,7 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
         ref={messagesContainerRef}
         onScroll={handleScroll}
         className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-        style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.07) transparent" }}
+        style={{ scrollbarWidth: "thin", scrollbarColor: "var(--border) transparent" }}
       >
         {/* Empty state */}
         {messages.length === 0 && !isSending && !isCompact ? (
@@ -478,8 +478,8 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
                               color: "#e2e8f0",
                             }
                           : {
-                              background: "rgba(255,255,255,0.04)",
-                              border: "1px solid rgba(255,255,255,0.07)",
+                              background: "var(--card)",
+                              border: "1px solid var(--border)",
                               color: "var(--text-base)",
                             }
                       }
@@ -532,8 +532,8 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
                   <div
                     className="px-4 py-2.5 rounded-2xl rounded-bl-sm flex items-center gap-2.5"
                     style={{
-                      background: "rgba(255,255,255,0.04)",
-                      border: "1px solid rgba(255,255,255,0.07)",
+                      background: "var(--card)",
+                      border: "1px solid var(--border)",
                     }}
                   >
                     <span className="text-xs" style={{ color: "rgba(90,104,128,0.9)" }}>
@@ -585,7 +585,7 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
         className="relative z-10 flex-shrink-0 px-4 py-3.5"
         style={{
           borderTop: "1px solid rgba(34,211,238,0.08)",
-          background: "linear-gradient(180deg, rgba(2,3,10,0.92) 0%, rgba(3,4,12,0.96) 100%)",
+          background: "var(--bg-glass-header)",
           backdropFilter: "blur(28px)",
           WebkitBackdropFilter: "blur(28px)",
         }}
@@ -620,8 +620,8 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
                     exit={{ opacity: 0, scale: 0.85 }}
                     className="relative flex-shrink-0 rounded-xl overflow-hidden"
                     style={{
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid var(--border)",
+                      background: "var(--card)",
                     }}
                   >
                     {isImage && previews[i] ? (
@@ -634,7 +634,7 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
                       <div className="w-16 h-16 flex flex-col items-center justify-center gap-1">
                         <FileVideo size={20} style={{ color: "rgba(167,139,250,0.8)" }} />
                         <span className="text-[9px] text-center px-1 truncate w-full"
-                          style={{ color: "rgba(148,163,184,0.7)" }}>
+                          style={{ color: "var(--text-muted)" }}>
                           {file.name.slice(0, 10)}
                         </span>
                       </div>
@@ -642,7 +642,7 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
                       <div className="w-16 h-16 flex flex-col items-center justify-center gap-1">
                         <FileImage size={20} style={{ color: "rgba(34,211,238,0.7)" }} />
                         <span className="text-[9px] text-center px-1 truncate w-full"
-                          style={{ color: "rgba(148,163,184,0.7)" }}>
+                          style={{ color: "var(--text-muted)" }}>
                           {file.name.slice(0, 10)}
                         </span>
                       </div>
@@ -652,7 +652,7 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
                       className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center"
                       style={{ background: "rgba(0,0,0,0.65)" }}
                     >
-                      <X size={9} style={{ color: "#e2e8f0" }} />
+                      <X size={9} style={{ color: "var(--text-strong)" }} />
                     </button>
                   </motion.div>
                 );
@@ -664,8 +664,8 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
         <div
           className="flex items-end gap-2 px-3 py-2.5 rounded-2xl input-glow transition-all"
           style={{
-            background: "rgba(255,255,255,0.035)",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
           }}
         >
           {/* Attach button */}
@@ -673,9 +673,9 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
             onClick={() => fileInputRef.current?.click()}
             className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all mb-0.5"
             style={{
-              background: attachments.length ? "rgba(167,139,250,0.1)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${attachments.length ? "rgba(167,139,250,0.25)" : "rgba(255,255,255,0.07)"}`,
-              color: attachments.length ? "rgba(167,139,250,0.9)" : "rgba(71,85,105,0.7)",
+              background: attachments.length ? "rgba(167,139,250,0.1)" : "var(--card)",
+              border: `1px solid ${attachments.length ? "rgba(167,139,250,0.25)" : "var(--border)"}`,
+              color: attachments.length ? "rgba(167,139,250,0.9)" : "var(--text-muted)",
             }}
             onMouseEnter={(e) => {
               (e.currentTarget as HTMLElement).style.background = "rgba(167,139,250,0.1)";
@@ -684,9 +684,9 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
             }}
             onMouseLeave={(e) => {
               if (attachments.length) return;
-              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)";
-              (e.currentTarget as HTMLElement).style.color = "rgba(71,85,105,0.7)";
+              (e.currentTarget as HTMLElement).style.background = "var(--card)";
+              (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+              (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
             }}
           >
             <Paperclip size={13} />
@@ -702,7 +702,7 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
             className="flex-1 min-h-[32px] max-h-28 bg-transparent border-0 resize-none focus:outline-none leading-relaxed py-0.5"
             style={{
               fontSize: isCompact ? "12px" : "13px",
-              color: "#c4cdd8",
+              color: "var(--text-strong)",
             }}
           />
 
@@ -720,9 +720,9 @@ export const AIChatWindow: React.FC<AIChatWindowProps> = ({ isCompact = false })
                     boxShadow: "0 0 12px rgba(34,211,238,0.12)",
                   }
                 : {
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.07)",
-                    color: "rgba(71,85,105,0.7)",
+                    background: "var(--card)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-muted)",
                     cursor: "not-allowed",
                   }
             }

@@ -127,7 +127,7 @@ function DashboardInner() {
         <div
           className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl"
           style={{
-            background: "linear-gradient(135deg, rgba(7,9,18,0.98), rgba(20,10,40,0.98))",
+            background: "var(--bg-modal)",
             border: "1px solid rgba(167,139,250,0.4)",
             boxShadow: "0 0 40px rgba(167,139,250,0.2)",
           }}

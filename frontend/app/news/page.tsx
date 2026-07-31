@@ -270,7 +270,7 @@ export default function NewsPage() {
   const secs = String(nextRefresh % 60).padStart(2, "0");
 
   return (
-    <div className="h-full overflow-y-auto pb-14 md:pb-0" style={{ background: "#070A12", color: "#fff" }}>
+    <div className="tm-app h-full overflow-y-auto pb-14 md:pb-0" style={{ background: "#070A12", color: "var(--text-base)" }}>
 
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="sticky top-0 z-20"

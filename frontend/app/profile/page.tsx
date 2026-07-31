@@ -238,7 +238,7 @@ function ProfilePageInner() {
 
   if (!mounted || !isAuthenticated || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#060612" }}>
+      <div className="tm-app min-h-screen flex items-center justify-center" style={{ background: "#060612" }}>
         <div className="w-6 h-6 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
       </div>
     );
@@ -284,7 +284,7 @@ function ProfilePageInner() {
   };
 
   return (
-    <div className="min-h-screen text-white" style={{ background: "#060612" }}>
+    <div className="tm-app min-h-screen text-white" style={{ background: "#060612" }}>
       {/* Top bar */}
       <div className="sticky top-0 z-30 backdrop-blur-xl" style={{ background: "rgba(6,6,18,0.85)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
         <div className="max-w-5xl mx-auto flex items-center justify-between px-6 py-3">

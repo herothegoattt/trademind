@@ -147,7 +147,7 @@ export default function JournalPage() {
     : '0.00';
 
   return (
-    <div className="h-full overflow-y-auto pb-14 md:pb-0 text-white page-bg">
+    <div className="tm-app h-full overflow-y-auto pb-14 md:pb-0 text-white page-bg">
       {/* Header */}
       <div
         className="sticky top-0 z-20"

@@ -444,7 +444,7 @@ export default function AnalyticsLabPage() {
   const planMeta = TIER_META[(userPlan as Tier)] ?? TIER_META.core;
 
   return (
-    <div className="h-full overflow-hidden flex flex-col text-white min-w-0 page-bg">
+    <div className="tm-app h-full overflow-hidden flex flex-col text-white min-w-0 page-bg">
       {/* ── Top bar ────────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 z-30 backdrop-blur-xl"
         style={{ background: "rgba(7,10,18,0.94)", borderBottom: "1px solid rgba(251,146,60,0.14)" }}>

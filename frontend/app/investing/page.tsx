@@ -37,7 +37,7 @@ function InvestingPageInner() {
   };
 
   return (
-    <div className="h-full overflow-y-auto pb-14 md:pb-0 page-bg">
+    <div className="tm-app h-full overflow-y-auto pb-14 md:pb-0 page-bg">
       {/* Header - Fixed */}
       <div
         className="fixed top-0 left-0 right-0 z-40 will-change-auto"

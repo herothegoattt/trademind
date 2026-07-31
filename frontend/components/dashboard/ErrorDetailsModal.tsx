@@ -37,12 +37,12 @@ function CandleChart({
       {/* Grid lines */}
       {[25, 50, 75].map(p => (
         <line key={p} x1={PL} x2={PR} y1={py(p)} y2={py(p)}
-          stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+          stroke="rgba(15,23,42,0.07)" strokeWidth="1" />
       ))}
 
       {/* Volume separator */}
       <line x1={PL} x2={PR} y1={VT - 2} y2={VT - 2}
-        stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+        stroke="rgba(15,23,42,0.07)" strokeWidth="1" />
 
       {/* Level lines */}
       {levels.map((l, i) => (
@@ -121,7 +121,7 @@ function CandleChart({
       })}
 
       {/* Volume label */}
-      <text x={PL + 2} y={VT + VH2 - 2} fill="rgba(255,255,255,0.2)" fontSize="5.5">
+      <text x={PL + 2} y={VT + VH2 - 2} fill="rgba(15,23,42,0.25)" fontSize="5.5">
         VOL
       </text>
     </svg>

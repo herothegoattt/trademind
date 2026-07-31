@@ -349,7 +349,7 @@ export function OnboardingFlow() {
             position: "fixed",
             width: "min(320px, calc(100vw - 32px))",
             zIndex: 9995,
-            background: "rgba(8,9,20,0.97)",
+            background: "var(--bg-modal)",
             borderStyle: "solid",
             borderWidth: 1,
             borderRadius: 14,

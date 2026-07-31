@@ -521,9 +521,9 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
                           <div
                             className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold tracking-widest px-2.5 py-0.5 rounded-full whitespace-nowrap"
                             style={{
-                              background: "rgba(30,30,40,0.95)",
-                              border: "1px solid rgba(255,255,255,0.1)",
-                              color: "rgba(148,163,184,0.8)",
+                              background: "var(--bg-bar)",
+                              border: "1px solid var(--border)",
+                              color: "var(--text-muted)",
                             }}
                           >
                             {t('current_plan_badge')}

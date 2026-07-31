@@ -380,7 +380,7 @@ function PostModal({ post, onClose, onLikePost, onLikeComment, onAddComment, myI
         </div>
 
         {/* Comment input */}
-        <div className="px-5 py-4 shrink-0" style={{ borderTop: `1px solid ${accent}15`, background: "rgba(4,6,18,0.9)" }}>
+        <div className="px-5 py-4 shrink-0" style={{ borderTop: `1px solid ${accent}15`, background: "var(--bg-bar)" }}>
           <div className="flex gap-2 items-center">
             <Avatar initials={myInitials} size={28} />
             <div className="flex-1 relative">

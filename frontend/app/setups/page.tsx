@@ -1517,7 +1517,7 @@ export default function SetupsPage() {
   ];
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: '#060910', color: '#fff', paddingBottom: 64 }}>
+    <div className="tm-app" style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-strong)', paddingBottom: 64 }}>
 
       {/* Header */}
       <div style={{

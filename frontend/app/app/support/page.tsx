@@ -55,8 +55,8 @@ interface ChatMsg {
 // ─── Input base ──────────────────────────────────────────────────────────────────
 const inputBase: CSSProperties = {
   width: "100%",
-  background: "rgba(255,255,255,0.03)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "var(--card)",
+  border: "1px solid var(--border)",
   borderRadius: 8,
   color: "var(--text-strong)",
   fontSize: "0.85rem",
@@ -118,7 +118,7 @@ function FAQPanel() {
               key={i}
               style={{
                 borderRadius: 8,
-                border: `1px solid ${isOpen ? `${ACCENT}25` : "rgba(255,255,255,0.055)"}`,
+                border: `1px solid ${isOpen ? `${ACCENT}25` : "var(--border)"}`,
                 background: isOpen ? `${ACCENT}08` : "transparent",
                 overflow: "hidden",
                 transition: "border-color 0.18s, background 0.18s",
@@ -142,7 +142,7 @@ function FAQPanel() {
                 <span style={{
                   fontSize: "0.83rem",
                   fontWeight: 500,
-                  color: isOpen ? "#e2e8f0" : "rgba(203,213,225,0.7)",
+                  color: isOpen ? "var(--text-strong)" : "var(--text-muted)",
                   lineHeight: 1.45,
                   fontFamily: "inherit",
                   transition: "color 0.15s",
@@ -270,10 +270,10 @@ function AIChat() {
               borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
               background: m.role === "user"
                 ? `${ACCENT}16`
-                : "rgba(255,255,255,0.042)",
-              border: `1px solid ${m.role === "user" ? `${ACCENT}28` : "rgba(255,255,255,0.06)"}`,
+                : "var(--card)",
+              border: `1px solid ${m.role === "user" ? `${ACCENT}28` : "var(--border)"}`,
               fontSize: "0.81rem",
-              color: m.role === "user" ? "#dde4f0" : "rgba(203,213,225,0.82)",
+              color: m.role === "user" ? "var(--text-strong)" : "var(--text-muted)",
               lineHeight: 1.65,
             }}>
               {m.loading ? (
@@ -298,8 +298,8 @@ function AIChat() {
       <div style={{
         display: "flex",
         gap: 8,
-        background: "rgba(255,255,255,0.025)",
-        border: "1px solid rgba(255,255,255,0.07)",
+        background: "var(--card)",
+        border: "1px solid var(--border)",
         borderRadius: 10,
         padding: "6px 6px 6px 12px",
         alignItems: "center",
@@ -327,7 +327,7 @@ function AIChat() {
           style={{
             width: 32, height: 32,
             borderRadius: 7,
-            background: input.trim() && !busy ? ACCENT : "rgba(255,255,255,0.06)",
+            background: input.trim() && !busy ? ACCENT : "var(--card-hover)",
             border: "none",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: input.trim() && !busy ? "pointer" : "default",
@@ -413,7 +413,7 @@ function ContactForm() {
         <button
           onClick={() => { setStatus("idle"); setMessage(""); setSubject(""); }}
           style={{
-            background: "none", border: "1px solid rgba(255,255,255,0.07)",
+            background: "none", border: "1px solid var(--border)",
             borderRadius: 7, cursor: "pointer",
             fontSize: "0.76rem", color: "rgba(100,116,139,0.45)",
             fontFamily: "inherit", padding: "6px 14px",
@@ -470,8 +470,8 @@ function ContactForm() {
         disabled={!valid || status === "sending"}
         style={{
           height: 40, borderRadius: 8,
-          background: valid ? ACCENT : "rgba(255,255,255,0.05)",
-          border: `1px solid ${valid ? "transparent" : "rgba(255,255,255,0.06)"}`,
+          background: valid ? ACCENT : "var(--card)",
+          border: `1px solid ${valid ? "transparent" : "var(--border)"}`,
           color: valid ? "#fff" : "rgba(100,116,139,0.4)",
           fontSize: "0.84rem", fontFamily: "inherit", fontWeight: 500,
           cursor: valid ? "pointer" : "default",
@@ -554,8 +554,8 @@ export default function SupportPage() {
         <div style={{
           display: "flex",
           gap: 1,
-          background: "rgba(255,255,255,0.025)",
-          border: "1px solid rgba(255,255,255,0.06)",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
           borderRadius: 10,
           padding: 3,
           marginBottom: 18,
@@ -578,9 +578,9 @@ export default function SupportPage() {
                   fontFamily: "inherit",
                   fontSize: "0.81rem",
                   fontWeight: active ? 500 : 400,
-                  background: active ? "#0f0e1e" : "transparent",
-                  color: active ? "#e2e8f0" : "rgba(100,116,139,0.55)",
-                  boxShadow: active ? "0 1px 4px rgba(0,0,0,0.4)" : "none",
+                  background: active ? "var(--accent-dim)" : "transparent",
+                  color: active ? "var(--text-strong)" : "var(--text-muted)",
+                  boxShadow: active ? "0 1px 4px rgba(15,23,42,0.12)" : "none",
                   transition: "all 0.15s ease",
                   whiteSpace: "nowrap",
                 }}
@@ -606,8 +606,8 @@ export default function SupportPage() {
             transition={{ duration: 0.13 }}
           >
             <div style={{
-              background: "#0c0b1a",
-              border: "1px solid rgba(255,255,255,0.07)",
+              background: "var(--bg-modal)",
+              border: "1px solid var(--border)",
               borderRadius: 12,
               padding: "22px 22px 24px",
             }}>

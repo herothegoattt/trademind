@@ -110,7 +110,7 @@ export default function MarketsPage() {
   const syms = SYMBOLS[category];
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "#070a12" }}>
+    <div className="tm-app flex flex-col h-full" style={{ background: "#070a12" }}>
 
       {/* ── Top bar ─────────────────────────────────────────────── */}
       <div
