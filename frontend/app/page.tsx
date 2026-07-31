@@ -2303,17 +2303,6 @@ export default function HomePage() {
           </div>
           <span style={{ fontWeight:700, fontSize:".9rem", letterSpacing:"-.02em" }}>TradeMind</span>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:20 }}>
-          {([["slide-problem","lp_nav_problem"],["slide-how","lp_nav_how"]] as [string,string][]).map(([id,k])=>(
-            <button key={id} onClick={()=>goTo(SLIDE_IDS.indexOf(id))}
-              style={{ fontSize:".78rem", color:"rgba(148,163,184,.45)", background:"none", border:"none", cursor:"pointer", transition:"color .2s", padding:0 }}
-              onMouseEnter={e=>(e.currentTarget.style.color="#f1f5f9")} onMouseLeave={e=>(e.currentTarget.style.color="rgba(148,163,184,.45)")}>{t(k)}</button>
-          ))}
-          <motion.button whileHover={{ scale:1.04 }} whileTap={{ scale:.97 }} onClick={() => launch()}
-            style={{ height:34, padding:"0 16px", background:`${VIO}20`, border:`1px solid ${VIO}50`, borderRadius:8, cursor:"pointer", fontSize:".7rem", fontFamily:"monospace", letterSpacing:".13em", color:`${VIO}ee`, fontWeight:700 }}>
-            {t("initialize_system")}
-          </motion.button>
-        </div>
       </motion.header>
 
       {/* nav dots */}
@@ -2329,7 +2318,7 @@ export default function HomePage() {
             willChange: "transform",
           }}
         >
-          <SlideHero        onLaunch={launch} onNext={() => goTo(1)} active={liveSlide===0} />
+          <SlideHero        onLaunch={launch} onNext={() => goTo(SLIDE_IDS.length - 1)} active={liveSlide===0} />
           <MSlideProblem    active={liveSlide===1} />
           <MSlidePreview    active={liveSlide===2} />
           <MSlideAnalytics  active={liveSlide===3} />
