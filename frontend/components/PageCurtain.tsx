@@ -22,6 +22,13 @@ export function PageCurtain() {
 
   useEffect(() => {
     if (first.current) { first.current = false; return; } // skip initial load
+    // boot arrival already plays its own entrance (AppEntrance) — don't double-transition
+    let skip = false;
+    try {
+      skip = sessionStorage.getItem("tm_skip_curtain") === "1";
+      if (skip) sessionStorage.removeItem("tm_skip_curtain");
+    } catch {}
+    if (skip) return;
     setRun((n) => n + 1);
     const id = setTimeout(() => setRun(0), 820);
     return () => clearTimeout(id);

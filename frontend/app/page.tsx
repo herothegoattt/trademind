@@ -64,7 +64,7 @@ function BootScreen({ onDone }: { onDone: () => void }) {
     return () => { ts.forEach(clearTimeout); cancelAnimationFrame(raf); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { if (done) { const id = setTimeout(onDone, 760); return () => clearTimeout(id); } }, [done, onDone]);
+  useEffect(() => { if (done) { const id = setTimeout(onDone, 920); return () => clearTimeout(id); } }, [done, onDone]);
 
   return (
     // resolves to the exact /app background so the route swap is invisible
@@ -86,21 +86,21 @@ function BootScreen({ onDone }: { onDone: () => void }) {
         ))}
       </div>
 
-      {/* ── warp-dive rings — only on launch, transform+opacity only ── */}
-      {done && [0, 0.12, 0.24].map((delay, i) => (
-        <motion.div key={i}
-          initial={{ scale:0.15, opacity:0.7 }} animate={{ scale:7, opacity:0 }}
-          transition={{ duration:0.85, delay, ease:[0.55, 0, 0.85, 0.25] }}
-          style={{ position:"absolute", width:220, height:220, borderRadius:"50%",
-            border:`1.5px solid ${i % 2 ? CYN : VIO}`, boxShadow:`0 0 24px ${i % 2 ? CYN : VIO}55`, pointerEvents:"none", zIndex:8 }} />
-      ))}
+      {/* ── single soft ring that closes inward on launch — guides the eye to the seam ── */}
+      {done && (
+        <motion.div
+          initial={{ scale:2.4, opacity:0 }} animate={{ scale:0.55, opacity:[0,.5,0] }}
+          transition={{ duration:0.9, ease:[0.16, 1, 0.3, 1] }}
+          style={{ position:"absolute", width:300, height:300, borderRadius:"50%",
+            border:`1px solid ${VIO}66`, boxShadow:`0 0 30px ${VIO}44`, pointerEvents:"none", zIndex:8 }} />
+      )}
 
-      {/* ── center stage — assembles on enter, accelerates INTO the screen on launch ── */}
+      {/* ── center stage — assembles on enter, then settles smoothly away on launch ── */}
       <motion.div
         initial={{ opacity:0, scale:0.92 }}
-        animate={done ? { opacity:0, scale:8 } : { opacity:1, scale:1 }}
+        animate={done ? { opacity:0, scale:1.18 } : { opacity:1, scale:1 }}
         transition={done
-          ? { duration:0.78, ease:[0.6, 0, 0.85, 0.2] }   // easeIn → "dive" acceleration
+          ? { duration:0.85, ease:[0.22, 1, 0.36, 1] }   // gentle "settle away" — no harsh zoom
           : { duration:0.9, ease:[0.22, 1, 0.36, 1] }}
         style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:34, zIndex:10, padding:"0 24px", willChange:"transform,opacity" }}>
 
@@ -152,14 +152,14 @@ function BootScreen({ onDone }: { onDone: () => void }) {
         </div>
       </motion.div>
 
-      {/* ── launch bloom — single scaling glow, transform+opacity only ── */}
+      {/* ── launch bloom — soft white core dissolving to the shared dark bg ── */}
       {done && (
         <motion.div
-          initial={{ opacity:0, scale:0.3 }} animate={{ opacity:[0, 0.55, 0], scale:2.4 }}
-          transition={{ duration:0.8, ease:[0.5, 0, 0.85, 0.3] }}
-          style={{ position:"absolute", width:"42vmax", height:"42vmax",
+          initial={{ opacity:0, scale:0.45 }} animate={{ opacity:[0, 0.65, 0], scale:2.1 }}
+          transition={{ duration:0.95, ease:[0.16, 1, 0.3, 1] }}
+          style={{ position:"absolute", width:"54vmax", height:"54vmax",
             borderRadius:"50%", pointerEvents:"none", zIndex:20, willChange:"transform,opacity",
-            background:`radial-gradient(circle, ${CYN}66 0%, ${VIO}2a 40%, transparent 70%)` }} />
+            background:`radial-gradient(circle, rgba(255,255,255,.95) 0%, ${VIO}1f 45%, transparent 72%)` }} />
       )}
     </div>
   );
@@ -2198,8 +2198,22 @@ export default function HomePage() {
     if (launchPlan) { params.set("upgrade_plan", launchPlan); if (launchBilling) params.set("billing", launchBilling); }
     // signal the dashboard to play its one-shot "warp arrival" entrance,
     // continuing the boot dive instead of hard-cutting to the app
-    try { sessionStorage.setItem("tm_enter", "1"); } catch {}
-    router.push("/app" + (params.toString() ? `?${params}` : ""));
+    try {
+      sessionStorage.setItem("tm_enter", "1");
+      // boot arrival already has its own entrance (AppEntrance) — skip the generic curtain
+      sessionStorage.setItem("tm_skip_curtain", "1");
+    } catch {}
+    const href = "/app" + (params.toString() ? `?${params}` : "");
+    const nav = () => router.push(href);
+    // CSS View Transitions API — smooth cross-page glide (blur+scale) instead of a hard cut.
+    // Falls back to plain navigation on browsers that don't support it yet.
+    const doc = typeof document !== "undefined" ? (document as Document) : null;
+    const vt = (doc as any)?.startViewTransition;
+    if (typeof vt === "function") {
+      vt.call(doc, nav);
+    } else {
+      nav();
+    }
   }, [router, launchPlan, launchBilling]);
 
   const TOTAL = SLIDE_IDS.length;
