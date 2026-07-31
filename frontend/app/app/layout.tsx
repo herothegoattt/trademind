@@ -10,7 +10,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <ProtectedLayout>
       <AppProviders>
         <AppEntrance>
-          <div className="h-screen w-screen overflow-hidden bg-[var(--bg)]">
+          <div className="tm-app h-screen w-screen overflow-hidden bg-[var(--bg)]">
             <SidebarNav />
             <TopStatusBar />
             {/* Content area — fixed, exact fill from below TopStatusBar to screen bottom */}

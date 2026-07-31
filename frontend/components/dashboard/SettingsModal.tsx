@@ -3,6 +3,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Sun, Moon, Bell, Download, LogOut } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { useDashboardStore } from "../../lib/store";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -10,7 +11,8 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const theme = useDashboardStore((s: any) => s.theme) as "light" | "dark";
+  const setTheme = useDashboardStore((s: any) => s.setTheme);
   const [notifications, setNotifications] = useState(true);
 
   const handleDownloadData = () => {
@@ -46,7 +48,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             className="fixed top-1/2 left-1/2 z-50 w-96 -translate-x-1/2 -translate-y-1/2 transform"
           >
             <div className={cn(
-              "relative rounded-2xl border border-cyan-400/40 bg-black/80 backdrop-blur-xl",
+              "relative rounded-2xl border border-cyan-400/40 bg-[var(--bg-modal)] backdrop-blur-xl",
               "shadow-2xl overflow-hidden"
             )}>
               {/* Header */}

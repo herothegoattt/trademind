@@ -29,6 +29,7 @@ const PAGE_LABELS: Record<string, string> = {
 
 export function TopStatusBar() {
   const t = useT();
+  const theme = useDashboardStore((s: any) => s.theme) as "dark" | "light";
   const pathname = usePathname();
 
   const [mounted,      setMounted]      = useState(false);
@@ -61,7 +62,7 @@ export function TopStatusBar() {
         className="fixed top-0 left-0 md:left-56 right-0 z-50 flex items-center h-16 px-4 md:px-5"
         style={{
           background: "var(--bg-bar)",
-          borderBottom: "1px solid rgba(255,255,255,0.055)",
+          borderBottom: "1px solid var(--border)",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
         }}
@@ -71,14 +72,14 @@ export function TopStatusBar() {
           {/* Mobile: logo */}
           <Link href="/app" className="flex md:hidden items-center gap-2 select-none">
             <Image
-              src="/logo.jpg"
+              src={theme === "light" ? "/logo-light.jpg" : "/logo.jpg"}
               alt="TradeMind"
               width={28}
               height={28}
               className="rounded-lg object-cover"
-              style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.1)" }}
+              style={{ boxShadow: "0 0 0 1px var(--border)" }}
             />
-            <span className="text-sm font-semibold tracking-tight neon-white" style={{ color: "#edf0f5" }}>
+            <span className="text-sm font-semibold tracking-tight neon-white" style={{ color: "var(--text-strong)" }}>
               TradeMind
             </span>
           </Link>
@@ -143,7 +144,7 @@ export function TopStatusBar() {
               </div>
             ) : (
               <>
-                <h1 className="text-[13px] font-semibold neon-white" style={{ color: "#edf0f5" }}>
+                <h1 className="text-[13px] font-semibold neon-white" style={{ color: "var(--text-strong)" }}>
                   {pageLabel}
                 </h1>
                 <span
@@ -207,8 +208,8 @@ export function TopStatusBar() {
             className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-300 transition-all"
             style={{ border: "1px solid transparent" }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)";
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)";
+              (e.currentTarget as HTMLElement).style.background = "var(--card-hover)";
+              (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLElement).style.background = "transparent";
@@ -225,8 +226,8 @@ export function TopStatusBar() {
             className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-300 transition-all"
             style={{ border: "1px solid transparent" }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)";
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)";
+              (e.currentTarget as HTMLElement).style.background = "var(--card-hover)";
+              (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLElement).style.background = "transparent";

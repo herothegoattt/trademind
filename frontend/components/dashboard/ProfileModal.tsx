@@ -360,7 +360,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     return (
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
         <div className="w-full sm:w-96 rounded-t-2xl sm:rounded-2xl overflow-hidden"
-          style={{ background: "rgba(7,9,18,0.98)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          style={{ background: "var(--bg-modal)", border: "1px solid var(--border)" }}>
           <div className="p-6 text-center">
             <div className="text-lg font-semibold text-white mb-2">{t('welcome_title')}</div>
             <div className="text-sm text-gray-400 mb-6">{t('login_or_register')}</div>
@@ -400,8 +400,8 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       <div
         className="w-full sm:w-[480px] flex flex-col rounded-t-2xl sm:rounded-2xl overflow-hidden"
         style={{
-          background: "rgba(7,9,18,0.98)",
-          border: "1px solid rgba(255,255,255,0.06)",
+          background: "var(--bg-modal)",
+          border: "1px solid var(--border)",
           boxShadow: "0 40px 100px rgba(0,0,0,0.8)",
         }}
       >

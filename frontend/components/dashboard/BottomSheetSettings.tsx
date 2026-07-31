@@ -132,8 +132,8 @@ export function BottomSheetSettings({ isOpen, onClose }: BottomSheetSettingsProp
             <div
               className="pointer-events-auto w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col"
               style={{
-                background: "rgba(8, 10, 22, 0.97)",
-                border: "1px solid rgba(255,255,255,0.08)",
+                background: "var(--bg-modal)",
+                border: "1px solid var(--border)",
                 boxShadow: "0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(6,182,212,0.06)",
                 maxHeight: "min(88vh, 680px)",
               }}

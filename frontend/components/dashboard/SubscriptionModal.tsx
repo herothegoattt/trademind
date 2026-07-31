@@ -128,7 +128,7 @@ function CongratsOverlay({
         transition={{ type: "spring", damping: 26, stiffness: 280, mass: 0.9 }}
         className="relative z-10 w-full max-w-lg flex flex-col items-center text-center"
         style={{
-          background: "rgba(7,9,18,0.97)",
+          background: "var(--bg-modal)",
           border: `1px solid ${plan.color}30`,
           borderRadius: 28,
           padding: "48px 36px 40px",
@@ -401,8 +401,8 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
               style={{
                 maxWidth: 860,
                 maxHeight: "90vh",
-                background: "rgba(7,9,18,0.98)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "var(--bg-modal)",
+                border: "1px solid var(--border)",
                 borderRadius: 20,
                 boxShadow: "0 40px 100px rgba(0,0,0,0.85)",
                 overflow: "hidden",
@@ -427,8 +427,8 @@ export function SubscriptionModal({ isOpen, onClose, currentPlan, onUpgrade }: S
                       onClick={() => setBilling("monthly")}
                       className="px-3 py-1.5 font-medium transition-all"
                       style={{
-                        background: billing === "monthly" ? "rgba(255,255,255,0.08)" : "transparent",
-                        color: billing === "monthly" ? "#e2e8f0" : "rgba(100,116,139,0.7)",
+                        background: billing === "monthly" ? "var(--card)" : "transparent",
+                        color: billing === "monthly" ? "var(--text-strong)" : "var(--text-muted)",
                       }}
                     >
                       {t('monthly_billing')}

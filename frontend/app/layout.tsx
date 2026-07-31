@@ -95,6 +95,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
+        {/* Restore theme before first paint (avoids flash) */}
+        <script dangerouslySetInnerHTML={{
+          __html: `try{if(localStorage.getItem("trademind-theme")==="light")document.documentElement.classList.add("light")}catch(e){}`,
+        }} />
+
         {/* Google Analytics 4 */}
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}

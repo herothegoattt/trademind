@@ -142,6 +142,7 @@ function NeonBar({ color, glow }: { color: string; glow: string }) {
 export function SidebarNav() {
   const t = useT();
   const selectSection = useDashboardStore((s: any) => s.selectSection);
+  const theme = useDashboardStore((s: any) => s.theme) as "dark" | "light";
   const requireAuth = useRequireAuth();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
@@ -185,10 +186,10 @@ export function SidebarNav() {
               }}
               transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
             >
-              <Image src="/logo.jpg" alt="TradeMind" width={30} height={30} className="object-cover block" />
+              <Image src={theme === "light" ? "/logo-light.jpg" : "/logo.jpg"} alt="TradeMind" width={30} height={30} className="object-cover block" />
             </motion.div>
             <div className="flex flex-col leading-none">
-              <span className="text-[13px] font-semibold tracking-tight neon-white" style={{ color: "#edf0f5" }}>
+              <span className="text-[13px] font-semibold tracking-tight neon-white" style={{ color: "var(--text-strong)" }}>
                 TradeMind
               </span>
               <span className="text-[10px] mt-0.5 font-medium neon-cyan">AI Coach</span>
@@ -235,7 +236,7 @@ export function SidebarNav() {
                               `0 0 6px rgba(${clr.glow},0.6), 0 0 16px rgba(${clr.glow},0.25)`,
                               `0 0 3px rgba(${clr.glow},0.3), 0 0 8px rgba(${clr.glow},0.12)`,
                             ],
-                            color: "#edf0f5",
+                            color: "var(--text-strong)",
                           } : { textShadow: "none", color: "transparent" }}
                           transition={active ? {
                             textShadow: { duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 },
@@ -272,14 +273,14 @@ export function SidebarNav() {
                   href={item.href}
                   target={item.external ? "_blank" : undefined}
                   className="text-[10px] transition-colors"
-                  style={{ color: "rgba(56,70,92,0.8)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(100,116,139,0.9)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(56,70,92,0.8)")}
+                  style={{ color: "var(--text-muted)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-base)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
                 >
                   {item.label}
                 </Link>
                 {i < arr.length - 1 && (
-                  <span style={{ color: "rgba(40,52,70,0.7)", fontSize: 10 }}>·</span>
+                  <span style={{ color: "var(--border-strong)", fontSize: 10 }}>·</span>
                 )}
               </span>
             ))}
@@ -292,10 +293,10 @@ export function SidebarNav() {
         data-entrance="dock"
         className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex"
         style={{
-          background: "rgba(6,8,16,0.97)",
+          background: "var(--bg-bar)",
           backdropFilter: "blur(24px)",
           WebkitBackdropFilter: "blur(24px)",
-          borderTop: "1px solid rgba(255,255,255,0.055)",
+          borderTop: "1px solid var(--sidebar-border)",
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
@@ -379,14 +380,14 @@ export function SidebarNav() {
               className="md:hidden fixed left-0 right-0 z-[70] rounded-t-3xl"
               style={{
                 bottom: 0,
-                background: "rgba(6,8,16,0.99)",
-                borderTop: "1px solid rgba(255,255,255,0.085)",
+                background: "var(--bg-modal)",
+                borderTop: "1px solid var(--border)",
                 paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))",
               }}
             >
               {/* Drag handle */}
               <div className="flex justify-center pt-3 pb-1">
-                <div className="w-10 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }} />
+                <div className="w-10 h-1 rounded-full" style={{ background: "var(--border-strong)" }} />
               </div>
 
               {/* Header */}

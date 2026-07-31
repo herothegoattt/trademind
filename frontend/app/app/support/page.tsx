@@ -58,7 +58,7 @@ const inputBase: CSSProperties = {
   background: "rgba(255,255,255,0.03)",
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 8,
-  color: "#e2e8f0",
+  color: "var(--text-strong)",
   fontSize: "0.85rem",
   fontFamily: "inherit",
   outline: "none",
@@ -315,7 +315,7 @@ function AIChat() {
             background: "none",
             border: "none",
             outline: "none",
-            color: "#e2e8f0",
+            color: "var(--text-strong)",
             fontSize: "0.84rem",
             fontFamily: "inherit",
             opacity: busy ? 0.5 : 1,
@@ -402,7 +402,7 @@ function ContactForm() {
           ✓
         </div>
         <div>
-          <p style={{ margin: 0, fontSize: "0.92rem", fontWeight: 600, color: "#e2e8f0" }}>
+          <p style={{ margin: 0, fontSize: "0.92rem", fontWeight: 600, color: "var(--text-strong)" }}>
             Message sent
           </p>
           <p style={{ margin: "6px 0 0", fontSize: "0.78rem", color: "rgba(100,116,139,0.5)", lineHeight: 1.6 }}>
@@ -540,7 +540,7 @@ export default function SupportPage() {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{
           margin: 0, fontSize: "1.15rem", fontWeight: 600,
-          color: "#e2e8f0", letterSpacing: "-0.02em",
+          color: "var(--text-strong)", letterSpacing: "-0.02em",
         }}>
           Help &amp; Support
         </h1>
