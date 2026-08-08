@@ -2,7 +2,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import {
   createChart, IChartApi, ISeriesApi, ColorType, CrosshairMode,
-  CandlestickSeries, HistogramSeries, LineSeries, LineStyle,
+  CandlestickSeries, BarSeries, AreaSeries, HistogramSeries, LineSeries, LineStyle,
   createTextWatermark,
 } from "lightweight-charts";
 import { computeIndicator, IndicatorConfig, IndicatorSource, lastValueAt } from "./indicators";
@@ -24,6 +24,41 @@ export const TV = {
 export interface OHLCVBar {
   time: number; open: number; high: number; low: number; close: number; volume: number;
 }
+
+export type ChartType = "candles" | "bars" | "line" | "area";
+
+export interface ChartStyle {
+  chartType: ChartType;
+  upColor: string;
+  downColor: string;
+  wickUpColor: string;
+  wickDownColor: string;
+  borderUpColor: string;
+  borderDownColor: string;
+  borderVisible: boolean;
+  bgColor: string;
+  gridColor: string;
+  textColor: string;
+  showGrid: boolean;
+  showWatermark: boolean;
+}
+
+/* TradingView default chart style (like TV's chart settings) */
+export const DEFAULT_CHART_STYLE: ChartStyle = {
+  chartType: "candles",
+  upColor: TV.up,
+  downColor: TV.down,
+  wickUpColor: TV.up,
+  wickDownColor: TV.down,
+  borderUpColor: TV.up,
+  borderDownColor: TV.down,
+  borderVisible: true,
+  bgColor: TV.bg,
+  gridColor: "#1d2a3d",
+  textColor: TV.dim,
+  showGrid: true,
+  showWatermark: true,
+};
 
 export type DrawingTool =
   | "pointer" | "pen" | "line" | "hline" | "ray"
@@ -51,8 +86,7 @@ interface Props {
   drawWidth?:       number;
   drawings:         Drawing[];
   onDrawingsChange: (d: Drawing[]) => void;
-  candleUpColor?:    string;
-  candleDownColor?:  string;
+  style?:           Partial<ChartStyle>;
   liveBarOverride?:  OHLCVBar;
   structureLabel?:   "BOS" | "CHOCH";   // label used by the "brk" tool
   zoneLabel?:        string;            // label used by the "rect" tool (POI/FVG/zone)
@@ -249,6 +283,36 @@ function fmtNum(n: number): string {
   return n < 0.01 ? n.toFixed(5) : n < 1 ? n.toFixed(4) : n.toFixed(2);
 }
 
+/* ── Build the main (price) series according to the chosen chart type ── */
+function buildMainSeries(chart: IChartApi, s: ChartStyle): ISeriesApi<any> {
+  const dotted = { priceLineVisible: true, priceLineColor: s.downColor, priceLineStyle: LineStyle.Dotted };
+  if (s.chartType === "bars") {
+    return chart.addSeries(BarSeries, { upColor: s.upColor, downColor: s.downColor, ...dotted });
+  }
+  if (s.chartType === "line") {
+    return chart.addSeries(LineSeries, { color: s.upColor, lineWidth: 2, ...dotted });
+  }
+  if (s.chartType === "area") {
+    return chart.addSeries(AreaSeries, {
+      lineColor: s.upColor, topColor: hexA(s.upColor, 0.35), bottomColor: hexA(s.upColor, 0.02), lineWidth: 2, ...dotted,
+    });
+  }
+  return chart.addSeries(CandlestickSeries, {
+    upColor: s.upColor, downColor: s.downColor,
+    wickUpColor: s.wickUpColor, wickDownColor: s.wickDownColor,
+    borderUpColor: s.borderUpColor, borderDownColor: s.borderDownColor,
+    borderVisible: s.borderVisible, ...dotted,
+  });
+}
+
+/* shape of one main-series data point per chart type */
+function mainPoint(c: OHLCVBar, s: ChartStyle): Record<string, any> {
+  if (s.chartType === "candles" || s.chartType === "bars") {
+    return { time: c.time as any, open: c.open, high: c.high, low: c.low, close: c.close };
+  }
+  return { time: c.time as any, value: c.close };
+}
+
 /* ── Hit testing (eraser) ─────────────────────────────────────────── */
 function distPtSeg(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
   const dx = bx - ax, dy = by - ay;
@@ -312,8 +376,7 @@ export function ReplayChart({
   drawWidth = 2,
   drawings,
   onDrawingsChange,
-  candleUpColor   = TV.up,
-  candleDownColor = TV.down,
+  style,
   liveBarOverride,
   structureLabel = "BOS",
   zoneLabel = "POI",
@@ -321,10 +384,11 @@ export function ReplayChart({
   symbolLabel = "",
   intervalLabel = "",
 }: Props) {
+  const effStyle = { ...DEFAULT_CHART_STYLE, ...style };
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
-  const candleRef    = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const candleRef    = useRef<ISeriesApi<any> | null>(null);
   const volRef       = useRef<ISeriesApi<"Histogram"> | null>(null);
   const indRef       = useRef<Map<string, ISeriesApi<any> | null>>(new Map());
   const prevVisible  = useRef(0);
@@ -340,8 +404,7 @@ export function ReplayChart({
   const colorRef     = useRef(drawColor);
   const widthRef     = useRef(drawWidth);
   const drawingsRef  = useRef(drawings);
-  const upColorRef   = useRef(candleUpColor);
-  const downColorRef = useRef(candleDownColor);
+  const styleRef     = useRef<ChartStyle>({ ...DEFAULT_CHART_STYLE, ...style });
   const structRef    = useRef(structureLabel);
   const zoneLabelRef = useRef(zoneLabel);
   const indicatorsRef = useRef(indicators);
@@ -350,27 +413,44 @@ export function ReplayChart({
   const lineStart    = useRef<DrawPoint | null>(null);
   const mouseCSS     = useRef<{ x: number; y: number } | null>(null);
   const rafId        = useRef(0);
+  // full OHLC window for legend lookups (works for line/area charts too)
+  const visibleDataRef = useRef<OHLCVBar[]>([]);
 
   useEffect(() => { toolRef.current     = tool;           }, [tool]);
   useEffect(() => { colorRef.current    = drawColor;      }, [drawColor]);
   useEffect(() => { widthRef.current    = drawWidth;      }, [drawWidth]);
-  useEffect(() => { upColorRef.current  = candleUpColor;  }, [candleUpColor]);
-  useEffect(() => { downColorRef.current = candleDownColor; }, [candleDownColor]);
+  useEffect(() => { styleRef.current    = { ...DEFAULT_CHART_STYLE, ...style }; }, [style]);
   useEffect(() => { structRef.current = structureLabel; }, [structureLabel]);
   useEffect(() => { zoneLabelRef.current = zoneLabel; }, [zoneLabel]);
   useEffect(() => { indicatorsRef.current = indicators; }, [indicators]);
   useEffect(() => { drawingsRef.current = drawings; scheduleRender(); }, [drawings]); // eslint-disable-line
 
-  /* ── Apply candle color changes live ───────────────────────────── */
-  useEffect(() => {
-    if (!candleRef.current) return;
-    candleRef.current.applyOptions({
-      upColor:      candleUpColor,
-      downColor:    candleDownColor,
-      wickUpColor:  candleUpColor,
-      wickDownColor: candleDownColor,
-    });
-  }, [candleUpColor, candleDownColor]);
+  /* ── Apply chart style live (TV-style colors / grid / chart type) ── */
+  const applyMainColors = useCallback((_chart: IChartApi, series: ISeriesApi<any> | null) => {
+    if (!series) return;
+    const s: ChartStyle = styleRef.current;
+    if (s.chartType === "candles") {
+      series.applyOptions({
+        upColor: s.upColor, downColor: s.downColor,
+        wickUpColor: s.wickUpColor, wickDownColor: s.wickDownColor,
+        borderUpColor: s.borderUpColor, borderDownColor: s.borderDownColor,
+        borderVisible: s.borderVisible,
+        priceLineColor: s.downColor,
+      });
+    } else if (s.chartType === "bars") {
+      series.applyOptions({ upColor: s.upColor, downColor: s.downColor, priceLineColor: s.downColor });
+    } else if (s.chartType === "line") {
+      series.applyOptions({ color: s.upColor, lineWidth: 2, priceLineColor: s.downColor });
+    } else {
+      series.applyOptions({
+        lineColor: s.upColor,
+        topColor: hexA(s.upColor, 0.35),
+        bottomColor: hexA(s.upColor, 0.02),
+        lineWidth: 2,
+        priceLineColor: s.downColor,
+      });
+    }
+  }, []);
 
   /* ── Render all drawings onto the canvas ────────────────────────── */
   const renderCanvas = useCallback(() => {
@@ -482,16 +562,40 @@ export function ReplayChart({
     rafId.current = requestAnimationFrame(() => { renderCanvas(); rafId.current = 0; });
   }, [renderCanvas]);
 
+  /* ── Apply chart style live (TV-style colors / grid / chart type) ── */
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (chart) {
+      chart.applyOptions({
+        layout: {
+          background: { type: ColorType.Solid, color: styleRef.current.bgColor },
+          textColor:  styleRef.current.textColor,
+        },
+        grid: {
+          vertLines: { color: styleRef.current.showGrid ? styleRef.current.gridColor : styleRef.current.bgColor },
+          horzLines: { color: styleRef.current.showGrid ? styleRef.current.gridColor : styleRef.current.bgColor },
+        },
+      });
+      applyMainColors(chart, candleRef.current);
+    }
+    // watermark visibility + text
+    try {
+      const show = styleRef.current.showWatermark;
+      wmRef.current?.applyOptions({
+        lines: show ? [{ text: symbolLabel ? `${symbolLabel}.${intervalLabel}` : "PRICE", color: "rgba(178,181,189,0.05)", fontSize: 84, fontStyle: "bold" }] : [],
+      });
+    } catch { /* ignore */ }
+    scheduleRender();
+  }, [style, symbolLabel, intervalLabel, scheduleRender]);
+
   /* ── Live bar: fast update() path — never touches viewport ─────── */
   useEffect(() => {
     if (!liveBarOverride || !candleRef.current || !volRef.current) return;
     const c = liveBarOverride;
-    const up = upColorRef.current;
-    const dn = downColorRef.current;
+    const up = styleRef.current.upColor;
+    const dn = styleRef.current.downColor;
     try {
-      candleRef.current.update({
-        time: c.time as any, open: c.open, high: c.high, low: c.low, close: c.close,
-      });
+      candleRef.current.update(mainPoint(c, styleRef.current));
       volRef.current.update({
         time: c.time as any, value: c.volume,
         color: c.close >= c.open ? `${up}38` : `${dn}38`,
@@ -500,7 +604,7 @@ export function ReplayChart({
     } catch {
       // stale time from quote API — skip this tick, next poll will have fresh data
     }
-  }, [liveBarOverride, scheduleRender]);
+  }, [liveBarOverride, scheduleRender, style]);
 
   /* ── Create chart once ──────────────────────────────────────────── */
   useEffect(() => {
@@ -513,11 +617,12 @@ export function ReplayChart({
     const w = rect.width  || 800;
     const h = rect.height || 500;
 
+    const s0: ChartStyle = styleRef.current;
     const chart = createChart(el, {
       width: w, height: h,
       layout: {
-        background: { type: ColorType.Solid, color: TV.bg },
-        textColor: TV.dim, fontSize: 11,
+        background: { type: ColorType.Solid, color: s0.bgColor },
+        textColor: s0.textColor, fontSize: 11,
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif",
         panes: {
           separatorColor: TV.line,
@@ -526,8 +631,8 @@ export function ReplayChart({
         },
       },
       grid: {
-        vertLines: { color: "rgba(42,78,110,0.12)" },
-        horzLines: { color: "rgba(42,78,110,0.12)" },
+        vertLines: { color: s0.showGrid ? s0.gridColor : s0.bgColor },
+        horzLines: { color: s0.showGrid ? s0.gridColor : s0.bgColor },
       },
       crosshair: {
         mode: CrosshairMode.Magnet,
@@ -549,16 +654,7 @@ export function ReplayChart({
       },
     });
 
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor:       upColorRef.current,
-      downColor:     downColorRef.current,
-      borderVisible: false,
-      wickUpColor:   upColorRef.current,
-      wickDownColor: downColorRef.current,
-      priceLineVisible: true,
-      priceLineColor: downColorRef.current,
-      priceLineStyle: LineStyle.Dotted,
-    });
+    const candleSeries = buildMainSeries(chart, styleRef.current);
 
     const volSeries = chart.addSeries(HistogramSeries, {
       color: "rgba(38,166,154,0.3)", priceFormat: { type: "volume" }, priceScaleId: "vol_ov",
@@ -572,11 +668,11 @@ export function ReplayChart({
     /* TradingView watermark */
     const wm = createTextWatermark(chart.panes()[0], {
       horzAlign: 'center', vertAlign: 'center',
-      lines: [{
+      lines: s0.showWatermark ? [{
         text: symbolLabel ? `${symbolLabel}.${intervalLabel}` : "PRICE",
         color: "rgba(178,181,189,0.05)",
         fontSize: 84, fontStyle: "bold",
-      }],
+      }] : [],
     });
     wmRef.current = wm;
 
@@ -599,9 +695,9 @@ export function ReplayChart({
         const v = lastValueAt(s, t as number);
         if (v) inds.push({ name: s.name, color: s.color, value: s.pane === 1 ? v.value.toFixed(2) : v.text });
       }
-      const data = (cs as any).data();
-      const bar = data.find((b: any) => (b as any).time === t);
-      if (bar) setLegend({ time: String(t), oh: [bar.open, bar.high, bar.low, bar.close], vol: String((bar as any).value ?? (bar as any).volume ?? ""), inds });
+      const data = visibleDataRef.current;
+      const bar = data.find((b) => b.time === t);
+      if (bar) setLegend({ time: String(t), oh: [bar.open, bar.high, bar.low, bar.close], vol: String(bar.volume ?? ""), inds });
     });
 
     const ro = new ResizeObserver((entries) => {
@@ -629,20 +725,7 @@ export function ReplayChart({
       chartRef.current = null; candleRef.current = null; volRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scheduleRender]);
-
-  /* update watermark text when symbol/interval changes */
-  useEffect(() => {
-    try {
-      wmRef.current?.applyOptions({
-        lines: [{
-          text: symbolLabel ? `${symbolLabel}.${intervalLabel}` : "PRICE",
-          color: "rgba(178,181,189,0.05)",
-          fontSize: 84, fontStyle: "bold",
-        }],
-      });
-    } catch { /* ignore */ }
-  }, [symbolLabel, intervalLabel]);
+  }, [scheduleRender, style?.chartType]);
 
   /* ── Data updates ───────────────────────────────────────────────── */
   useEffect(() => {
@@ -653,12 +736,14 @@ export function ReplayChart({
     prevCandlesRef.current = candles;
 
     const visible  = candles.slice(0, visibleCount);
+    visibleDataRef.current = visible;
     const isAppend = !isNewDataset && prevVisible.current > 0 && visibleCount === prevVisible.current + 1;
     prevVisible.current = visibleCount;
 
-    const up = upColorRef.current;
-    const dn = downColorRef.current;
-    const cd = visible.map((c) => ({ time: c.time as any, open: c.open, high: c.high, low: c.low, close: c.close }));
+    const s = styleRef.current;
+    const up = s.upColor;
+    const dn = s.downColor;
+    const cd = visible.map((c) => mainPoint(c, s));
     const vd = visible.map((c) => ({
       time: c.time as any, value: c.volume,
       color: c.close >= c.open ? `${up}38` : `${dn}38`,
@@ -699,12 +784,12 @@ export function ReplayChart({
       }
       // slider scrub: don't touch viewport — let the user's manual pan/zoom persist
     }
-  }, [candles, visibleCount, scheduleRender]);
+  }, [candles, visibleCount, scheduleRender, style?.chartType]);
 
   /* ── Indicator series sync ──────────────────────────────────────── */
   useEffect(() => {
     const chart = chartRef.current;
-    if (!chart || !indicators.length || !candles.length) return;
+    if (!chart || !candles.length) return;
     const visible = candles.slice(0, visibleCount);
 
     // compute fresh sources for the currently-visible window
@@ -762,7 +847,7 @@ export function ReplayChart({
         chart.priceScale(`ind-${srcs.find((s) => s.pane === 1)?.id ?? "rsi14"}`, 1).applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } });
       }
     } catch { /* ignore */ }
-  }, [candles, visibleCount, indicators]);
+  }, [candles, visibleCount, indicators, style?.chartType]);
 
   /* ── Mouse helpers ──────────────────────────────────────────────── */
   const cssXY = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -887,7 +972,7 @@ export function ReplayChart({
   };
 
   return (
-    <div ref={containerRef} className="w-full h-full relative overflow-hidden" style={{ background: TV.bg }}>
+    <div ref={containerRef} className="w-full h-full relative overflow-hidden" style={{ background: effStyle.bgColor }}>
       {/* TradingView-style OHLC + indicator legend overlay */}
       <div
         className="absolute top-2 left-2 z-20 pointer-events-none select-none rounded-md px-2 py-1.5 hidden lg:block"

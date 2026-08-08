@@ -11,9 +11,10 @@ import {
   MousePointer2, Pencil, Minus, ArrowUpRight, Eraser, Trash2, Search, X,
   RotateCcw as Reset, Layers, Wallet, Activity, NotebookPen, PieChart,
   Target, Plus, Check, CircleDot, Save, Maximize2, Minimize2, Timer, Zap,
-  Ruler, Square, GitBranch, SlidersHorizontal, X as XIcon,
+  Ruler, Square, GitBranch, SlidersHorizontal, X as XIcon, Settings, Palette,
 } from "lucide-react";
-import type { OHLCVBar, DrawingTool, Drawing } from "../../components/backtesting/ReplayChart";
+import type { OHLCVBar, DrawingTool, Drawing, ChartStyle, ChartType } from "../../components/backtesting/ReplayChart";
+import { DEFAULT_CHART_STYLE } from "../../components/backtesting/ReplayChart";
 import AnalyticsPanel from "../../components/backtesting/AnalyticsPanel";
 import { INDICATOR_MENU, IndicatorConfig, indicatorById } from "../../components/backtesting/indicators";
 
@@ -44,6 +45,57 @@ const FX = {
   down:    "#ef4444",
   blue:    "#3b82f6",
 };
+
+/* ── Chart settings (TV-style) ─────────────────────────────────── */
+function ChartColor({ label, value, onChange, swatches }: {
+  label: string; value: string; onChange: (v: string) => void; swatches: string[];
+}) {
+  return (
+    <div>
+      <div className="text-[9px] font-semibold uppercase tracking-widest" style={{ color: FX.dim }}>{label}</div>
+      <div className="flex items-center gap-1.5 mt-1">
+        <label
+          className="relative flex w-5 h-5 rounded-md cursor-pointer flex-shrink-0 overflow-hidden"
+          style={{ background: value, border: "1px solid rgba(255,255,255,0.18)" }}
+        >
+          <input
+            type="color" value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 opacity-0 cursor-pointer"
+          />
+        </label>
+        {swatches.map((c) => (
+          <button
+            key={c}
+            onClick={() => onChange(c)}
+            className="w-4 h-4 rounded-md flex-shrink-0 transition-transform hover:scale-110"
+            style={{
+              background: c,
+              border: value.toUpperCase() === c.toUpperCase() ? "1.5px solid #e2e8f0" : "1px solid rgba(255,255,255,0.1)",
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ToggleRow({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button onClick={() => onChange(!on)} className="w-full flex items-center justify-between py-0.5 group">
+      <span className="text-[10px] font-semibold" style={{ color: FX.muted }}>{label}</span>
+      <span
+        className="relative w-7 h-4 rounded-full transition-colors flex-shrink-0"
+        style={{ background: on ? "#2962ff" : "rgba(255,255,255,0.12)" }}
+      >
+        <span
+          className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all"
+          style={{ left: on ? "calc(100% - 0.875rem)" : "0.125rem" }}
+        />
+      </span>
+    </button>
+  );
+}
 
 /* ── Data ─────────────────────────────────────────────────────── */
 type Category = "My Pairs" | "Stocks" | "ETFs" | "Indices" | "Forex" | "Crypto" | "Commodities";
@@ -338,8 +390,24 @@ export default function BacktestPage() {
   const [drawColor,       setDrawColor]       = useState("#3b82f6");
   const [drawWidth,       setDrawWidth]       = useState(2);
   const [drawings,        setDrawings]        = useState<Drawing[]>([]);
-  const [candleUpColor,   setCandleUpColor]   = useState("#26a69a");
-  const [candleDownColor, setCandleDownColor] = useState("#ef5350");
+  const [chartStyle, setChartStyle] = useState<ChartStyle>(() => {
+    if (typeof window === "undefined") return { ...DEFAULT_CHART_STYLE };
+    try {
+      const raw = localStorage.getItem("tm_backtest_chart_style");
+      return { ...DEFAULT_CHART_STYLE, ...(raw ? JSON.parse(raw) : null) };
+    } catch {
+      return { ...DEFAULT_CHART_STYLE };
+    }
+  });
+  const [styleOpen, setStyleOpen] = useState(false);
+
+  const patchStyle = useCallback((patch: Partial<ChartStyle>) => {
+    setChartStyle((prev) => {
+      const next = { ...prev, ...patch };
+      try { localStorage.setItem("tm_backtest_chart_style", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
   const [liveBar,         setLiveBar]         = useState<OHLCVBar | null>(null);
   const [marketState,     setMarketState]     = useState<string | null>(null);
   const [indOpen,         setIndOpen]         = useState(false);
@@ -1320,6 +1388,122 @@ const periodRef      = useRef<HTMLDivElement>(null);
                 ))}
               </div>
             )}
+
+            {/* Chart settings */}
+            <div className="relative flex-shrink-0 ml-auto">
+              <button
+                onClick={() => setStyleOpen((p) => !p)}
+                title="Chart settings"
+                className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+                style={{
+                  background: styleOpen ? "rgba(59,130,246,0.14)" : "rgba(255,255,255,0.03)",
+                  border: styleOpen ? "1px solid rgba(59,130,246,0.45)" : `1px solid ${FX.border2}`,
+                  color: styleOpen ? "#60a5fa" : FX.dim,
+                }}
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </button>
+
+              <AnimatePresence>
+                {styleOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute top-full right-0 mt-1.5 z-50 rounded-xl overflow-hidden"
+                    style={{ width: 320, background: "rgba(15,20,32,0.99)", border: `1px solid ${FX.border2}`, boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+                  >
+                    <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${FX.border}` }}>
+                      <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest" style={{ color: FX.dim }}>
+                        <Palette className="w-3 h-3" /> Chart settings
+                      </span>
+                      <span className="text-[9px] font-mono" style={{ color: FX.dim }}>style</span>
+                    </div>
+
+                    <div className="px-3 py-2.5 max-h-[70vh] overflow-y-auto flex flex-col gap-3.5">
+                      {/* Chart type */}
+                      <div>
+                        <div className="text-[10px] font-semibold" style={{ color: FX.muted }}>Style</div>
+                        <div className="grid grid-cols-4 gap-1.5 mt-1.5">
+                          {(["candles", "bars", "line", "area"] as ChartType[]).map((t) => (
+                            <button
+                              key={t}
+                              onClick={() => patchStyle({ chartType: t })}
+                              className="rounded-md py-1.5 text-[10px] font-bold capitalize transition-all"
+                              style={{
+                                background: chartStyle.chartType === t ? "rgba(59,130,246,0.16)" : "rgba(255,255,255,0.03)",
+                                border: `1px solid ${chartStyle.chartType === t ? "rgba(59,130,246,0.5)" : FX.border}`,
+                                color: chartStyle.chartType === t ? "#60a5fa" : FX.muted,
+                              }}
+                            >
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Candle rendering */}
+                      <div>
+                        <div className="text-[10px] font-semibold" style={{ color: FX.muted }}>
+                          {chartStyle.chartType === "candles" ? "Candles" : chartStyle.chartType === "bars" ? "Bars" : "Line"} colors
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 mt-2">
+                          <ChartColor label="Up" value={chartStyle.upColor}
+                            onChange={(v) => patchStyle({ upColor: v })} swatches={["#26a69a", "#22c55e", "#00b4d8", "#ffd166"]} />
+                          <ChartColor label="Down" value={chartStyle.downColor}
+                            onChange={(v) => patchStyle({ downColor: v })} swatches={["#ef5350", "#ef4444", "#ff6b6b", "#e11d48"]} />
+                          {chartStyle.chartType !== "line" && chartStyle.chartType !== "area" && (
+                            <>
+                              <ChartColor label="Wick up" value={chartStyle.wickUpColor}
+                                onChange={(v) => patchStyle({ wickUpColor: v })} swatches={[chartStyle.upColor]} />
+                              <ChartColor label="Wick down" value={chartStyle.wickDownColor}
+                                onChange={(v) => patchStyle({ wickDownColor: v })} swatches={[chartStyle.downColor]} />
+                            </>
+                          )}
+                          {chartStyle.chartType === "candles" && (
+                            <>
+                              <ChartColor label="Border up" value={chartStyle.borderUpColor}
+                                onChange={(v) => patchStyle({ borderUpColor: v })} swatches={[chartStyle.upColor]} />
+                              <ChartColor label="Border down" value={chartStyle.borderDownColor}
+                                onChange={(v) => patchStyle({ borderDownColor: v })} swatches={[chartStyle.downColor]} />
+                            </>
+                          )}
+                        </div>
+                        {chartStyle.chartType === "candles" && (
+                          <div className="mt-2"><ToggleRow label="Show candle borders" on={chartStyle.borderVisible} onChange={(v) => patchStyle({ borderVisible: v })} /></div>
+                        )}
+                      </div>
+
+                      {/* Appearance */}
+                      <div style={{ borderTop: `1px solid ${FX.border}`, paddingTop: 10 }}>
+                        <div className="text-[10px] font-semibold" style={{ color: FX.muted }}>Appearance</div>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 mt-2">
+                          <ChartColor label="Background" value={chartStyle.bgColor}
+                            onChange={(v) => patchStyle({ bgColor: v })} swatches={["#131722", "#0d1117", "#0b0e14", "#111827", "#f5f5f5"]} />
+                          <ChartColor label="Grid lines" value={chartStyle.gridColor}
+                            onChange={(v) => patchStyle({ gridColor: v })} swatches={["#1d2a3d", "#2a2e39", "#152238"]} />
+                          <ChartColor label="Text" value={chartStyle.textColor}
+                            onChange={(v) => patchStyle({ textColor: v })} swatches={["#787b86", "#d1d4dc", "#8b96ab", "#e2e8f0"]} />
+                        </div>
+                        <div className="mt-2 grid grid-cols-1 gap-0.5">
+                          <ToggleRow label="Show grid" on={chartStyle.showGrid} onChange={(v) => patchStyle({ showGrid: v })} />
+                          <ToggleRow label="Show watermark" on={chartStyle.showWatermark} onChange={(v) => patchStyle({ showWatermark: v })} />
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => patchStyle({ ...DEFAULT_CHART_STYLE })}
+                        className="mt-0.5 rounded-lg py-1.5 text-[10px] font-bold transition-colors"
+                        style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${FX.border2}`, color: FX.muted }}
+                      >
+                        Reset to defaults
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* Chart */}
@@ -1358,8 +1542,7 @@ const periodRef      = useRef<HTMLDivElement>(null);
                 drawWidth={drawWidth}
                 drawings={drawings}
                 onDrawingsChange={setDrawings}
-                candleUpColor={candleUpColor}
-                candleDownColor={candleDownColor}
+                style={chartStyle}
                 liveBarOverride={isAtEnd && liveBar ? liveBar : undefined}
                 structureLabel={structLabel}
                 zoneLabel={zoneLabel}
