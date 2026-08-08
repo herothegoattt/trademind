@@ -340,6 +340,7 @@ export default function BacktestPage() {
   const [candleUpColor,   setCandleUpColor]   = useState("#22c55e");
   const [candleDownColor, setCandleDownColor] = useState("#ef4444");
   const [liveBar,         setLiveBar]         = useState<OHLCVBar | null>(null);
+  const [marketState,     setMarketState]     = useState<string | null>(null);
 
   const [orderSide, setOrderSide] = useState<Side>("buy");
   const [orderSize, setOrderSize] = useState(1);
@@ -411,7 +412,7 @@ export default function BacktestPage() {
 
   /* data fetch → new session */
   const loadData = useCallback(async (sym: string, iv: string, per: string) => {
-    setLoading(true); setError(null); setIsPlaying(false); setLiveBar(null);
+    setLoading(true); setError(null); setIsPlaying(false); setLiveBar(null); setMarketState(null);
     if (playRef.current !== null) window.clearInterval(playRef.current);
     try {
       const res  = await fetch(`/api/backtesting/ohlcv?symbol=${encodeURIComponent(sym)}&interval=${iv}&period=${per}&v=${Date.now()}`, { cache: "no-store" });
@@ -481,6 +482,12 @@ export default function BacktestPage() {
         const res = await fetch(`/api/backtesting/quote?symbol=${encodeURIComponent(ticker)}&v=${Date.now()}`, { cache: "no-store" });
         if (!res.ok || cancelled) return;
         const d = await res.json();
+        setMarketState(d.marketState ?? null);
+        // Only overlay a "live" last bar while the market is actually trading.
+        // During the weekend/closed hours the OHLC series already ends at the
+        // last closed bar (which matches OANDA spot) — don't inject futures noise.
+        const live = ["REGULAR", "OPEN"].includes(d.marketState);
+        if (!live) return;
         const bars = allBarsRef.current;
         const lastBarTime = bars.length > 0 ? bars[bars.length - 1].time : 0;
         const computedTime = barOpenTime(d.time, interval);
@@ -960,6 +967,34 @@ export default function BacktestPage() {
               {" "}L <span style={{ color: FX.down }}>{fmtPrice(currentBar.low)}</span>
               {" "}C <span style={{ color: currentBar.close >= currentBar.open ? FX.up : FX.down }}>{fmtPrice(currentBar.close)}</span>
             </span>
+          </div>
+        )}
+
+        {/* Market status */}
+        {marketState && (
+          <div
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-semibold flex-shrink-0"
+            style={{
+              background: marketState === "REGULAR" || marketState === "OPEN"
+                ? "rgba(34,197,94,0.08)"
+                : "rgba(148,163,184,0.08)",
+              border: marketState === "REGULAR" || marketState === "OPEN"
+                ? "1px solid rgba(34,197,94,0.25)"
+                : `1px solid ${FX.border2}`,
+              color: marketState === "REGULAR" || marketState === "OPEN"
+                ? "#22c55e" : FX.muted,
+            }}
+          >
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{
+                background: marketState === "REGULAR" || marketState === "OPEN"
+                  ? "#22c55e" : FX.muted,
+                boxShadow: marketState === "REGULAR" || marketState === "OPEN"
+                  ? "0 0 6px rgba(34,197,94,0.8)" : "none",
+              }}
+            />
+            {marketState === "REGULAR" || marketState === "OPEN" ? "Market open" : "Market closed"}
           </div>
         )}
 
