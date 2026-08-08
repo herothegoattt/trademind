@@ -140,7 +140,7 @@ const translations: Record<Lang, Record<string, string>> = {
     section_trader_dna: 'Trader DNA',
     section_investing: 'Investing',
     section_analytics_lab: 'Analytics Lab',
-    section_backtesting: 'Bar Replay',
+    section_backtesting: 'Backtest',
 
     // Error types
     error_fomo: 'FOMO',
@@ -596,7 +596,7 @@ const translations: Record<Lang, Record<string, string>> = {
     section_trader_dna: 'Трейдер DNA',
     section_investing: 'Инвестиции',
     section_analytics_lab: 'Analytics Lab',
-    section_backtesting: 'Bar Replay',
+    section_backtesting: 'Backtest',
 
     // Error types
     error_fomo: 'FOMO',
@@ -1052,7 +1052,7 @@ const translations: Record<Lang, Record<string, string>> = {
     section_trader_dna: 'Treydar DNA',
     section_investing: 'Investitsiyalar',
     section_analytics_lab: 'Analytics Lab',
-    section_backtesting: 'Bar Replay',
+    section_backtesting: 'Backtest',
 
     // Error types
     error_fomo: 'FOMO',
