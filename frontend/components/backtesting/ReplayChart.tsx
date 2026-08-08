@@ -7,15 +7,21 @@ export interface OHLCVBar {
   time: number; open: number; high: number; low: number; close: number; volume: number;
 }
 
-export type DrawingTool = "pointer" | "pen" | "line" | "hline" | "ray" | "eraser";
+export type DrawingTool =
+  | "pointer" | "pen" | "line" | "hline" | "ray"
+  | "rect"   // POI / FVG / demand-supply zone box
+  | "rr"     // Risk-to-reward Long/Short grid
+  | "brk"    // BOS / CHOCH structure marker
+  | "eraser";
 
 export interface DrawPoint { time: number; price: number; }
 export interface Drawing {
   id: string;
-  type: "pen" | "line" | "hline" | "ray";
+  type: "pen" | "line" | "hline" | "ray" | "rect" | "rr" | "brk";
   points: DrawPoint[];
   color: string;
   width: number;
+  label?: string;   // e.g. "POI", "FVG", "BOS", "CHOCH", "Supply", "Demand"
 }
 
 /* ── Props ────────────────────────────────────────────────────────── */
@@ -30,6 +36,8 @@ interface Props {
   candleUpColor?:    string;
   candleDownColor?:  string;
   liveBarOverride?:  OHLCVBar;
+  structureLabel?:   "BOS" | "CHOCH";   // label used by the "brk" tool
+  zoneLabel?:        string;            // label used by the "rect" tool (POI/FVG/zone)
 }
 
 /* ── Coordinate helpers ───────────────────────────────────────────── */
@@ -113,7 +121,111 @@ function drawShape(
       }
     }
   }
+
+  if (d.type === "rect" && d.points.length >= 2) {
+    const p1 = toPixel(chart, series, d.points[0]);
+    const p2 = toPixel(chart, series, d.points[1]);
+    if (p1 && p2) {
+      const x1 = Math.min(p1.x, p2.x) * dpr, x2 = Math.max(p1.x, p2.x) * dpr;
+      const y1 = Math.min(p1.y, p2.y) * dpr, y2 = Math.max(p1.y, p2.y) * dpr;
+      ctx.fillStyle = hexA(d.color, 0.12);
+      ctx.strokeStyle = d.color;
+      ctx.lineWidth   = d.width * dpr;
+      ctx.setLineDash([6 * dpr, 4 * dpr]);
+      ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.setLineDash([]);
+      // time-axis label
+      if (d.label) {
+        const label = d.label.toUpperCase();
+        ctx.font = `bold ${9 * dpr}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.fillStyle = d.color;
+        ctx.textBaseline = "top";
+        ctx.fillText(label, x1 + 4 * dpr, Math.max(2 * dpr, y1 + 4 * dpr));
+      }
+    }
+  }
+
+  if (d.type === "rr" && d.points.length >= 2) {
+    // points[0] = stop-loss anchor, points[1] = entry/TP baseline
+    const p1 = toPixel(chart, series, d.points[0]);
+    const p2 = toPixel(chart, series, d.points[1]);
+    if (p1 && p2) {
+      const entry = d.points[1].price, sl = d.points[0].price;
+      const dir  = entry >= sl ? 1 : -1;
+      const risk = Math.abs(entry - sl);
+      if (risk > 0) {
+        const N = 3;
+        ctx.font = `bold ${9 * dpr}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        for (let i = 0; i <= N; i++) {
+          const target = entry + dir * risk * i;
+          const ty = series.priceToCoordinate(target);
+          if (ty == null) continue;
+          const isBE = i === 0, isTP = i === 1;
+          ctx.save();
+          ctx.strokeStyle = isBE ? "#64748b" : isTP ? "#22c55e" : hexA("#22c55e", 0.55);
+          ctx.lineWidth = (isBE || isTP ? 1.6 : 1) * dpr;
+          ctx.setLineDash([6 * dpr, 4 * dpr]);
+          ctx.beginPath(); ctx.moveTo(0, ty * dpr); ctx.lineTo(W, ty * dpr); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = isBE ? "#94a3b8" : isTP ? "#22c55e" : hexA("#22c55e", 0.7);
+          const label = i === 0 ? "BE" : `+${i}R`;
+          ctx.fillText(label, W - 6 * dpr, ty * dpr);
+          ctx.restore();
+        }
+        // entry + SL labels
+        const ey = series.priceToCoordinate(entry);
+        const sy = series.priceToCoordinate(sl);
+        if (ey != null) { ctx.fillStyle = "#60a5fa"; ctx.textAlign = "left"; ctx.fillText(`Entry ${fmtNum(entry)}`, 6 * dpr, ey * dpr); }
+        if (sy != null) { ctx.fillStyle = "#ef4444"; ctx.textAlign = "left"; ctx.fillText(`SL ${fmtNum(sl)}`, 6 * dpr, sy * dpr); }
+        ctx.textAlign = "start";
+      }
+    }
+  }
+
+  if (d.type === "brk" && d.points.length >= 2) {
+    const p1 = toPixel(chart, series, d.points[0]);
+    const p2 = toPixel(chart, series, d.points[1]);
+    if (p1 && p2) {
+      ctx.save();
+      ctx.strokeStyle = d.color;
+      ctx.lineWidth   = d.width * dpr;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(p1.x * dpr, p1.y * dpr);
+      ctx.lineTo(p2.x * dpr, p2.y * dpr);
+      ctx.stroke();
+      // marker dot at breakout point
+      ctx.fillStyle = d.color;
+      ctx.beginPath();
+      ctx.arc(p2.x * dpr, p2.y * dpr, 3.5 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      if (d.label) {
+        ctx.font = `bold ${9 * dpr}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.fillStyle = d.color;
+        ctx.textBaseline = "bottom";
+        ctx.fillText(d.label.toUpperCase(), p2.x * dpr + 5 * dpr, p2.y * dpr - 3 * dpr);
+        ctx.textBaseline = "alphabetic";
+      }
+      ctx.restore();
+    }
+  }
   ctx.restore();
+}
+
+/* hex color with alpha, supports #rrggbb */
+function hexA(hex: string, a: number): string {
+  const h = hex.replace("#", "");
+  const f = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(f, 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function fmtNum(n: number): string {
+  return n < 0.01 ? n.toFixed(5) : n < 1 ? n.toFixed(4) : n.toFixed(2);
 }
 
 /* ── Hit testing (eraser) ─────────────────────────────────────────── */
@@ -140,11 +252,33 @@ function hitTest(
     const y = series.priceToCoordinate(d.points[0]?.price ?? 0);
     return y != null && Math.abs(y - my) < R;
   }
-  if ((d.type === "line" || d.type === "ray") && d.points.length >= 2) {
+  if ((d.type === "line" || d.type === "ray" || d.type === "brk") && d.points.length >= 2) {
     const p1 = toPixel(chart, series, d.points[0]);
     const p2 = toPixel(chart, series, d.points[1]);
     if (!p1 || !p2) return false;
     return distPtSeg(mx, my, p1.x, p1.y, p2.x, p2.y) < R;
+  }
+  if (d.type === "rect" && d.points.length >= 2) {
+    const p1 = toPixel(chart, series, d.points[0]);
+    const p2 = toPixel(chart, series, d.points[1]);
+    if (!p1 || !p2) return false;
+    return mx >= Math.min(p1.x, p2.x) - R && mx <= Math.max(p1.x, p2.x) + R &&
+           my >= Math.min(p1.y, p2.y) - R && my <= Math.max(p1.y, p2.y) + R;
+  }
+  if (d.type === "rr" && d.points.length >= 2) {
+    const p1 = toPixel(chart, series, d.points[0]);
+    const p2 = toPixel(chart, series, d.points[1]);
+    if (p1 && p2 && Math.abs(my - p1.y) < R) return true;
+    if (p1 && p2) {
+      const entry = d.points[1].price, sl = d.points[0].price;
+      const dir = entry >= sl ? 1 : -1;
+      const risk = Math.abs(entry - sl);
+      for (let i = 0; i <= 3; i++) {
+        const y = series.priceToCoordinate(entry + dir * risk * i);
+        if (y != null && Math.abs(y - my) < R) return true;
+      }
+    }
+    return false;
   }
   return false;
 }
@@ -160,6 +294,8 @@ export function ReplayChart({
   candleUpColor   = "#10b981",
   candleDownColor = "#ef4444",
   liveBarOverride,
+  structureLabel = "BOS",
+  zoneLabel = "POI",
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
@@ -178,6 +314,8 @@ export function ReplayChart({
   const drawingsRef  = useRef(drawings);
   const upColorRef   = useRef(candleUpColor);
   const downColorRef = useRef(candleDownColor);
+  const structRef    = useRef(structureLabel);
+  const zoneLabelRef = useRef(zoneLabel);
   const isPenDown    = useRef(false);
   const pendingPen   = useRef<DrawPoint[]>([]);
   const lineStart    = useRef<DrawPoint | null>(null);
@@ -189,6 +327,8 @@ export function ReplayChart({
   useEffect(() => { widthRef.current    = drawWidth;      }, [drawWidth]);
   useEffect(() => { upColorRef.current  = candleUpColor;  }, [candleUpColor]);
   useEffect(() => { downColorRef.current = candleDownColor; }, [candleDownColor]);
+  useEffect(() => { structRef.current = structureLabel; }, [structureLabel]);
+  useEffect(() => { zoneLabelRef.current = zoneLabel; }, [zoneLabel]);
   useEffect(() => { drawingsRef.current = drawings; scheduleRender(); }, [drawings]); // eslint-disable-line
 
   /* ── Apply candle color changes live ───────────────────────────── */
@@ -269,6 +409,39 @@ export function ReplayChart({
         ctx.lineWidth   = widthRef.current * dpr;
         ctx.setLineDash([8 * dpr, 5 * dpr]);
         ctx.beginPath(); ctx.moveTo(0, y * dpr); ctx.lineTo(W, y * dpr); ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    if (ls && cur && toolRef.current === "rect") {
+      const p1 = toPixel(chart, series, ls);
+      if (p1) {
+        const x1 = Math.min(p1.x, cur.x) * dpr, x2 = Math.max(p1.x, cur.x) * dpr;
+        const y1 = Math.min(p1.y, cur.y) * dpr, y2 = Math.max(p1.y, cur.y) * dpr;
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        ctx.strokeStyle = colorRef.current;
+        ctx.fillStyle   = hexA(colorRef.current, 0.1);
+        ctx.lineWidth   = widthRef.current * dpr;
+        ctx.setLineDash([6 * dpr, 4 * dpr]);
+        ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+        ctx.restore();
+      }
+    }
+
+    if (ls && cur && toolRef.current === "rr") {
+      const p1 = toPixel(chart, series, ls);
+      if (p1) {
+        ctx.save();
+        ctx.globalAlpha = 0.7;
+        ctx.strokeStyle = colorRef.current;
+        ctx.lineWidth   = widthRef.current * dpr;
+        ctx.setLineDash([6 * dpr, 4 * dpr]);
+        ctx.beginPath();
+        ctx.moveTo(p1.x * dpr, p1.y * dpr);
+        ctx.lineTo(cur.x * dpr, cur.y * dpr);
+        ctx.stroke();
         ctx.restore();
       }
     }
@@ -460,12 +633,27 @@ export function ReplayChart({
       return;
     }
 
-    if (t === "line" || t === "ray") {
+    if (t === "line" || t === "ray" || t === "rect" || t === "brk") {
       if (!lineStart.current) {
         lineStart.current = cp;
         mouseCSS.current  = px;
       } else {
-        onDrawingsChange([...drawingsRef.current, { id: newId(), type: t, points: [lineStart.current, cp], color: colorRef.current, width: widthRef.current }]);
+        const label = t === "rect" ? zoneLabelRef.current : t === "brk" ? structRef.current : undefined;
+        onDrawingsChange([...drawingsRef.current, { id: newId(), type: t, points: [lineStart.current, cp], color: colorRef.current, width: widthRef.current, label }]);
+        lineStart.current = null;
+        mouseCSS.current  = null;
+      }
+      scheduleRender();
+      return;
+    }
+
+    if (t === "rr") {
+      if (!lineStart.current) {
+        // first click = stop-loss anchor
+        lineStart.current = cp;
+        mouseCSS.current  = px;
+      } else {
+        onDrawingsChange([...drawingsRef.current, { id: newId(), type: "rr", points: [lineStart.current, cp], color: colorRef.current, width: widthRef.current }]);
         lineStart.current = null;
         mouseCSS.current  = null;
       }
@@ -496,7 +684,7 @@ export function ReplayChart({
       if (kept.length !== drawingsRef.current.length) onDrawingsChange(kept);
     }
 
-    if (["line", "ray", "hline"].includes(t) && lineStart.current) scheduleRender();
+    if (["line", "ray", "hline", "rect", "rr", "brk"].includes(t) && lineStart.current) scheduleRender();
   };
 
   const onMouseUp = () => {
@@ -526,6 +714,9 @@ export function ReplayChart({
     line:    lineStart.current ? "crosshair" : "cell",
     hline:   "row-resize",
     ray:     lineStart.current ? "crosshair" : "cell",
+    rect:    lineStart.current ? "crosshair" : "cell",
+    rr:      lineStart.current ? "crosshair" : "cell",
+    brk:     lineStart.current ? "crosshair" : "cell",
     eraser:  "cell",
   };
 

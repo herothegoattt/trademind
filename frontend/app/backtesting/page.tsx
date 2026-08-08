@@ -11,12 +11,19 @@ import {
   MousePointer2, Pencil, Minus, ArrowUpRight, Eraser, Trash2, Search, X,
   RotateCcw as Reset, Layers, Wallet, Activity, NotebookPen, PieChart,
   Target, Plus, Check, CircleDot, Save, Maximize2, Minimize2, Timer, Zap,
+  Ruler, Square, GitBranch,
 } from "lucide-react";
 import type { OHLCVBar, DrawingTool, Drawing } from "../../components/backtesting/ReplayChart";
+import AnalyticsPanel from "../../components/backtesting/AnalyticsPanel";
 
 const ReplayChart = dynamic(
   () => import("../../components/backtesting/ReplayChart").then((m) => m.ReplayChart),
   { ssr: false, loading: () => <div className="w-full h-full flex items-center justify-center"><RefreshCw className="w-5 h-5 animate-spin" style={{ color: "rgba(255,255,255,0.25)" }} /></div> }
+);
+
+const MultiTimeframe = dynamic(
+  () => import("../../components/backtesting/MultiTimeframe").then((m) => m.default),
+  { ssr: false, loading: () => <div /> }
 );
 
 /* ── FX Replay style palette ───────────────────────────────────── */
@@ -38,9 +45,20 @@ const FX = {
 };
 
 /* ── Data ─────────────────────────────────────────────────────── */
-type Category = "Stocks" | "ETFs" | "Indices" | "Forex" | "Crypto" | "Commodities";
+type Category = "My Pairs" | "Stocks" | "ETFs" | "Indices" | "Forex" | "Crypto" | "Commodities";
 
+/* TradingView-style pairs the trader trades daily — mapped to live Yahoo sources */
 const SYMBOLS: Record<Category, { label: string; ticker: string }[]> = {
+  "My Pairs": [
+    { label: "XAUUSD", ticker: "GC=F"      },   // Gold / USD
+    { label: "XAGUSD", ticker: "SI=F"      },   // Silver / USD
+    { label: "GER40",  ticker: "^GDAXI"    },   // Germany 40 (DAX)
+    { label: "NAS100", ticker: "^NDX"      },   // Nasdaq 100
+    { label: "SPX500", ticker: "^GSPC"     },   // S&P 500
+    { label: "US30",   ticker: "^DJI"      },   // Dow Jones 30
+    { label: "GBPUSD", ticker: "GBPUSD=X"  },   // GBP / USD
+    { label: "EURUSD", ticker: "EURUSD=X"  },   // EUR / USD
+  ],
   Stocks: [
     { label: "AAPL",  ticker: "AAPL"  }, { label: "MSFT",  ticker: "MSFT"  },
     { label: "NVDA",  ticker: "NVDA"  }, { label: "GOOGL", ticker: "GOOGL" },
@@ -157,6 +175,7 @@ const SYMBOLS: Record<Category, { label: string; ticker: string }[]> = {
 };
 
 const CAT_COLOR: Record<Category, { color: string; rgb: string }> = {
+  "My Pairs":    { color: "#fbbf24", rgb: "251,191,36" },
   Stocks:      { color: "#4ade80", rgb: "74,222,128"  },
   ETFs:        { color: "#818cf8", rgb: "129,140,248" },
   Indices:     { color: "#38bdf8", rgb: "56,189,248"  },
@@ -179,6 +198,7 @@ const PERIODS = [
 ];
 
 const SPEEDS = [
+  { label: "0.5×", ms: 2400 },
   { label: "1×",   ms: 1200 },
   { label: "2×",   ms: 700  },
   { label: "3×",   ms: 400  },
@@ -249,6 +269,7 @@ interface OpenPos {
   tp: number | null;
   openBar: number;
   openTime: number;
+  breakEven?: boolean;
 }
 interface ClosedTrade {
   id: string;
@@ -262,6 +283,8 @@ interface ClosedTrade {
   reason: "TP" | "SL" | "Manual" | "Session End";
   openTime: number;
   closeTime: number;
+  symbol?: string;
+  partial?: boolean;
 }
 interface JournalEntry {
   id: string;
@@ -271,14 +294,27 @@ interface JournalEntry {
   pnl?: number;
 }
 
+interface PendingOrder {
+  id: string;
+  side: Side;
+  type: "market" | "limit" | "stop";
+  price: number;
+  size: number;
+  sl: number | null;
+  tp: number | null;
+  placedBar: number;
+  placedTime: number;
+  partial?: boolean;
+}
+
 const CONTRACT = 100;
 const START_BALANCE = 10000;
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 /* ── Main page ────────────────────────────────────────────────── */
 export default function BacktestPage() {
-  const [ticker,      setTicker]      = useState("EURUSD=X");
-  const [tickerLabel, setTickerLabel] = useState("EUR/USD");
+  const [ticker,      setTicker]      = useState("GC=F");
+  const [tickerLabel, setTickerLabel] = useState("XAUUSD");
   const [interval,    setInterval]    = useState("1h");
   const [period,      setPeriod]      = useState("1y");
 
@@ -288,7 +324,7 @@ export default function BacktestPage() {
   const [error,      setError]      = useState<string | null>(null);
 
   const [isPlaying,    setIsPlaying]    = useState(false);
-  const [speedIdx,     setSpeedIdx]     = useState(2);
+  const [speedIdx,     setSpeedIdx]     = useState(3);
   const [speedOpen,    setSpeedOpen]    = useState(false);
   const [periodOpen,   setPeriodOpen]   = useState(false);
   const [panelOpen,    setPanelOpen]    = useState(true);
@@ -310,6 +346,17 @@ export default function BacktestPage() {
   const [orderSL,   setOrderSL]   = useState("");
   const [orderTP,   setOrderTP]   = useState("");
 
+  const [orderType,    setOrderType]    = useState<"market" | "limit" | "stop">("market");
+  const [orderPrice,   setOrderPrice]   = useState("");
+  const [riskEnabled,  setRiskEnabled]  = useState(false);
+  const [riskMode,     setRiskMode]     = useState<"percent" | "fixed">("percent");
+  const [riskValue,    setRiskValue]    = useState("1");
+  const [partialTP,    setPartialTP]    = useState(false);
+  const [pending,      setPending]      = useState<PendingOrder[]>([]);
+  const [mtfOpen,      setMtfOpen]      = useState(false);
+  const [zoneLabel,    setZoneLabel]    = useState("POI");
+  const [structLabel,  setStructLabel]  = useState<"BOS" | "CHOCH">("BOS");
+
   const [positions, setPositions] = useState<OpenPos[]>([]);
   const [closed,    setClosed]    = useState<ClosedTrade[]>([]);
   const [journal,   setJournal]   = useState<JournalEntry[]>([]);
@@ -319,6 +366,7 @@ export default function BacktestPage() {
   const playRef       = useRef<number | null>(null);
   const allBarsRef    = useRef<OHLCVBar[]>([]);
   const positionsRef  = useRef<OpenPos[]>([]);
+  const pendingRef     = useRef<PendingOrder[]>([]);
   const searchRef     = useRef<HTMLDivElement>(null);
   const searchInputRef= useRef<HTMLInputElement>(null);
   const periodRef     = useRef<HTMLDivElement>(null);
@@ -366,7 +414,7 @@ export default function BacktestPage() {
     setLoading(true); setError(null); setIsPlaying(false); setLiveBar(null);
     if (playRef.current !== null) window.clearInterval(playRef.current);
     try {
-      const res  = await fetch(`/api/backtesting/ohlcv?symbol=${encodeURIComponent(sym)}&interval=${iv}&period=${per}`);
+      const res  = await fetch(`/api/backtesting/ohlcv?symbol=${encodeURIComponent(sym)}&interval=${iv}&period=${per}&v=${Date.now()}`, { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || "Failed to load data");
       const bars: OHLCVBar[] = json.candles;
@@ -375,6 +423,8 @@ export default function BacktestPage() {
       lastScanIdx.current = bars.length > 1 ? Math.floor(bars.length * 0.55) : 0;
       positionsRef.current = [];
       setPositions([]);
+      pendingRef.current = [];
+      setPending([]);
       setClosed([]);
       setJournal([{
         id: uid(), time: Date.now() / 1000, kind: "note",
@@ -428,7 +478,7 @@ export default function BacktestPage() {
     const poll = async () => {
       if (!isAtEndRef.current) return;
       try {
-        const res = await fetch(`/api/backtesting/quote?symbol=${encodeURIComponent(ticker)}`);
+        const res = await fetch(`/api/backtesting/quote?symbol=${encodeURIComponent(ticker)}&v=${Date.now()}`, { cache: "no-store" });
         if (!res.ok || cancelled) return;
         const d = await res.json();
         const bars = allBarsRef.current;
@@ -446,53 +496,109 @@ export default function BacktestPage() {
     return () => { cancelled = true; window.clearInterval(iv); };
   }, [allBars.length, ticker, interval]);
 
-  /* SL/TP engine — sweep un-scanned bars */
+  /* SL/TP + pending-order engine — sweep un-scanned bars */
   useEffect(() => {
     if (!allBars.length) return;
     if (currentIdx <= lastScanIdx.current) return;
 
+    let positions = positionsRef.current.slice();
+    let pend = pendingRef.current.slice();
     const newlyClosed: ClosedTrade[] = [];
-    let remaining = positionsRef.current.slice();
+    const openEntries: JournalEntry[] = [];
 
     for (let i = lastScanIdx.current + 1; i <= currentIdx; i++) {
       const b = allBars[i];
       if (!b) break;
-      const still: OpenPos[] = [];
-      for (const p of remaining) {
-        let exit: number | null = null;
-        let reason: ClosedTrade["reason"] | null = null;
-        if (p.side === "buy") {
-          if (p.sl !== null && b.low <= p.sl)      { exit = p.sl; reason = "SL"; }
-          else if (p.tp !== null && b.high >= p.tp) { exit = p.tp; reason = "TP"; }
-        } else {
-          if (p.sl !== null && b.high >= p.sl)      { exit = p.sl; reason = "SL"; }
-          else if (p.tp !== null && b.low <= p.tp)  { exit = p.tp; reason = "TP"; }
+
+      /* pending limit / stop orders → open positions on High/Low sweep */
+      if (pend.length) {
+        const stillPend: PendingOrder[] = [];
+        for (const p of pend) {
+          const isBuy = p.side === "buy";
+          const hit = p.type === "limit"
+            ? (isBuy ? b.low <= p.price : b.high >= p.price)
+            : (isBuy ? b.high >= p.price : b.low <= p.price);
+          if (hit) {
+            positions.push({
+              id: p.id, side: p.side, size: p.size, entry: p.price,
+              sl: p.sl, tp: p.tp, openBar: i, openTime: b.time,
+            });
+            openEntries.push({
+              id: uid(), time: b.time, kind: "open",
+              text: `${p.side.toUpperCase()} ${p.type.toUpperCase()} ${p.size} lot fill @ ${fmtPrice(p.price)}${p.sl ? ` · SL ${fmtPrice(p.sl)}` : ""}${p.tp ? ` · TP ${fmtPrice(p.tp)}` : ""}`,
+            });
+          } else {
+            stillPend.push(p);
+          }
         }
-        if (exit !== null && reason !== null) {
-          const dir = p.side === "buy" ? 1 : -1;
-          const pnl = dir * (exit - p.entry) * p.size * CONTRACT;
-          newlyClosed.push({ id: p.id, side: p.side, size: p.size, entry: p.entry, exit, sl: p.sl, tp: p.tp, pnl, reason, openTime: p.openTime, closeTime: b.time });
-        } else {
-          still.push(p);
-        }
+        pend = stillPend;
       }
-      remaining = still;
-      if (!remaining.length) break;
+
+      /* open positions — SL / TP sweep, with partial TP → break-even */
+      const still: OpenPos[] = [];
+      for (const p of positions) {
+        const dir = p.side === "buy" ? 1 : -1;
+        const isBuy = p.side === "buy";
+        let acted = false;
+
+        if (isBuy && p.sl !== null && b.low <= p.sl) {
+          const pnl = dir * (p.sl - p.entry) * p.size * CONTRACT;
+          newlyClosed.push({ id: p.id, side: p.side, size: p.size, entry: p.entry, exit: p.sl, sl: p.sl, tp: p.tp, pnl, reason: "SL", openTime: p.openTime, closeTime: b.time });
+          acted = true;
+        } else if (isBuy && p.tp !== null && b.high >= p.tp) {
+          if (partialTP && p.size > 0.25) {
+            const half = p.size / 2;
+            const halfPnl = dir * (p.tp - p.entry) * half * CONTRACT;
+            newlyClosed.push({ id: p.id, side: p.side, size: half, entry: p.entry, exit: p.tp, sl: p.sl, tp: p.tp, pnl: halfPnl, reason: "TP", openTime: p.openTime, closeTime: b.time, partial: true });
+            still.push({ id: p.id + "-be", side: p.side, size: half, entry: p.entry, sl: p.entry, tp: null, openBar: i, openTime: b.time, breakEven: true });
+          } else {
+            const pnl2 = dir * (p.tp - p.entry) * p.size * CONTRACT;
+            newlyClosed.push({ id: p.id, side: p.side, size: p.size, entry: p.entry, exit: p.tp, sl: p.sl, tp: p.tp, pnl: pnl2, reason: "TP", openTime: p.openTime, closeTime: b.time });
+          }
+          acted = true;
+        } else if (!isBuy && p.sl !== null && b.high >= p.sl) {
+          const pl = dir * (p.sl - p.entry) * p.size * CONTRACT;
+          newlyClosed.push({ id: p.id, side: p.side, size: p.size, entry: p.entry, exit: p.sl, sl: p.sl, tp: p.tp, pnl: pl, reason: "SL", openTime: p.openTime, closeTime: b.time });
+          acted = true;
+        } else if (!isBuy && p.tp !== null && b.low <= p.tp) {
+          if (partialTP && p.size > 0.25) {
+            const half = p.size / 2;
+            const halfPnl = dir * (p.tp - p.entry) * half * CONTRACT;
+            newlyClosed.push({ id: p.id, side: p.side, size: half, entry: p.entry, exit: p.tp, sl: p.sl, tp: p.tp, pnl: halfPnl, reason: "TP", openTime: p.openTime, closeTime: b.time, partial: true });
+            still.push({ id: p.id + "-be", side: p.side, size: half, entry: p.entry, sl: p.entry, tp: null, openBar: i, openTime: b.time, breakEven: true });
+          } else {
+            const pnl2 = dir * (p.tp - p.entry) * p.size * CONTRACT;
+            newlyClosed.push({ id: p.id, side: p.side, size: p.size, entry: p.entry, exit: p.tp, sl: p.sl, tp: p.tp, pnl: pnl2, reason: "TP", openTime: p.openTime, closeTime: b.time });
+          }
+          acted = true;
+        }
+
+        if (!acted) still.push(p);
+      }
+      positions = still;
+
+      if (!positions.length && !pend.length) break;
     }
+
+    pendingRef.current = pend;
+    setPending(pend);
+    positionsRef.current = positions;
+    setPositions(positions);
     lastScanIdx.current = currentIdx;
+
+    if (openEntries.length) setJournal((prev) => [...openEntries, ...prev]);
+
     if (newlyClosed.length) {
-      positionsRef.current = remaining;
-      setPositions(remaining);
       setClosed((prev) => [...newlyClosed, ...prev]);
       const entries: JournalEntry[] = newlyClosed.map((c) => ({
         id: uid(), time: c.closeTime, kind: "close", pnl: c.pnl,
-        text: `${c.side.toUpperCase()} ${c.size} → ${c.reason} ${fmtMoney(c.pnl)}`,
+        text: `${c.side.toUpperCase()} ${c.size} → ${c.reason}${c.partial ? " (partial)" : ""} ${fmtMoney(c.pnl)}`,
       }));
       setJournal((prev) => [...entries, ...prev]);
     }
-  }, [currentIdx, allBars]);
+  }, [currentIdx, allBars, partialTP]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* derived */
+/* derived */
   const visibleBars = allBars.slice(0, currentIdx + 1);
   const currentBar  = visibleBars[visibleBars.length - 1];
   const firstBar    = visibleBars[0];
@@ -516,6 +622,7 @@ export default function BacktestPage() {
   const grossW = closed.filter((c) => c.pnl > 0).reduce((s, c) => s + c.pnl, 0);
   const grossL = Math.abs(closed.filter((c) => c.pnl < 0).reduce((s, c) => s + c.pnl, 0));
   const pf     = grossL > 0 ? grossW / grossL : grossW > 0 ? Infinity : 0;
+  void wins; void pf;
 
   const move = (delta: number) => setCurrentIdx((p) => Math.max(0, Math.min(p + delta, allBars.length - 1)));
 
@@ -535,48 +642,92 @@ export default function BacktestPage() {
     if (e.key === "Escape") { setSearchOpen(false); setSearchQuery(""); }
   };
 
-  /* trading actions */
-  const placeOrder = (side: Side) => {
-    if (!currentBar || !allBars.length) return;
-    if (orderSize <= 0) { flashNotice("Position size must be > 0"); return; }
-    const sl = orderSL ? Number(orderSL) : null;
-    const tp = orderTP ? Number(orderTP) : null;
-    const pos: OpenPos = {
-      id: uid(), side, size: orderSize, entry: execPrice,
-      sl, tp, openBar: currentIdx, openTime: currentBar.time,
-    };
-    positionsRef.current = [...positionsRef.current, pos];
-    setPositions(positionsRef.current);
-    setJournal((prev) => [{
-      id: uid(), time: currentBar.time, kind: "open",
-      text: `${side.toUpperCase()} ${orderSize} lot @ ${fmtPrice(execPrice)}${sl ? ` · SL ${fmtPrice(sl)}` : ""}${tp ? ` · TP ${fmtPrice(tp)}` : ""}`,
-    }, ...prev]);
-    flashNotice(`${side.toUpperCase()} ${orderSize} lot @ ${fmtPrice(execPrice)}`);
+  /* risk-based position size ($ or % of balance) */
+  const autoSizeFor = (entry: number, slVal: number): number => {
+    if (!riskEnabled) return orderSize;
+    if (!slVal || !isFinite(slVal) || slVal === entry) return orderSize;
+    const riskAmt = riskMode === "percent" ? balance * (Number(riskValue) / 100) : Number(riskValue);
+    if (!isFinite(riskAmt) || riskAmt <= 0) return orderSize;
+    const q = riskAmt / (Math.abs(entry - slVal) * CONTRACT);
+    return Math.max(0.01, Math.min(50, q));
   };
 
-  const closePos = (id: string) => {
-    const p = positionsRef.current.find((x) => x.id === id);
-    if (!p || !currentBar) return;
-    const dir = p.side === "buy" ? 1 : -1;
-    const pnl = dir * (execPrice - p.entry) * p.size * CONTRACT;
-    const rest = positionsRef.current.filter((x) => x.id !== id);
-    positionsRef.current = rest;
-    setPositions(rest);
-    setClosed((prev) => [{
-      id: p.id, side: p.side, size: p.size, entry: p.entry, exit: execPrice,
-      sl: p.sl, tp: p.tp, pnl, reason: "Manual",
-      openTime: p.openTime, closeTime: currentBar.time,
-    }, ...prev]);
-    setJournal((prev) => [{
-      id: uid(), time: currentBar.time, kind: "close", pnl,
-      text: `${p.side.toUpperCase()} ${p.size} lot closed @ ${fmtPrice(execPrice)} · ${fmtMoney(pnl)}`,
-    }, ...prev]);
+  const tradingHandlers = {
+    /* trading actions */
+    placeOrder: (side: Side) => {
+      if (!currentBar || !allBars.length) return;
+
+      const sl = orderSL ? Number(orderSL) : null;
+      const tp = orderTP ? Number(orderTP) : null;
+      if (orderSL && (!isFinite(sl as number) || sl === null)) { flashNotice("Invalid stop loss"); return; }
+      if (orderTP && (!isFinite(tp as number) || tp === null)) { flashNotice("Invalid take profit"); return; }
+
+      if (orderType !== "market") {
+        const px = Number(orderPrice);
+        if (!isFinite(px) || px <= 0) { flashNotice("Enter a limit/stop price"); return; }
+        const size = autoSizeFor(px, sl ?? px);
+        const o: PendingOrder = {
+          id: uid(), side, type: orderType, price: px, size,
+          sl, tp, placedBar: currentIdx, placedTime: currentBar.time, partial: partialTP,
+        };
+        pendingRef.current = [...pendingRef.current, o];
+        setPending(pendingRef.current);
+        setJournal((prev) => [{
+          id: uid(), time: currentBar.time, kind: "note",
+          text: `${side.toUpperCase()} ${orderType} ${px} · ${size} lot${sl ? ` · SL ${fmtPrice(sl)}` : ""}${tp ? ` · TP ${fmtPrice(tp)}` : ""}${partialTP ? " · partial+B/E" : ""}`,
+        }, ...prev]);
+        flashNotice(`${side.toUpperCase()} ${orderType} @ ${fmtPrice(px)}`);
+        return;
+      }
+
+      const size = autoSizeFor(execPrice, sl ?? execPrice);
+      const pos: OpenPos = {
+        id: uid(), side, size, entry: execPrice,
+        sl, tp, openBar: currentIdx, openTime: currentBar.time,
+      };
+      positionsRef.current = [...positionsRef.current, pos];
+      setPositions(positionsRef.current);
+      setJournal((prev) => [{
+        id: uid(), time: currentBar.time, kind: "open",
+        text: `${side.toUpperCase()} ${size} lot @ ${fmtPrice(execPrice)}${sl ? ` · SL ${fmtPrice(sl)}` : ""}${tp ? ` · TP ${fmtPrice(tp)}` : ""}${partialTP && tp ? " · partial+B/E" : ""}`,
+      }, ...prev]);
+      flashNotice(`${side.toUpperCase()} ${size} lot @ ${fmtPrice(execPrice)}`);
+    },
+
+    cancelPending: (id: string) => {
+      pendingRef.current = pendingRef.current.filter((p) => p.id !== id);
+      setPending(pendingRef.current);
+    },
+
+    closePos: (id: string) => {
+      const p = positionsRef.current.find((x) => x.id === id);
+      if (!p || !currentBar) return;
+      const dir = p.side === "buy" ? 1 : -1;
+      const pnl = dir * (execPrice - p.entry) * p.size * CONTRACT;
+      const rest = positionsRef.current.filter((x) => x.id !== id);
+      positionsRef.current = rest;
+      setPositions(rest);
+      setClosed((prev) => [{
+        id: p.id, side: p.side, size: p.size, entry: p.entry, exit: execPrice,
+        sl: p.sl, tp: p.tp, pnl, reason: "Manual",
+        openTime: p.openTime, closeTime: currentBar.time,
+      }, ...prev]);
+      setJournal((prev) => [{
+        id: uid(), time: currentBar.time, kind: "close", pnl,
+        text: `${p.side.toUpperCase()} ${p.size} lot closed @ ${fmtPrice(execPrice)} · ${fmtMoney(pnl)}`,
+      }, ...prev]);
+    },
   };
+
+  const placeOrder = tradingHandlers.placeOrder;
+  const closePos = tradingHandlers.closePos;
+  const cancelPending = tradingHandlers.cancelPending;
 
   const resetSession = () => {
     setIsPlaying(false);
     positionsRef.current = [];
-    setPositions([]); setClosed([]); setJournal([]);
+    pendingRef.current = [];
+    setPositions([]); setPending([]); setClosed([]); setJournal([]);
     setCurrentIdx(0); lastScanIdx.current = 0;
     if (allBars.length) setCurrentIdx(Math.max(0, Math.floor(allBars.length * 0.55)));
     flashNotice("Session reset");
@@ -587,6 +738,25 @@ export default function BacktestPage() {
     setJournal((prev) => [{ id: uid(), time: Date.now() / 1000, kind: "note", text: noteText.trim() }, ...prev]);
     setNoteText("");
   };
+
+  /* persist journal + closed trades + drawings locally (per symbol) */
+  const storageKey = () => `tm_backtest_v1_${ticker}`;
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey());
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (Array.isArray(saved.closed)) setClosed(saved.closed);
+      if (Array.isArray(saved.journal)) setJournal(saved.journal);
+      if (Array.isArray(saved.drawings)) setDrawings(saved.drawings);
+    } catch { /* ignore */ }
+  }, [ticker]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey(), JSON.stringify({ closed, journal, drawings, ticker, savedAt: Date.now() }));
+    } catch { /* ignore */ }
+  }, [closed, journal, drawings, ticker]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div
@@ -944,6 +1114,15 @@ export default function BacktestPage() {
         </span>
 
         <button
+          onClick={() => setMtfOpen((p) => !p)}
+          title="Multi-timeframe sync pane"
+          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors flex-shrink-0 hover:bg-white/5"
+          style={{ color: mtfOpen ? "#38bdf8" : FX.dim, background: mtfOpen ? "rgba(56,189,248,0.12)" : "transparent" }}
+        >
+          <Layers className="w-3.5 h-3.5" />
+        </button>
+
+        <button
           onClick={resetSession}
           title="Reset session"
           className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors flex-shrink-0 hover:bg-white/5"
@@ -971,6 +1150,10 @@ export default function BacktestPage() {
               onWidth={setDrawWidth}
               onClear={() => setDrawings([])}
               drawingsCount={drawings.length}
+              zoneLabel={zoneLabel}
+              onZoneLabel={setZoneLabel}
+              structLabel={structLabel}
+              onStructLabel={setStructLabel}
             />
           </div>
 
@@ -1013,7 +1196,22 @@ export default function BacktestPage() {
                 candleUpColor={candleUpColor}
                 candleDownColor={candleDownColor}
                 liveBarOverride={isAtEnd && liveBar ? liveBar : undefined}
+                structureLabel={structLabel}
+                zoneLabel={zoneLabel}
               />
+            )}
+
+            {mtfOpen && allBars.length > 0 && (
+              <div className="absolute bottom-0 left-0 right-0 z-10" style={{ height: 132 }}>
+                <MultiTimeframe
+                  ticker={ticker}
+                  period={period}
+                  currentTime={currentBar?.time ?? null}
+                  activeInterval={interval}
+                  onPickInterval={(iv) => setInterval(iv)}
+                  height={132}
+                />
+              </div>
             )}
           </div>
 
@@ -1065,6 +1263,22 @@ export default function BacktestPage() {
               wins={wins}
               closedCount={closed.length}
               pf={pf}
+              orderType={orderType}
+              setOrderType={setOrderType}
+              orderPrice={orderPrice}
+              setOrderPrice={setOrderPrice}
+              riskEnabled={riskEnabled}
+              setRiskEnabled={setRiskEnabled}
+              riskMode={riskMode}
+              setRiskMode={setRiskMode}
+              riskValue={riskValue}
+              setRiskValue={setRiskValue}
+              partialTP={partialTP}
+              setPartialTP={setPartialTP}
+              autoSize={autoSizeFor(execPrice, orderSL ? Number(orderSL) : execPrice)}
+              pending={pending}
+              onCancelPending={cancelPending}
+              tickerLabel={tickerLabel}
             />
           </div>
         )}
@@ -1222,13 +1436,20 @@ const DRAW_TOOLS: { tool: DrawingTool; icon: React.ReactNode; title: string }[] 
   { tool: "line",    icon: <TrendingUp    className="w-3.5 h-3.5" />, title: "Trend Line"       },
   { tool: "hline",   icon: <Minus         className="w-3.5 h-3.5" />, title: "Horizontal Line"  },
   { tool: "ray",     icon: <ArrowUpRight  className="w-3.5 h-3.5" />, title: "Ray"              },
+  { tool: "rect",    icon: <Square        className="w-3.5 h-3.5" />, title: "Zone (POI/FVG)"   },
+  { tool: "rr",      icon: <Ruler         className="w-3.5 h-3.5" />, title: "R:R Grid (L/S)"   },
+  { tool: "brk",     icon: <GitBranch     className="w-3.5 h-3.5" />, title: "BOS / CHOCH"      },
   { tool: "eraser",  icon: <Eraser        className="w-3.5 h-3.5" />, title: "Eraser"           },
 ];
 
 const PRESET_COLORS = ["#22d3ee", "#3b82f6", "#22c55e", "#ef4444", "#f59e0b", "#a78bfa", "#f8fafc"];
 
+const ZONE_LABELS = ["POI", "FVG", "Supply", "Demand", "OB"];
+const STRUCT_LABELS = ["BOS", "CHOCH"] as const;
+
 function DrawTools({
   tool, onTool, color, onColor, width, onWidth, onClear, drawingsCount,
+  zoneLabel, onZoneLabel, structLabel, onStructLabel,
 }: {
   tool: DrawingTool;
   onTool: (t: DrawingTool) => void;
@@ -1238,6 +1459,10 @@ function DrawTools({
   onWidth: (w: number) => void;
   onClear: () => void;
   drawingsCount: number;
+  zoneLabel: string;
+  onZoneLabel: (z: string) => void;
+  structLabel: "BOS" | "CHOCH";
+  onStructLabel: (s: "BOS" | "CHOCH") => void;
 }) {
   return (
     <>
@@ -1259,6 +1484,50 @@ function DrawTools({
           </button>
         ))}
       </div>
+
+      {tool === "rect" && (
+        <>
+          <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
+          <div className="flex items-center gap-0.5">
+            {ZONE_LABELS.map((z) => (
+              <button
+                key={z}
+                onClick={() => onZoneLabel(z)}
+                className="px-1.5 h-6 rounded text-[9px] font-bold transition-all"
+                style={{
+                  background: zoneLabel === z ? "rgba(34,211,238,0.14)" : "transparent",
+                  border: zoneLabel === z ? "1px solid rgba(34,211,238,0.4)" : "1px solid transparent",
+                  color: zoneLabel === z ? "#67e8f9" : "rgba(148,163,184,0.5)",
+                }}
+              >
+                {z}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {tool === "brk" && (
+        <>
+          <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
+          <div className="flex items-center gap-0.5">
+            {STRUCT_LABELS.map((s) => (
+              <button
+                key={s}
+                onClick={() => onStructLabel(s)}
+                className="px-1.5 h-6 rounded text-[9px] font-bold transition-all"
+                style={{
+                  background: structLabel === s ? "rgba(167,139,250,0.16)" : "transparent",
+                  border: structLabel === s ? "1px solid rgba(167,139,250,0.4)" : "1px solid transparent",
+                  color: structLabel === s ? "#c4b5fd" : "rgba(148,163,184,0.5)",
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
 
@@ -1330,6 +1599,13 @@ function TradePanel({
   positions, onClosePos,
   closed, journal, noteText, setNoteText, onAddNote,
   balance, equity, realized, wins, closedCount, pf,
+  orderType, setOrderType,
+  orderPrice, setOrderPrice,
+  riskEnabled, setRiskEnabled,
+  riskMode, setRiskMode,
+  riskValue, setRiskValue,
+  partialTP, setPartialTP,
+  autoSize, pending, onCancelPending, tickerLabel,
 }: {
   userTab: "trade" | "positions" | "journal" | "stats";
   setUserTab: (t: "trade" | "positions" | "journal" | "stats") => void;
@@ -1345,6 +1621,17 @@ function TradePanel({
   journal: JournalEntry[];
   noteText: string; setNoteText: (s: string) => void; onAddNote: () => void;
   balance: number; equity: number; realized: number; wins: number; closedCount: number; pf: number;
+  orderType: "market" | "limit" | "stop";
+  setOrderType: (t: "market" | "limit" | "stop") => void;
+  orderPrice: string; setOrderPrice: (s: string) => void;
+  riskEnabled: boolean; setRiskEnabled: (b: boolean) => void;
+  riskMode: "percent" | "fixed"; setRiskMode: (m: "percent" | "fixed") => void;
+  riskValue: string; setRiskValue: (s: string) => void;
+  partialTP: boolean; setPartialTP: (b: boolean) => void;
+  autoSize: number;
+  pending: PendingOrder[];
+  onCancelPending: (id: string) => void;
+  tickerLabel: string;
 }) {
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -1410,14 +1697,84 @@ function TradePanel({
               </button>
             </div>
 
-            {/* Entry price */}
-            <div className="mt-1 flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${FX.border}` }}>
-              <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: FX.dim }}>Market price</span>
-              <span className="text-[12px] font-bold font-mono" style={{ color: "#fff" }}>{execPrice ? fmtPrice(execPrice) : "—"}</span>
+            {/* Order type */}
+            <div className="grid grid-cols-3 gap-1">
+              {(["market", "limit", "stop"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setOrderType(t)}
+                  className="py-1 rounded-md text-[9px] font-bold transition-all"
+                  style={{
+                    background: orderType === t ? "rgba(59,130,246,0.14)" : "rgba(255,255,255,0.03)",
+                    border: orderType === t ? "1px solid rgba(59,130,246,0.4)" : `1px solid ${FX.border}`,
+                    color: orderType === t ? "#60a5fa" : "rgba(148,163,184,0.5)",
+                  }}
+                >
+                  {t.toUpperCase()}
+                </button>
+              ))}
             </div>
 
+            {/* Entry price */}
+            {orderType === "market" ? (
+              <div className="mt-1 flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${FX.border}` }}>
+                <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: FX.dim }}>Market price</span>
+                <span className="text-[12px] font-bold font-mono" style={{ color: "#fff" }}>{execPrice ? fmtPrice(execPrice) : "—"}</span>
+              </div>
+            ) : (
+              <LabelInput label={`${orderType} price`} value={orderPrice} onChange={setOrderPrice} placeholder={execPrice ? String(execPrice.toFixed(2)) : "0.00"} color="#60a5fa" />
+            )}
+
             {/* Size */}
-            <SizeBlock orderSize={orderSize} setOrderSize={setOrderSize} />
+            <SizeBlock orderSize={orderSize} setOrderSize={setOrderSize} disabled={riskEnabled} />
+
+            {/* Risk sizing */}
+            <div className="mt-1 rounded-lg p-2" style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${FX.border}` }}>
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] font-bold uppercase tracking-widest" style={{ color: FX.dim }}>Risk-based size</span>
+                <button
+                  onClick={() => setRiskEnabled(!riskEnabled)}
+                  className="relative w-7 h-4 rounded-full transition-all flex-shrink-0"
+                  style={{ background: riskEnabled ? "rgba(34,197,94,0.4)" : "rgba(255,255,255,0.08)" }}
+                >
+                  <span
+                    className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
+                    style={{ left: riskEnabled ? 14 : 2, background: riskEnabled ? "#22c55e" : "#64748b" }}
+                  />
+                </button>
+              </div>
+              {riskEnabled && (
+                <div className="flex items-center gap-1 mt-2">
+                  <div className="flex gap-1">
+                    {(["percent", "fixed"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setRiskMode(m)}
+                        className="px-2 py-1 rounded-md text-[9px] font-bold"
+                        style={{
+                          background: riskMode === m ? "rgba(59,130,246,0.14)" : "transparent",
+                          border: `1px solid ${riskMode === m ? "rgba(59,130,246,0.4)" : FX.border}`,
+                          color: riskMode === m ? "#60a5fa" : FX.dim,
+                        }}
+                      >
+                        {m === "percent" ? "%" : "$"}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    value={riskValue}
+                    onChange={(e) => setRiskValue(e.target.value)}
+                    type="text"
+                    inputMode="decimal"
+                    className="flex-1 min-w-0 bg-transparent text-[11px] font-mono outline-none rounded-lg px-2 py-1.5"
+                    style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${FX.border}`, color: "#fff" }}
+                  />
+                  <span className="text-[9px] font-bold font-mono flex-shrink-0" style={{ color: FX.dim }}>
+                    → {autoSize.toFixed(2)} lots
+                  </span>
+                </div>
+              )}
+            </div>
 
             {/* SL / TP */}
             <div className="grid grid-cols-2 gap-2 mt-1">
@@ -1425,7 +1782,20 @@ function TradePanel({
               <LabelInput label="Take Profit" value={orderTP} onChange={setOrderTP} placeholder="—" color={FX.up} />
             </div>
 
-            <p className="text-[8px] mt-1.5 text-center" style={{ color: FX.dim }}>
+            {/* Partial TP */}
+            <button
+              onClick={() => setPartialTP(!partialTP)}
+              className="mt-1 w-full py-1.5 rounded-lg text-[9px] font-bold transition-all"
+              style={{
+                background: partialTP ? "rgba(34,197,94,0.1)" : "rgba(255,255,255,0.03)",
+                border: `1px solid ${partialTP ? "rgba(34,197,94,0.4)" : FX.border}`,
+                color: partialTP ? "#4ade80" : FX.dim,
+              }}
+            >
+              {partialTP ? "✓ Partial TP 50% + Break-even" : "Partial TP 50% + Break-even"}
+            </button>
+
+            <p className="text-[8px] mt-1 text-center" style={{ color: FX.dim }}>
               P&L = (exit − entry) × {CONTRACT} × lots · balance starts at {fmtMoney(START_BALANCE)}
             </p>
           </div>
@@ -1433,7 +1803,34 @@ function TradePanel({
 
         {userTab === "positions" && (
           <div className="flex flex-col gap-1.5">
-            <p className="text-[9px] font-bold uppercase tracking-widest px-1" style={{ color: FX.dim }}>
+            {pending.length > 0 && (
+              <>
+                <p className="text-[9px] font-bold uppercase tracking-widest px-1" style={{ color: FX.dim }}>
+                  Pending · {pending.length}
+                </p>
+                {pending.map((p) => (
+                  <div key={p.id} className="rounded-lg px-2 py-1.5 flex items-center justify-between" style={{ background: "rgba(56,189,248,0.05)", border: `1px solid ${FX.border}` }}>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] font-bold" style={{ color: p.side === "buy" ? FX.up : FX.down }}>
+                        {p.side.toUpperCase()} {p.type.toUpperCase()} @ {fmtPrice(p.price)}
+                      </span>
+                      <span className="text-[8px] font-mono" style={{ color: FX.dim }}>
+                        {p.size} lot{p.sl ? ` · SL ${fmtPrice(p.sl)}` : ""}{p.tp ? ` · TP ${fmtPrice(p.tp)}` : ""}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => onCancelPending(p.id)}
+                      className="px-2 py-1 rounded-md text-[9px] font-bold"
+                      style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171" }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
+
+            <p className="text-[9px] font-bold uppercase tracking-widest px-1 mt-1" style={{ color: FX.dim }}>
               Open · {positions.length}
             </p>
             {positions.length === 0 && (
@@ -1528,15 +1925,7 @@ function TradePanel({
 
         {userTab === "stats" && (
           <div className="flex flex-col gap-1.5">
-            <StatRow label="Total trades" value={String(closedCount)} />
-            <StatRow label="Wins" value={String(wins)} />
-            <StatRow label="Win rate" value={closedCount ? `${((wins / closedCount) * 100).toFixed(1)}%` : "—"} />
-            <StatRow label="Profit factor" value={pf === Infinity ? "∞" : closedCount ? pf.toFixed(2) : "—"} />
-            <StatRow label="Net P&L" value={fmtMoney(realized)} up={realized >= 0} />
-            <div className="mt-1 rounded-lg p-2" style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${FX.border}` }}>
-              <p className="text-[8px] font-bold uppercase tracking-widest" style={{ color: FX.dim }}>Session</p>
-              <p className="text-[10px] mt-1" style={{ color: FX.muted }}>Replay candles to execute fake trades. P&L uses a fixed {CONTRACT} monetary scale per lot — good for practising structure, entries and risk management.</p>
-            </div>
+            <AnalyticsPanel closed={closed} start={START_BALANCE} />
           </div>
         )}
       </div>
@@ -1555,10 +1944,10 @@ function MiniStat({ label, value, idx, up }: { label: string; value: string; idx
   );
 }
 
-function SizeBlock({ orderSize, setOrderSize }: { orderSize: number; setOrderSize: (n: number) => void }) {
+function SizeBlock({ orderSize, setOrderSize, disabled }: { orderSize: number; setOrderSize: (n: number) => void; disabled?: boolean }) {
   const sizes = [0.25, 0.5, 1, 2, 5, 10];
   return (
-    <div className="mt-1.5">
+    <div className="mt-1.5" style={{ opacity: disabled ? 0.5 : 1, pointerEvents: disabled ? "none" : "auto" }}>
       <div className="flex items-center justify-between px-1 mb-1">
         <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: FX.dim }}>Size</span>
         <span className="text-[11px] font-bold font-mono" style={{ color: "#fff" }}>{orderSize} lots</span>
@@ -1608,14 +1997,5 @@ function LabelInput({ label, value, onChange, placeholder, color }: {
         style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${FX.border}`, color: color ?? "#fff" }}
       />
     </label>
-  );
-}
-
-function StatRow({ label, value, up }: { label: string; value: string; up?: boolean }) {
-  return (
-    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${FX.border}` }}>
-      <span className="text-[10px]" style={{ color: FX.dim }}>{label}</span>
-      <span className="text-[11px] font-bold font-mono" style={{ color: up !== undefined ? (up ? FX.up : FX.down) : "#d3dbe8" }}>{value}</span>
-    </div>
   );
 }

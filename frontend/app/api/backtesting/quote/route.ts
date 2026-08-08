@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 const YahooFinanceClass = require("yahoo-finance2").default;
 const yf = new YahooFinanceClass();
 
+// Always serve the live quote — never cache
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: NextRequest) {
   const symbol = (req.nextUrl.searchParams.get("symbol") ?? "AAPL").toUpperCase().trim();
 

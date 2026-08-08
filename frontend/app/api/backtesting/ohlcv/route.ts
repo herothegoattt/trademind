@@ -4,6 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 const YahooFinanceClass = require("yahoo-finance2").default;
 const yf = new YahooFinanceClass();
 
+// Always serve live data — do not cache this route handler
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 // Interval mapping → Yahoo Finance interval string
 const YF_INTERVAL: Record<string, string> = {
   "1m":  "1m",
