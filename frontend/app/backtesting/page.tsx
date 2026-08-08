@@ -11,10 +11,11 @@ import {
   MousePointer2, Pencil, Minus, ArrowUpRight, Eraser, Trash2, Search, X,
   RotateCcw as Reset, Layers, Wallet, Activity, NotebookPen, PieChart,
   Target, Plus, Check, CircleDot, Save, Maximize2, Minimize2, Timer, Zap,
-  Ruler, Square, GitBranch,
+  Ruler, Square, GitBranch, SlidersHorizontal, X as XIcon,
 } from "lucide-react";
 import type { OHLCVBar, DrawingTool, Drawing } from "../../components/backtesting/ReplayChart";
 import AnalyticsPanel from "../../components/backtesting/AnalyticsPanel";
+import { INDICATOR_MENU, IndicatorConfig, indicatorById } from "../../components/backtesting/indicators";
 
 const ReplayChart = dynamic(
   () => import("../../components/backtesting/ReplayChart").then((m) => m.ReplayChart),
@@ -337,10 +338,12 @@ export default function BacktestPage() {
   const [drawColor,       setDrawColor]       = useState("#3b82f6");
   const [drawWidth,       setDrawWidth]       = useState(2);
   const [drawings,        setDrawings]        = useState<Drawing[]>([]);
-  const [candleUpColor,   setCandleUpColor]   = useState("#22c55e");
-  const [candleDownColor, setCandleDownColor] = useState("#ef4444");
+  const [candleUpColor,   setCandleUpColor]   = useState("#26a69a");
+  const [candleDownColor, setCandleDownColor] = useState("#ef5350");
   const [liveBar,         setLiveBar]         = useState<OHLCVBar | null>(null);
   const [marketState,     setMarketState]     = useState<string | null>(null);
+  const [indOpen,         setIndOpen]         = useState(false);
+  const [indicators,      setIndicators]      = useState<IndicatorConfig[]>([]);
 
   const [orderSide, setOrderSide] = useState<Side>("buy");
   const [orderSize, setOrderSize] = useState(1);
@@ -370,8 +373,9 @@ export default function BacktestPage() {
   const pendingRef     = useRef<PendingOrder[]>([]);
   const searchRef     = useRef<HTMLDivElement>(null);
   const searchInputRef= useRef<HTMLInputElement>(null);
-  const periodRef     = useRef<HTMLDivElement>(null);
+const periodRef      = useRef<HTMLDivElement>(null);
   const speedRef      = useRef<HTMLDivElement>(null);
+  const indRef        = useRef<HTMLDivElement>(null);
   const lastScanIdx   = useRef(0);
   const noticeTimer   = useRef<number | null>(null);
 
@@ -381,6 +385,7 @@ export default function BacktestPage() {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) { setSearchOpen(false); setSearchQuery(""); }
       if (periodRef.current && !periodRef.current.contains(e.target as Node)) setPeriodOpen(false);
       if (speedRef.current  && !speedRef.current.contains(e.target as Node))  setSpeedOpen(false);
+      if (indRef.current    && !indRef.current.contains(e.target as Node))    setIndOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -746,7 +751,7 @@ export default function BacktestPage() {
     setNoteText("");
   };
 
-  /* persist journal + closed trades + drawings locally (per symbol) */
+  /* persist journal + closed trades + drawings + indicators locally (per symbol) */
   const storageKey = () => `tm_backtest_v1_${ticker}`;
   useEffect(() => {
     try {
@@ -758,6 +763,28 @@ export default function BacktestPage() {
       if (Array.isArray(saved.drawings)) setDrawings(saved.drawings);
     } catch { /* ignore */ }
   }, [ticker]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* indicators — persist globally */
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("tm_backtest_indicators");
+      if (!raw) return;
+      const ids = JSON.parse(raw) as string[];
+      const cfgs = ids.map(indicatorById).filter((x): x is IndicatorConfig => !!x);
+      if (cfgs.length) setIndicators(cfgs);
+    } catch { /* ignore */ }
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("tm_backtest_indicators", JSON.stringify(indicators.map((i) => i.id)));
+    } catch { /* ignore */ }
+  }, [indicators]);
+
+  const toggleIndicator = (id: string) => {
+    setIndicators((prev) => prev.some((i) => i.id === id)
+      ? prev.filter((i) => i.id !== id)
+      : [...prev, ...(INDICATOR_MENU.filter((i) => i.id === id) ?? [])]);
+  };
 
   useEffect(() => {
     try {
@@ -1171,11 +1198,15 @@ export default function BacktestPage() {
       <div className="flex-1 min-h-0 flex">
         {/* Chart */}
         <div className="flex-1 min-w-0 flex flex-col relative">
-          {/* Drawing toolbar (floating at top-left of the chart) */}
+          {/* Chart toolbar (TV-style top row: draw tools + indicators) */}
           <div
-            className="absolute top-2 left-2 z-20 flex items-center gap-1.5 rounded-xl px-1.5 py-1"
-            style={{ background: "rgba(10,14,23,0.85)", border: `1px solid ${FX.border}`, backdropFilter: "blur(8px)" }}
+            className="flex-shrink-0 flex items-center gap-2 px-2 h-[40px] z-20"
+            style={{ background: "#10141d", borderBottom: `1px solid ${FX.border}` }}
           >
+            <span className="hidden sm:flex items-center gap-1.5 pr-1 flex-shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: CAT_COLOR["My Pairs"].color }} />
+              <span className="text-[9px] font-bold text-slate-500">TRADING</span>
+            </span>
             <DrawTools
               tool={activeTool}
               onTool={setActiveTool}
@@ -1190,6 +1221,105 @@ export default function BacktestPage() {
               structLabel={structLabel}
               onStructLabel={setStructLabel}
             />
+
+            <div style={{ width: 1, height: 18, background: "rgba(255,255,255,0.09)", flexShrink: 0 }} />
+
+            {/* Indicators dropdown */}
+            <div ref={indRef} className="relative flex-shrink-0">
+              <button
+                onClick={() => setIndOpen((p) => !p)}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-bold transition-all"
+                style={{
+                  background: indOpen ? "rgba(59,130,246,0.14)" : "rgba(255,255,255,0.03)",
+                  border: indOpen ? "1px solid rgba(59,130,246,0.45)" : `1px solid ${FX.border2}`,
+                  color: indOpen ? "#60a5fa" : "rgba(148,163,184,0.7)",
+                }}
+              >
+                <SlidersHorizontal className="w-3 h-3" />
+                fx
+                {indicators.length > 0 && (
+                  <span
+                    className="flex items-center justify-center rounded-full text-[8px] font-bold"
+                    style={{ minWidth: 14, height: 14, background: "rgba(59,130,246,0.3)", color: "#93c5fd" }}
+                  >
+                    {indicators.length}
+                  </span>
+                )}
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              <AnimatePresence>
+                {indOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute top-full mt-1.5 left-0 z-50 rounded-xl overflow-hidden"
+                    style={{
+                      width: 280,
+                      background: "rgba(15,20,32,0.99)",
+                      border: `1px solid ${FX.border2}`,
+                      boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+                    }}
+                  >
+                    <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${FX.border}` }}>
+                      <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: FX.dim }}>Indicators</span>
+                      <span className="text-[9px] font-mono" style={{ color: FX.dim }}>{indicators.length} on</span>
+                    </div>
+                    <div className="py-1 max-h-72 overflow-y-auto">
+                      {INDICATOR_MENU.map((ind) => {
+                        const on = indicators.some((i) => i.id === ind.id);
+                        return (
+                          <button
+                            key={ind.id}
+                            onClick={() => toggleIndicator(ind.id)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left transition-colors"
+                            style={{ background: on ? "rgba(59,130,246,0.08)" : "transparent" }}
+                          >
+                            <span
+                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{ background: ind.pane === 1 ? "#a78bfa" : ind.color }}
+                            />
+                            <span className="flex-1 text-[11px] font-semibold" style={{ color: on ? "#e2e8f0" : "rgba(148,163,184,0.7)" }}>
+                              {ind.name}
+                            </span>
+                            <span className="text-[8px] font-mono" style={{ color: ind.pane === 1 ? "#a78bfa" : FX.dim }}>
+                              {ind.pane === 1 ? "pane" : "overlay"}
+                            </span>
+                            <span className="flex items-center justify-center w-4 h-4 rounded" style={{ border: `1px solid ${on ? "#60a5fa" : FX.border2}` }}>
+                              {on && <Check className="w-3 h-3" style={{ color: "#60a5fa" }} />}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Active indicator chips */}
+            {indicators.length > 0 && (
+              <div className="hidden md:flex items-center gap-1.5 overflow-x-auto flex-shrink min-w-0">
+                {indicators.map((ind) => (
+                  <button
+                    key={ind.id}
+                    onClick={() => toggleIndicator(ind.id)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-semibold transition-all flex-shrink-0"
+                    style={{
+                      background: "rgba(255,255,255,0.03)",
+                      border: `1px solid ${FX.border}`,
+                      color: ind.color,
+                    }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: ind.color }} />
+                    {ind.name}
+                    <XIcon className="w-2.5 h-2.5" style={{ color: FX.dim }} />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Chart */}
@@ -1233,6 +1363,9 @@ export default function BacktestPage() {
                 liveBarOverride={isAtEnd && liveBar ? liveBar : undefined}
                 structureLabel={structLabel}
                 zoneLabel={zoneLabel}
+                indicators={indicators}
+                symbolLabel={tickerLabel}
+                intervalLabel={interval}
               />
             )}
 

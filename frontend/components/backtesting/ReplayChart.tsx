@@ -1,6 +1,24 @@
 "use client";
-import { useEffect, useRef, useCallback } from "react";
-import { createChart, IChartApi, ISeriesApi, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries } from "lightweight-charts";
+import { useEffect, useRef, useCallback, useState } from "react";
+import {
+  createChart, IChartApi, ISeriesApi, ColorType, CrosshairMode,
+  CandlestickSeries, HistogramSeries, LineSeries, LineStyle,
+  createTextWatermark,
+} from "lightweight-charts";
+import { computeIndicator, IndicatorConfig, IndicatorSource, lastValueAt } from "./indicators";
+
+/* ── TradingView dark palette ──────────────────────────────────── */
+export const TV = {
+  bg:    "#131722",
+  panel: "#1e222d",
+  line:  "#2a2e39",
+  text:  "#d1d4dc",
+  muted: "#b2b5be",
+  dim:   "#787b86",
+  blue:  "#2962ff",
+  up:    "#26a69a",
+  down:  "#ef5350",
+};
 
 /* ── Public types ─────────────────────────────────────────────────── */
 export interface OHLCVBar {
@@ -38,6 +56,9 @@ interface Props {
   liveBarOverride?:  OHLCVBar;
   structureLabel?:   "BOS" | "CHOCH";   // label used by the "brk" tool
   zoneLabel?:        string;            // label used by the "rect" tool (POI/FVG/zone)
+  indicators?:       IndicatorConfig[];
+  symbolLabel?:      string;
+  intervalLabel?:    string;
 }
 
 /* ── Coordinate helpers ───────────────────────────────────────────── */
@@ -291,21 +312,28 @@ export function ReplayChart({
   drawWidth = 2,
   drawings,
   onDrawingsChange,
-  candleUpColor   = "#10b981",
-  candleDownColor = "#ef4444",
+  candleUpColor   = TV.up,
+  candleDownColor = TV.down,
   liveBarOverride,
   structureLabel = "BOS",
   zoneLabel = "POI",
+  indicators = [],
+  symbolLabel = "",
+  intervalLabel = "",
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
   const candleRef    = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volRef       = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const indRef       = useRef<Map<string, ISeriesApi<any> | null>>(new Map());
   const prevVisible  = useRef(0);
   // track the last candles array reference to detect dataset swaps vs scrub
   const prevCandlesRef = useRef<OHLCVBar[]>([]);
   const dprRef       = useRef(1);
+  const [legend, setLegend] = useState<{ time: string; oh: [number, number, number, number]; vol: string; inds: { name: string; color: string; value: string }[] } | null>(null);
+  const indSourcesRef = useRef<IndicatorSource[]>([]);
+  const wmRef = useRef<{ applyOptions: (o: any) => void; detach: () => void } | null>(null);
 
   // refs so event-handler closures always see the latest values
   const toolRef      = useRef(tool);
@@ -316,6 +344,7 @@ export function ReplayChart({
   const downColorRef = useRef(candleDownColor);
   const structRef    = useRef(structureLabel);
   const zoneLabelRef = useRef(zoneLabel);
+  const indicatorsRef = useRef(indicators);
   const isPenDown    = useRef(false);
   const pendingPen   = useRef<DrawPoint[]>([]);
   const lineStart    = useRef<DrawPoint | null>(null);
@@ -329,6 +358,7 @@ export function ReplayChart({
   useEffect(() => { downColorRef.current = candleDownColor; }, [candleDownColor]);
   useEffect(() => { structRef.current = structureLabel; }, [structureLabel]);
   useEffect(() => { zoneLabelRef.current = zoneLabel; }, [zoneLabel]);
+  useEffect(() => { indicatorsRef.current = indicators; }, [indicators]);
   useEffect(() => { drawingsRef.current = drawings; scheduleRender(); }, [drawings]); // eslint-disable-line
 
   /* ── Apply candle color changes live ───────────────────────────── */
@@ -486,23 +516,36 @@ export function ReplayChart({
     const chart = createChart(el, {
       width: w, height: h,
       layout: {
-        background: { type: ColorType.Solid, color: "#070a12" },
-        textColor: "#64748b", fontSize: 11,
+        background: { type: ColorType.Solid, color: TV.bg },
+        textColor: TV.dim, fontSize: 11,
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif",
+        panes: {
+          separatorColor: TV.line,
+          separatorHoverColor: "rgba(178,181,189,0.2)",
+          enableResize: true,
+        },
       },
       grid: {
-        vertLines: { color: "rgba(255,255,255,0.04)" },
-        horzLines: { color: "rgba(255,255,255,0.04)" },
+        vertLines: { color: "rgba(42,78,110,0.12)" },
+        horzLines: { color: "rgba(42,78,110,0.12)" },
       },
-      crosshair: { mode: CrosshairMode.Normal },
+      crosshair: {
+        mode: CrosshairMode.Magnet,
+        vertLine: { labelBackgroundColor: TV.blue, color: "rgba(41,98,255,0.4)", labelVisible: true },
+        horzLine: { labelBackgroundColor: TV.blue, color: "rgba(41,98,255,0.4)", labelVisible: true },
+      },
       rightPriceScale: {
-        borderColor: "rgba(255,255,255,0.06)",
-        scaleMargins: { top: 0.06, bottom: 0.22 },
+        borderColor: TV.line,
+        scaleMargins: { top: 0.06, bottom: 0.3 },
       },
       timeScale: {
-        borderColor: "rgba(255,255,255,0.06)",
+        borderColor: TV.line,
         timeVisible: true, secondsVisible: false, rightOffset: 8,
-        // keep the latest bar visible by default
         lockVisibleTimeRangeOnResize: true,
+        tickMarkFormatter: (t: any) => {
+          const d = new Date((t as number) * 1000);
+          return `${d.getDate()} ${d.toLocaleString("en-US", { month: "short" })}`;
+        },
       },
     });
 
@@ -512,10 +555,13 @@ export function ReplayChart({
       borderVisible: false,
       wickUpColor:   upColorRef.current,
       wickDownColor: downColorRef.current,
+      priceLineVisible: true,
+      priceLineColor: downColorRef.current,
+      priceLineStyle: LineStyle.Dotted,
     });
 
     const volSeries = chart.addSeries(HistogramSeries, {
-      color: "rgba(16,185,129,0.25)", priceFormat: { type: "volume" }, priceScaleId: "vol_ov",
+      color: "rgba(38,166,154,0.3)", priceFormat: { type: "volume" }, priceScaleId: "vol_ov",
     });
     chart.priceScale("vol_ov").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
 
@@ -523,12 +569,40 @@ export function ReplayChart({
     candleRef.current = candleSeries;
     volRef.current    = volSeries;
 
+    /* TradingView watermark */
+    const wm = createTextWatermark(chart.panes()[0], {
+      horzAlign: 'center', vertAlign: 'center',
+      lines: [{
+        text: symbolLabel ? `${symbolLabel}.${intervalLabel}` : "PRICE",
+        color: "rgba(178,181,189,0.05)",
+        fontSize: 84, fontStyle: "bold",
+      }],
+    });
+    wmRef.current = wm;
+
     if (canvasRef.current) {
       canvasRef.current.width  = Math.round(w * dpr);
       canvasRef.current.height = Math.round(h * dpr);
     }
 
     chart.timeScale().subscribeVisibleLogicalRangeChange(() => scheduleRender());
+
+    /* ── Crosshair legend: OHLC + indicator values ────────────── */
+    chart.subscribeCrosshairMove((param: any) => {
+      const ch = chartRef.current, cs = candleRef.current;
+      if (!ch || !cs) { setLegend(null); return; }
+      const t = param.time;
+      if (t == null) { setLegend(null); return; }
+      const srcs = indSourcesRef.current;
+      const inds: { name: string; color: string; value: string }[] = [];
+      for (const s of srcs) if (s.name && s.kind === "line") {
+        const v = lastValueAt(s, t as number);
+        if (v) inds.push({ name: s.name, color: s.color, value: s.pane === 1 ? v.value.toFixed(2) : v.text });
+      }
+      const data = (cs as any).data();
+      const bar = data.find((b: any) => (b as any).time === t);
+      if (bar) setLegend({ time: String(t), oh: [bar.open, bar.high, bar.low, bar.close], vol: String((bar as any).value ?? (bar as any).volume ?? ""), inds });
+    });
 
     const ro = new ResizeObserver((entries) => {
       for (const e of entries) {
@@ -548,10 +622,27 @@ export function ReplayChart({
     return () => {
       ro.disconnect();
       if (rafId.current) cancelAnimationFrame(rafId.current);
+      try { wm.detach(); } catch { /* ignore */ }
+      wmRef.current = null;
+      indRef.current.clear(); // eslint-disable-line react-hooks/exhaustive-deps
       chart.remove();
       chartRef.current = null; candleRef.current = null; volRef.current = null;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleRender]);
+
+  /* update watermark text when symbol/interval changes */
+  useEffect(() => {
+    try {
+      wmRef.current?.applyOptions({
+        lines: [{
+          text: symbolLabel ? `${symbolLabel}.${intervalLabel}` : "PRICE",
+          color: "rgba(178,181,189,0.05)",
+          fontSize: 84, fontStyle: "bold",
+        }],
+      });
+    } catch { /* ignore */ }
+  }, [symbolLabel, intervalLabel]);
 
   /* ── Data updates ───────────────────────────────────────────────── */
   useEffect(() => {
@@ -583,6 +674,18 @@ export function ReplayChart({
       volRef.current.setData(vd);
       scheduleRender();
 
+      // default legend → last visible bar (with indicator values when available)
+      const last = candles[visibleCount - 1];
+      if (last) {
+        const srcs = indSourcesRef.current;
+        const inds: { name: string; color: string; value: string }[] = [];
+        for (const s of srcs) if (s.name && s.kind === "line") {
+          const v = lastValueAt(s, last.time);
+          if (v) inds.push({ name: s.name, color: s.color, value: s.pane === 1 ? v.value.toFixed(2) : v.text });
+        }
+        setLegend({ time: String(last.time), oh: [last.open, last.high, last.low, last.close], vol: String(last.volume || ""), inds });
+      }
+
       if (isNewDataset) {
         // new dataset loaded: show last ~80 bars right-aligned, leave room on right
         const WINDOW = 80;
@@ -597,6 +700,69 @@ export function ReplayChart({
       // slider scrub: don't touch viewport — let the user's manual pan/zoom persist
     }
   }, [candles, visibleCount, scheduleRender]);
+
+  /* ── Indicator series sync ──────────────────────────────────────── */
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !indicators.length || !candles.length) return;
+    const visible = candles.slice(0, visibleCount);
+
+    // compute fresh sources for the currently-visible window
+    const srcs: IndicatorSource[] = [];
+    for (const cfg of indicators) {
+      srcs.push(...computeIndicator(cfg, visible));
+    }
+    indSourcesRef.current = srcs;
+
+    // drop series no longer needed
+    const wanted = new Set(srcs.map((s) => s.id));
+    indRef.current.forEach((s, id) => {
+      if (!wanted.has(id) && s) { try { chart.removeSeries(s); } catch { /* ignore */ } indRef.current.delete(id); }
+    });
+
+    for (const s of srcs) {
+      let series = indRef.current.get(s.id);
+      if (!series) {
+        try {
+          if (s.kind === "histogram") {
+            series = chart.addSeries(HistogramSeries, {
+              priceFormat: { type: "volume" }, priceScaleId: `ind-${s.id}`,
+              priceLineVisible: false, lastValueVisible: false,
+            }, s.pane);
+          } else {
+            series = chart.addSeries(LineSeries, {
+              color: s.color, lineWidth: 1, lineStyle: LineStyle.Solid,
+              priceLineVisible: false, lastValueVisible: true,
+              crosshairMarkerVisible: false,
+            }, s.pane);
+          }
+          if (series) indRef.current.set(s.id, series);
+        } catch { /* ignore */ }
+      }
+      if (series) {
+        try {
+          if (s.kind === "histogram") {
+            (series as ISeriesApi<"Histogram">).setData(s.points.map((p) => ({
+              time: p.time as any, value: p.value,
+              color: p.value >= 0 ? "rgba(41,98,255,0.45)" : "rgba(239,83,80,0.45)",
+            })));
+          } else {
+            (series as ISeriesApi<"Line">).setData(s.points.map((p) => ({ time: p.time as any, value: p.value })));
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
+    // bottom pane height for RSI/MACD
+    const hasPane1 = srcs.some((s) => s.pane === 1);
+    try {
+      const panes = chart.panes();
+      if (hasPane1 && panes.length >= 2) {
+        panes[1].setHeight(96);
+        chart.priceScale(`ind-${srcs.find((s) => s.pane === 1)?.id ?? "rsi14"}`, 1).applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } });
+      }
+    } catch { /* ignore */ }
+  }, [candles, visibleCount, indicators]);
 
   /* ── Mouse helpers ──────────────────────────────────────────────── */
   const cssXY = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -721,7 +887,41 @@ export function ReplayChart({
   };
 
   return (
-    <div ref={containerRef} className="w-full h-full relative overflow-hidden">
+    <div ref={containerRef} className="w-full h-full relative overflow-hidden" style={{ background: TV.bg }}>
+      {/* TradingView-style OHLC + indicator legend overlay */}
+      <div
+        className="absolute top-2 left-2 z-20 pointer-events-none select-none rounded-md px-2 py-1.5 hidden lg:block"
+        style={{ background: "rgba(19,23,34,0.72)", border: `1px solid ${TV.line}` }}
+      >
+        {legend && (
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2 font-mono">
+              <span className="text-[10px] font-bold" style={{ color: TV.text }}>{symbolLabel}</span>
+              <span className="text-[9px]" style={{ color: TV.blue }}>{intervalLabel}</span>
+              <span className="text-[10px]" style={{ color: "#e6a23c" }}>
+                {fmtNum(legend.oh[3])}
+              </span>
+            </div>
+            <div className="flex items-center gap-2.5 font-mono text-[9px]" style={{ color: TV.dim }}>
+              <span>O <span style={{ color: TV.muted }}>{fmtNum(legend.oh[0])}</span></span>
+              <span>H <span style={{ color: TV.up }}>{fmtNum(legend.oh[1])}</span></span>
+              <span>L <span style={{ color: TV.down }}>{fmtNum(legend.oh[2])}</span></span>
+              <span>C <span style={{ color: legend.oh[3] >= legend.oh[0] ? TV.up : TV.down }}>{fmtNum(legend.oh[3])}</span></span>
+              <span>Vol <span style={{ color: TV.muted }}>{legend.vol}</span></span>
+            </div>
+            {legend.inds.length > 0 && (
+              <div className="flex items-center gap-2.5 flex-wrap font-mono text-[9px] mt-0.5" style={{ color: TV.dim }}>
+                {legend.inds.slice(0, 6).map((i) => (
+                  <span key={i.name} className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: i.color }} />
+                    {i.name} <span style={{ color: TV.muted }}>{i.value}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       <canvas
         ref={canvasRef}
         className="absolute inset-0 z-10"
