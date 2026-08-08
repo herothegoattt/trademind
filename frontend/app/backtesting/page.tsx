@@ -8,15 +8,17 @@ import {
   ArrowLeft, Play, Pause, SkipBack, SkipForward,
   ChevronsLeft, ChevronsRight, RefreshCw, TrendingUp,
   TrendingDown, BarChart3, Clock, ChevronDown, RotateCcw,
-  MousePointer2, Pencil, Minus, ArrowUpRight, Eraser, Trash2, Search, X,
+  MousePointer2, Pencil, Minus, ArrowRight, ArrowUpRight, Eraser, Trash2, Search, X,
   RotateCcw as Reset, Layers, Wallet, Activity, NotebookPen, PieChart,
   Target, Plus, Check, CircleDot, Save, Maximize2, Minimize2, Timer, Zap,
-  Ruler, Square, GitBranch, SlidersHorizontal, X as XIcon, Settings, Palette,
+  Ruler, Square, GitBranch, SlidersHorizontal, X as XIcon, Settings, Palette, Share2, Award,
 } from "lucide-react";
 import type { OHLCVBar, DrawingTool, Drawing, ChartStyle, ChartType } from "../../components/backtesting/ReplayChart";
 import { DEFAULT_CHART_STYLE } from "../../components/backtesting/ReplayChart";
 import AnalyticsPanel from "../../components/backtesting/AnalyticsPanel";
 import { INDICATOR_MENU, IndicatorConfig, indicatorById } from "../../components/backtesting/indicators";
+import { EvaluationPanel, DEFAULT_EVAL_CFG, EvalConfig } from "../../components/backtesting/Evaluation";
+import type { Side, OpenPos, ClosedTrade } from "../../components/backtesting/Evaluation";
 
 const ReplayChart = dynamic(
   () => import("../../components/backtesting/ReplayChart").then((m) => m.ReplayChart),
@@ -312,41 +314,6 @@ const SEP = () => (
 );
 
 /* ── Trading state types ──────────────────────────────────────── */
-type Side = "buy" | "sell";
-interface OpenPos {
-  id: string;
-  side: Side;
-  size: number;
-  entry: number;
-  sl: number | null;
-  tp: number | null;
-  openBar: number;
-  openTime: number;
-  breakEven?: boolean;
-}
-interface ClosedTrade {
-  id: string;
-  side: Side;
-  size: number;
-  entry: number;
-  exit: number;
-  sl: number | null;
-  tp: number | null;
-  pnl: number;
-  reason: "TP" | "SL" | "Manual" | "Session End";
-  openTime: number;
-  closeTime: number;
-  symbol?: string;
-  partial?: boolean;
-}
-interface JournalEntry {
-  id: string;
-  time: number;
-  text: string;
-  kind: "open" | "close" | "note";
-  pnl?: number;
-}
-
 interface PendingOrder {
   id: string;
   side: Side;
@@ -358,6 +325,14 @@ interface PendingOrder {
   placedBar: number;
   placedTime: number;
   partial?: boolean;
+}
+
+interface JournalEntry {
+  id: string;
+  time: number;
+  text: string;
+  kind: "open" | "close" | "note";
+  pnl?: number;
 }
 
 const CONTRACT = 100;
@@ -446,6 +421,16 @@ const periodRef      = useRef<HTMLDivElement>(null);
   const indRef        = useRef<HTMLDivElement>(null);
   const lastScanIdx   = useRef(0);
   const noticeTimer   = useRef<number | null>(null);
+  const currentIdxRef = useRef(0);
+  const seekRaf       = useRef<number | null>(null);
+
+  useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
+  useEffect(() => () => { if (seekRaf.current !== null) cancelAnimationFrame(seekRaf.current); }, []);
+
+  const [shareOpen, setShareOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const shareSeekRef   = useRef<number | undefined>(undefined);
+  const shareClusterRef = useRef<HTMLDivElement | null>(null);
 
   /* outside-click for dropdowns */
   useEffect(() => {
@@ -453,6 +438,7 @@ const periodRef      = useRef<HTMLDivElement>(null);
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) { setSearchOpen(false); setSearchQuery(""); }
       if (periodRef.current && !periodRef.current.contains(e.target as Node)) setPeriodOpen(false);
       if (speedRef.current  && !speedRef.current.contains(e.target as Node))  setSpeedOpen(false);
+      if (shareClusterRef.current && !shareClusterRef.current.contains(e.target as Node)) { setShareOpen(false); setCopied(false); }
       if (indRef.current    && !indRef.current.contains(e.target as Node))    setIndOpen(false);
     };
     document.addEventListener("mousedown", handler);
@@ -467,6 +453,44 @@ const periodRef      = useRef<HTMLDivElement>(null);
     if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
     noticeTimer.current = window.setTimeout(() => setNotice(null), 2600);
   }, []);
+
+  const [mode, setMode] = useState<"charts" | "eval" | null>(() => {
+    if (typeof window === "undefined") return null;
+    return (localStorage.getItem("tm_mode") as "charts" | "eval" | null) ?? null;
+  });
+  const [evalCfg, setEvalCfg] = useState<EvalConfig>(() => {
+    if (typeof window === "undefined") return { ...DEFAULT_EVAL_CFG };
+    try {
+      const raw = localStorage.getItem("tm_eval_cfg");
+      return raw ? { ...DEFAULT_EVAL_CFG, ...JSON.parse(raw) } : { ...DEFAULT_EVAL_CFG };
+    } catch {
+      return { ...DEFAULT_EVAL_CFG };
+    }
+  });
+
+  const chooseMode = useCallback((m: "charts" | "eval") => {
+    setMode(m);
+    try { localStorage.setItem("tm_mode", m); } catch { /* ignore */ }
+  }, []);
+
+  const updateEvalCfg = useCallback((c: EvalConfig) => {
+    setEvalCfg(c);
+    try { localStorage.setItem("tm_eval_cfg", JSON.stringify(c)); } catch { /* ignore */ }
+  }, []);
+
+  const resetEvaluation = useCallback(() => {
+    positionsRef.current = [];
+    setPositions([]);
+    pendingRef.current = [];
+    setPending([]);
+    setClosed([]);
+    lastScanIdx.current = currentIdx;
+    setJournal([{
+      id: uid(), time: Date.now() / 1000, kind: "note",
+      text: `Evaluation reset — fresh session. Account ${fmtMoney(evalCfg.balance)}`,
+    }]);
+    flashNotice("Evaluation reset");
+  }, [evalCfg.balance, currentIdx, flashNotice]);
 
   /* filtered symbols */
   const q = searchQuery.toLowerCase();
@@ -511,20 +535,61 @@ const periodRef      = useRef<HTMLDivElement>(null);
     }
   }, []);
 
-  useEffect(() => { if (!allBars.length) loadData(ticker, interval, period); }, []); // eslint-disable-line
+  useEffect(() => {
+    if (allBars.length) return;
+    /* initial load — deep-link ("share") support: sym / tf / t params */
+    let sym = ticker, iv = interval, tgt: number | undefined;
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const s = p.get("sym"); if (s) sym = s;
+      const tf = p.get("tf"); if (tf) iv = tf;
+      const t = p.get("t"); if (t !== null && t !== "" && isFinite(Number(t))) tgt = Number(t);
+    } catch { /* ignore */ }
+    if (tgt !== undefined) shareSeekRef.current = tgt;
+    if (sym !== ticker) setTicker(sym);
+    if (iv !== interval) setInterval(iv);
+    loadData(sym, iv, period);
+  }, []); // eslint-disable-line
+
+  /* deep-link: once bars are here, seek to the shared bar timestamp */
+  useEffect(() => {
+    if (!allBars.length) return;
+    const tgt = shareSeekRef.current;
+    if (tgt === undefined) return;
+    shareSeekRef.current = undefined;
+    let lo = 0, hi = allBars.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (allBars[mid].time < tgt) lo = mid + 1; else hi = mid;
+    }
+    setCurrentIdx(lo);
+    if (lo > 0 && allBars[lo].time > tgt && allBars[lo - 1].time >= tgt) lo = lo - 1;
+    lastScanIdx.current = lo;
+    setIsPlaying(false);
+  }, [allBars]);
 
   /* auto-play */
   useEffect(() => {
     if (playRef.current !== null) window.clearInterval(playRef.current);
     if (!isPlaying) return;
-    playRef.current = window.setInterval(() => {
-      setCurrentIdx((prev) => {
-        const next = prev + 1;
-        if (next >= allBars.length) { setIsPlaying(false); return prev; }
-        return next;
-      });
-    }, SPEEDS[speedIdx].ms) as unknown as number;
-    return () => { if (playRef.current !== null) window.clearInterval(playRef.current); };
+    let last = performance.now();
+    let acc = 0;
+    const step = (t: number) => {
+      acc += t - last; last = t;
+      const ms = SPEEDS[speedIdx].ms;
+      let advanced = 0;
+      while (acc >= ms && advanced < 6) { acc -= ms; advanced++; }
+      if (advanced > 0) {
+        setCurrentIdx((prev) => {
+          const next = prev + advanced;
+          if (next >= allBars.length) { setIsPlaying(false); return prev; }
+          return next;
+        });
+      }
+      playRef.current = requestAnimationFrame(step) as unknown as number;
+    };
+    playRef.current = requestAnimationFrame(step) as unknown as number;
+    return () => { if (playRef.current !== null) cancelAnimationFrame(playRef.current); };
   }, [isPlaying, speedIdx, allBars.length]);
 
   /* keyboard */
@@ -704,7 +769,25 @@ const periodRef      = useRef<HTMLDivElement>(null);
   const pf     = grossL > 0 ? grossW / grossL : grossW > 0 ? Infinity : 0;
   void wins; void pf;
 
-  const move = (delta: number) => setCurrentIdx((p) => Math.max(0, Math.min(p + delta, allBars.length - 1)));
+  const move = (delta: number) => animateSeekTo(currentIdxRef.current + delta);
+
+  /* smooth eased jump to an index (rAF, eases near target) */
+  const animateSeekTo = (target: number) => {
+    if (seekRaf.current !== null) cancelAnimationFrame(seekRaf.current);
+    if (!allBars.length) return;
+    const t = Math.max(0, Math.min(target, allBars.length - 1));
+    const frame = () => {
+      const cur = currentIdxRef.current;
+      const diff = t - cur;
+      if (diff === 0) { seekRaf.current = null; return; }
+      const v = Math.max(1, Math.round(Math.abs(diff) * 0.07));
+      const nx = Math.max(0, Math.min(cur + (diff > 0 ? v : -v), allBars.length - 1));
+      setCurrentIdx(nx);
+      if (nx !== t) seekRaf.current = requestAnimationFrame(frame);
+      else seekRaf.current = null;
+    };
+    seekRaf.current = requestAnimationFrame(frame);
+  };
 
   /* symbol pick */
   const pickSymbol = (sym: { label: string; ticker: string }) => {
@@ -860,7 +943,9 @@ const periodRef      = useRef<HTMLDivElement>(null);
     } catch { /* ignore */ }
   }, [closed, journal, drawings, ticker]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return (
+  return mode === null ? (
+    <ModeChooser onPick={chooseMode} />
+  ) : (
     <div
       className="flex flex-col h-screen select-none overflow-hidden"
       style={{ background: FX.bg, color: FX.text }}
@@ -1108,6 +1193,92 @@ const periodRef      = useRef<HTMLDivElement>(null);
           </div>
         )}
 
+        {/* Mode switch */}
+        {mode && (
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg flex-shrink-0" style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${FX.border}` }}>
+            {(["charts", "eval"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => chooseMode(m)}
+                className="px-2 h-6 rounded-md text-[9px] font-bold uppercase tracking-wide transition-all"
+                style={{
+                  background: mode === m ? "rgba(90,165,255,0.16)" : "transparent",
+                  color: mode === m ? "#7ec0ff" : FX.dim,
+                }}
+              >
+                {m === "charts" ? "Charts" : "Eval"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Share */}
+        {mode && (
+          <div ref={shareClusterRef} className="relative flex-shrink-0">
+            <button
+              onClick={() => { setShareOpen((p) => !p); setCopied(false); }}
+              title="Share replay link"
+              className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+              style={{
+                background: shareOpen ? "rgba(90,165,255,0.12)" : "rgba(255,255,255,0.04)",
+                border: shareOpen ? "1px solid rgba(90,165,255,0.4)" : `1px solid ${FX.border}`,
+                color: shareOpen ? "#7ec0ff" : FX.dim,
+              }}
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+
+            <AnimatePresence>
+              {shareOpen && (() => {
+                const link = `${window.location.origin}${window.location.pathname}?sym=${encodeURIComponent(ticker)}&tf=${encodeURIComponent(interval)}&t=${currentBar?.time ?? ""}`;
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                    transition={{ duration: 0.13 }}
+                    className="absolute top-full mt-1.5 right-0 z-50 rounded-xl overflow-hidden"
+                    style={{ width: 320, background: FX.panel2, border: `1px solid ${FX.border2}`, boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
+                  >
+                    <div className="px-3 py-2.5 flex items-center gap-2" style={{ borderBottom: `1px solid ${FX.border}` }}>
+                      <Share2 className="w-3.5 h-3.5" style={{ color: "#7ec0ff" }} />
+                      <span className="text-[11px] font-bold" style={{ color: FX.text }}>Share replay</span>
+                      <span className="text-[9px] font-mono ml-auto" style={{ color: FX.dim }}>
+                        {tickerLabel} · {interval}
+                      </span>
+                    </div>
+                    <div className="px-3 py-3">
+                      <div className="text-[9px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: FX.dim }}>
+                        Anyone with the link opens directly at this bar
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          readOnly
+                          value={link}
+                          onFocus={(e) => e.currentTarget.select()}
+                          className="flex-1 min-w-0 rounded-lg px-2.5 py-2 text-[10px] font-mono outline-none"
+                          style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${FX.border}`, color: FX.muted }}
+                        />
+                        <button
+                          onClick={async () => {
+                            try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+                            catch { /* ignore */ }
+                          }}
+                          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[10px] font-bold transition-colors"
+                          style={{ background: copied ? "rgba(46,201,140,0.14)" : "rgba(90,165,255,0.14)", border: `1px solid ${copied ? "rgba(46,201,140,0.4)" : "rgba(90,165,255,0.4)"}`, color: copied ? "#2ec98c" : "#7ec0ff" }}
+                        >
+                          <Check className="w-3 h-3" />
+                          {copied ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })()}
+            </AnimatePresence>
+          </div>
+        )}
+
         {/* Panel toggle */}
         <button
           onClick={() => setPanelOpen((p) => !p)}
@@ -1123,153 +1294,15 @@ const periodRef      = useRef<HTMLDivElement>(null);
         </button>
       </div>
 
-      {/* ── Replay player bar ────────────────────────────────────── */}
-      <div
-        className="flex-shrink-0 flex items-center gap-1.5 px-2 h-[42px]"
-        style={{ borderBottom: `1px solid ${FX.border}`, background: FX.bar }}
-      >
-        <PlayerBtn title="Jump to start" onClick={() => { setIsPlaying(false); setCurrentIdx(0); lastScanIdx.current = 0; }} disabled={!allBars.length}>
-          <SkipBack className="w-3.5 h-3.5" />
-        </PlayerBtn>
-        <PlayerBtn title="Back 5 bars" onClick={() => move(-5)} disabled={!allBars.length}>
-          <ChevronsLeft className="w-3.5 h-3.5" />
-          <span className="text-[9px] font-bold">5</span>
-        </PlayerBtn>
-        <PlayerBtn title="Back 1 bar" onClick={() => move(-1)} disabled={!allBars.length}>
-          <SkipBack className="w-3.5 h-3.5" />
-        </PlayerBtn>
-
-        <button
-          onClick={() => setIsPlaying((p) => !p)}
-          disabled={!allBars.length}
-          className="flex items-center justify-center rounded-xl transition-all flex-shrink-0"
-          style={{
-            width: 36, height: 36,
-            background: isPlaying ? "rgba(59,130,246,0.2)" : "rgba(59,130,246,0.14)",
-            border: "1px solid rgba(59,130,246,0.4)",
-            color: "#93c5fd",
-            boxShadow: isPlaying ? "0 0 12px rgba(59,130,246,0.3)" : "none",
-            opacity: allBars.length ? 1 : 0.35,
-          }}
-        >
-          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-        </button>
-
-        <PlayerBtn title="Forward 1 bar" onClick={() => move(1)} disabled={!allBars.length}>
-          <SkipForward className="w-3.5 h-3.5" />
-        </PlayerBtn>
-        <PlayerBtn title="Forward 5 bars" onClick={() => move(5)} disabled={!allBars.length}>
-          <ChevronsRight className="w-3.5 h-3.5" />
-          <span className="text-[9px] font-bold">5</span>
-        </PlayerBtn>
-
-        <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
-
-        {/* Speed */}
-        <div ref={speedRef} className="relative flex-shrink-0">
-          <button
-            onClick={() => setSpeedOpen((p) => !p)}
-            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-bold transition-all"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${FX.border2}`,
-              color: "rgba(148,163,184,0.6)",
-            }}
-          >
-            <Timer className="w-3 h-3" />
-            {SPEEDS[speedIdx].label}
-            <ChevronDown className="w-3 h-3" />
-          </button>
-          <AnimatePresence>
-            {speedOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.1 }}
-                className="absolute bottom-full mb-1.5 left-0 z-50 rounded-xl overflow-hidden"
-                style={{
-                  background: "rgba(15,20,32,0.99)",
-                  border: `1px solid ${FX.border2}`,
-                  minWidth: 78,
-                  boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
-                }}
-              >
-                {SPEEDS.map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => { setSpeedIdx(i); setSpeedOpen(false); }}
-                    className="w-full px-3 py-2 text-left text-[11px] font-bold transition-colors"
-                    style={{
-                      color: speedIdx === i ? "#60a5fa" : "rgba(148,163,184,0.55)",
-                      background: speedIdx === i ? "rgba(59,130,246,0.08)" : "transparent",
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Progress */}
-        <div className="flex-1 flex items-center gap-2.5 min-w-40">
-          <span className="text-[10px] font-mono flex-shrink-0" style={{ color: FX.dim }}>{currentIdx + 1}</span>
-          <div className="flex-1 relative h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
-            <motion.div
-              className="absolute left-0 top-0 h-full rounded-full pointer-events-none"
-              style={{
-                width: `${progress}%`,
-                background: "linear-gradient(90deg,#3b82f6,#22d3ee)",
-                boxShadow: "0 0 8px rgba(59,130,246,0.4)",
-              }}
-            />
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, allBars.length - 1)}
-              value={currentIdx}
-              onChange={(e) => setCurrentIdx(Number(e.target.value))}
-              className="absolute inset-0 w-full opacity-0 cursor-pointer"
-              style={{ height: "100%" }}
-            />
-          </div>
-          <span className="text-[10px] font-mono flex-shrink-0" style={{ color: FX.dim }}>{allBars.length}</span>
-        </div>
-
-        {/* Current bar date */}
-        <span className="text-[10px] font-mono flex-shrink-0 hidden md:block" style={{ color: "rgba(148,163,184,0.5)" }}>
-          {currentBar ? barDate(currentBar.time, interval) : "—"}
-        </span>
-
-        <button
-          onClick={() => setMtfOpen((p) => !p)}
-          title="Multi-timeframe sync pane"
-          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors flex-shrink-0 hover:bg-white/5"
-          style={{ color: mtfOpen ? "#38bdf8" : FX.dim, background: mtfOpen ? "rgba(56,189,248,0.12)" : "transparent" }}
-        >
-          <Layers className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          onClick={resetSession}
-          title="Reset session"
-          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors flex-shrink-0 hover:bg-white/5"
-          style={{ color: FX.dim }}
-        >
-          <Reset className="w-3.5 h-3.5" />
-        </button>
-      </div>
 
       {/* ── Main workspace ───────────────────────────────────────── */}
       <div className="flex-1 min-h-0 flex">
         {/* Chart */}
         <div className="flex-1 min-w-0 flex flex-col relative">
-          {/* Chart toolbar (TV-style top row: draw tools + indicators) */}
+          {/* Chart toolbar (minimal top row: draw tools + indicators) */}
           <div
-            className="flex-shrink-0 flex items-center gap-2 px-2 h-[40px] z-20"
-            style={{ background: "#10141d", borderBottom: `1px solid ${FX.border}` }}
+            className="flex-shrink-0 flex items-center gap-2 px-2 h-[38px] z-20"
+            style={{ background: "rgba(23,26,32,0.75)", backdropFilter: "blur(10px)", borderBottom: `1px solid ${FX.border}` }}
           >
             <span className="hidden sm:flex items-center gap-1.5 pr-1 flex-shrink-0">
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: CAT_COLOR["My Pairs"].color }} />
@@ -1566,6 +1599,145 @@ const periodRef      = useRef<HTMLDivElement>(null);
             )}
           </div>
 
+      {/* ── Replay player bar ────────────────────────────────────── */}
+      <div
+        className="flex-shrink-0 flex items-center gap-1.5 px-2 h-[42px]"
+        style={{ borderTop: `1px solid ${FX.border}`, background: FX.bar }}
+      >
+        <PlayerBtn title="Jump to start" onClick={() => { setIsPlaying(false); setCurrentIdx(0); lastScanIdx.current = 0; }} disabled={!allBars.length}>
+          <SkipBack className="w-3.5 h-3.5" />
+        </PlayerBtn>
+        <PlayerBtn title="Back 5 bars" onClick={() => move(-5)} disabled={!allBars.length}>
+          <ChevronsLeft className="w-3.5 h-3.5" />
+          <span className="text-[9px] font-bold">5</span>
+        </PlayerBtn>
+        <PlayerBtn title="Back 1 bar" onClick={() => move(-1)} disabled={!allBars.length}>
+          <SkipBack className="w-3.5 h-3.5" />
+        </PlayerBtn>
+
+        <button
+          onClick={() => setIsPlaying((p) => !p)}
+          disabled={!allBars.length}
+          className="flex items-center justify-center rounded-xl transition-all flex-shrink-0"
+          style={{
+            width: 36, height: 36,
+            background: isPlaying ? "rgba(59,130,246,0.2)" : "rgba(59,130,246,0.14)",
+            border: "1px solid rgba(59,130,246,0.4)",
+            color: "#93c5fd",
+            boxShadow: isPlaying ? "0 0 12px rgba(59,130,246,0.3)" : "none",
+            opacity: allBars.length ? 1 : 0.35,
+          }}
+        >
+          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+        </button>
+
+        <PlayerBtn title="Forward 1 bar" onClick={() => move(1)} disabled={!allBars.length}>
+          <SkipForward className="w-3.5 h-3.5" />
+        </PlayerBtn>
+        <PlayerBtn title="Forward 5 bars" onClick={() => move(5)} disabled={!allBars.length}>
+          <ChevronsRight className="w-3.5 h-3.5" />
+          <span className="text-[9px] font-bold">5</span>
+        </PlayerBtn>
+
+        <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
+
+        {/* Speed */}
+        <div ref={speedRef} className="relative flex-shrink-0">
+          <button
+            onClick={() => setSpeedOpen((p) => !p)}
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-bold transition-all"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: `1px solid ${FX.border2}`,
+              color: "rgba(148,163,184,0.6)",
+            }}
+          >
+            <Timer className="w-3 h-3" />
+            {SPEEDS[speedIdx].label}
+            <ChevronDown className="w-3 h-3" />
+          </button>
+          <AnimatePresence>
+            {speedOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.1 }}
+                className="absolute bottom-full mb-1.5 left-0 z-50 rounded-xl overflow-hidden"
+                style={{
+                  background: "rgba(15,20,32,0.99)",
+                  border: `1px solid ${FX.border2}`,
+                  minWidth: 78,
+                  boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+                }}
+              >
+                {SPEEDS.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setSpeedIdx(i); setSpeedOpen(false); }}
+                    className="w-full px-3 py-2 text-left text-[11px] font-bold transition-colors"
+                    style={{
+                      color: speedIdx === i ? "#60a5fa" : "rgba(148,163,184,0.55)",
+                      background: speedIdx === i ? "rgba(59,130,246,0.08)" : "transparent",
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Progress */}
+        <div className="flex-1 flex items-center gap-2.5 min-w-40">
+          <span className="text-[10px] font-mono flex-shrink-0" style={{ color: FX.dim }}>{currentIdx + 1}</span>
+          <div className="flex-1 relative h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+            <motion.div
+              className="absolute left-0 top-0 h-full rounded-full pointer-events-none"
+              style={{
+                width: `${progress}%`,
+                background: "linear-gradient(90deg,#3b82f6,#22d3ee)",
+                boxShadow: "0 0 8px rgba(59,130,246,0.4)",
+              }}
+            />
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, allBars.length - 1)}
+              value={currentIdx}
+              onChange={(e) => animateSeekTo(Number(e.target.value))}
+              className="absolute inset-0 w-full opacity-0 cursor-pointer"
+              style={{ height: "100%" }}
+            />
+          </div>
+          <span className="text-[10px] font-mono flex-shrink-0" style={{ color: FX.dim }}>{allBars.length}</span>
+        </div>
+
+        {/* Current bar date */}
+        <span className="text-[10px] font-mono flex-shrink-0 hidden md:block" style={{ color: "rgba(148,163,184,0.5)" }}>
+          {currentBar ? barDate(currentBar.time, interval) : "—"}
+        </span>
+
+        <button
+          onClick={() => setMtfOpen((p) => !p)}
+          title="Multi-timeframe sync pane"
+          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors flex-shrink-0 hover:bg-white/5"
+          style={{ color: mtfOpen ? "#38bdf8" : FX.dim, background: mtfOpen ? "rgba(56,189,248,0.12)" : "transparent" }}
+        >
+          <Layers className="w-3.5 h-3.5" />
+        </button>
+
+        <button
+          onClick={resetSession}
+          title="Reset session"
+          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors flex-shrink-0 hover:bg-white/5"
+          style={{ color: FX.dim }}
+        >
+          <Reset className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
           {/* Notices */}
           <AnimatePresence>
             {notice && (
@@ -1583,11 +1755,19 @@ const periodRef      = useRef<HTMLDivElement>(null);
         </div>
 
         {/* ── Right trading panel ─────────────────────────────────── */}
-        {panelOpen && (
-          <div
-            className="w-[300px] flex-shrink-0 flex flex-col min-h-0"
-            style={{ borderLeft: `1px solid ${FX.border}`, background: FX.panel }}
-          >
+        {mode === "eval" ? (
+          panelOpen && (
+            <EvaluationPanel
+              cfg={evalCfg}
+              onCfg={updateEvalCfg}
+              trades={closed}
+              positions={positions}
+              current={currentBar ? { time: currentBar.time, close: currentBar.close } : null}
+              onReset={resetEvaluation}
+            />
+          )
+        ) : (
+          panelOpen && (
             <TradePanel
               userTab={userTab}
               setUserTab={setUserTab}
@@ -1631,7 +1811,7 @@ const periodRef      = useRef<HTMLDivElement>(null);
               onCancelPending={cancelPending}
               tickerLabel={tickerLabel}
             />
-          </div>
+          )
         )}
       </div>
     </div>
@@ -2348,5 +2528,99 @@ function LabelInput({ label, value, onChange, placeholder, color }: {
         style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${FX.border}`, color: color ?? "#fff" }}
       />
     </label>
+  );
+}
+
+/* ── Mode chooser (enter screen) ────────────────────────────────── */
+function ModeChooser({ onPick }: { onPick: (m: "charts" | "eval") => void }) {
+  return (
+    <div
+      className="h-screen w-full flex items-center justify-center select-none overflow-hidden relative"
+      style={{ background: "radial-gradient(1200px 600px at 50% -10%, #141d31 0%, #0b0f17 55%, #0a0d12 100%)", color: "#e6ecf5" }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 26 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: "easeOut" }}
+        className="w-full max-w-[640px] px-6 flex flex-col gap-8"
+      >
+        {/* Verbose logo */}
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2.5 mb-3">
+            <motion.div
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.15, duration: 0.4 }}
+              className="w-11 h-11 rounded-2xl flex items-center justify-center text-[15px] font-black"
+              style={{ background: "linear-gradient(135deg,#5aa7ff,#a78bfa)", color: "#fff", boxShadow: "0 12px 32px rgba(90,165,255,0.35)" }}
+            >
+              T
+            </motion.div>
+          </div>
+          <h1 className="text-[26px] font-bold tracking-tight" style={{ color: "#fff" }}>Trading Mind</h1>
+          <p className="text-[11px] font-semibold tracking-[0.3em] uppercase mt-1" style={{ color: "#6b7a96" }}>Simulated replay · Practice</p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Charts */}
+          <motion.button
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.35 }}
+            whileHover={{ y: -4 }}
+            onClick={() => onPick("charts")}
+            className="flex-1 rounded-2xl p-5 text-left transition-all group"
+            style={{ background: "rgba(20,28,44,0.65)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(12px)" }}
+          >
+            <div className="flex items-start justify-between">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(90,165,255,0.14)" }}>
+                <BarChart3 className="w-4 h-4" style={{ color: "#7ec0ff" }} />
+              </div>
+              <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-full" style={{ background: "rgba(90,165,255,0.1)", color: "#7ec0ff" }}>
+                Replay
+              </span>
+            </div>
+            <div className="mt-4 text-[17px] font-bold" style={{ color: "#fff" }}>Charts</div>
+            <p className="mt-1 text-[11px] leading-relaxed" style={{ color: "#8b9bb8" }}>
+              Bar-by-bar market replay. Trade simulated positions, draw on price, apply indicators, journal every move.
+            </p>
+            <div className="mt-4 text-[10px] font-bold flex items-center gap-1.5" style={{ color: "#7ec0ff" }}>
+              Open replay <ArrowRight className="w-3 h-3" />
+            </div>
+          </motion.button>
+
+          {/* Evaluation */}
+          <motion.button
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.28, duration: 0.35 }}
+            whileHover={{ x: -4 }}
+            onClick={() => onPick("eval")}
+            className="flex-1 rounded-2xl p-5 text-left transition-all"
+            style={{ background: "rgba(21,27,44,0.65)", border: "1px solid rgba(167,139,250,0.22)", backdropFilter: "blur(12px)" }}
+          >
+            <div className="flex items-start justify-between">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(167,139,250,0.16)" }}>
+                <Award className="w-4 h-4" style={{ color: "#c4b5fd" }} />
+              </div>
+              <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-full" style={{ background: "rgba(167,139,250,0.12)", color: "#c4b5fd" }}>
+                Prop style
+              </span>
+            </div>
+            <div className="mt-4 text-[17px] font-bold" style={{ color: "#fff" }}>Evaluation</div>
+            <p className="mt-1 text-[11px] leading-relaxed" style={{ color: "#9299b6" }}>
+              Prop-firm simulator. Track profit target, max daily loss and trailing drawdown as you trade the same replay.
+            </p>
+            <div className="mt-4 text-[10px] font-bold flex items-center gap-1.5" style={{ color: "#c4b5fd" }}>
+              Start evaluation <ArrowRight className="w-3 h-3" />
+            </div>
+          </motion.button>
+        </div>
+
+        <p className="text-center text-[9px] tracking-wide" style={{ color: "#4d5d79" }}>
+          SIMULATED REPLAY — NOT REAL TRADING · NO REAL MONEY
+        </p>
+      </motion.div>
+    </div>
   );
 }
