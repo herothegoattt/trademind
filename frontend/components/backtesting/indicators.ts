@@ -3,6 +3,8 @@
 /* ── Indicator engine for the TV-style Backtest chart ───────────────── */
 
 import type { OHLCVBar } from "./ReplayChart";
+import { estimateDeltaFromOHLCV } from "../../lib/orderflow";
+import type { TpoRow, TpoData, GexData } from "../../lib/market-profile-primitive";
 
 export interface IndicatorConfig {
   id: string;
@@ -14,14 +16,26 @@ export interface IndicatorConfig {
 /* Computed points: lightweight-charts accepts {time, value}[] */
 export type Point = { time: number; value: number };
 
+/* Order-flow big-trade marker (volume spike → proxy for a large print). */
+export interface BigTradeMarker {
+  time: number;
+  price: number;
+  side: "buy" | "sell";
+}
+
 /* One concrete visual series on the chart (an indicator may emit several). */
 export interface IndicatorSource {
   id: string;         // unique chart key, e.g. "bb20-upper"
   name: string;       // legend label
   color: string;
   pane: 0 | 1;
-  kind: "line" | "area" | "histogram" | "baseline";
+  kind: "line" | "area" | "histogram" | "baseline" | "markers" | "tpo" | "gex";
   points: Point[];
+  markers?: BigTradeMarker[];   // kind === "markers"
+  tpo?: TpoData | null;         // kind === "tpo"
+  gex?: GexData | null;         // kind === "gex"
+  height?: number;              // preferred bottom-pane height (px) for delta
+  shareScale?: string;          // join an existing price scale instead of a new axis
 }
 
 /* ── Simple stats ──────────────────────────────────────────────── */
@@ -128,6 +142,121 @@ export function macd(
   return { macd: line, signal, hist };
 }
 
+/* ── Order-flow estimates (OHLCV-derived, honest "est." labels) ──────── */
+
+/** Per-bar raw volume delta estimate (close position within the range). */
+export function deltaSeries(values: OHLCVBar[]): (number | null)[] {
+  return values.map((b) => estimateDeltaFromOHLCV(b));
+}
+
+/** Cumulative signed delta — running sum of the per-bar estimate. */
+export function cumulativeDelta(values: OHLCVBar[]): (number | null)[] {
+  const out: (number | null)[] = new Array(values.length).fill(null);
+  let acc = 0;
+  for (let i = 0; i < values.length; i++) {
+    acc += estimateDeltaFromOHLCV(values[i]);
+    out[i] = acc;
+  }
+  return out;
+}
+
+/** Bars whose volume ≥ mult × rolling average → "big trades" proxy markers. */
+export function bigTrades(values: OHLCVBar[], window = 20, mult = 2.5): BigTradeMarker[] {
+  if (values.length === 0) return [];
+  const out: BigTradeMarker[] = [];
+  const vols = values.map((b) => b.volume || 0);
+  let sum = 0;
+  const rolling: number[] = [];
+  for (let i = 0; i < vols.length; i++) {
+    sum += vols[i];
+    if (i >= window) sum -= vols[i - window];
+    rolling[i] = i >= window - 1 ? sum / window : sum / Math.min(i + 1, window);
+  }
+  for (let i = 0; i < values.length; i++) {
+    const v = vols[i];
+    const avg = rolling[i] || 1;
+    if (v > 0 && v >= mult * avg) {
+      out.push({ time: values[i].time, price: values[i].close >= values[i].open ? values[i].high : values[i].low, side: values[i].close >= values[i].open ? "buy" : "sell" });
+    }
+  }
+  return out;
+}
+
+/* ── TPO / Market Profile (OHLCV-derived) ───────────────────────────── */
+
+export function computeTpo(values: OHLCVBar[], rowsPerSession = 16): TpoData {
+  if (values.length === 0) return { rows: [], sessions: [], pocRow: -1, vaLowRow: -1, vaHighRow: -1, rowsPerSession };
+
+  // Session = consecutive runs of bars interrupted by a large time gap or day change.
+  // Use ~18h inactivity as the session break (crypto/futures trade near 24/7).
+  const sessions: TpoData["sessions"] = [];
+  const sessionOf: number[] = [];
+  for (let i = 0; i < values.length; i++) {
+    if (i === 0 || values[i].time - values[i - 1].time > 18 * 3600) {
+      sessionOf[i] = sessions.length;
+      sessions.push({ index: sessions.length, startTime: values[i].time, endTime: values[i].time });
+    } else {
+      sessionOf[i] = sessionOf[i - 1];
+      sessions[sessionOf[i]].endTime = values[i].time;
+    }
+  }
+
+  // Price rows: fixed number of bands over the visible price range.
+  let lo = Infinity, hi = -Infinity;
+  for (const b of values) { if (b.low < lo) lo = b.low; if (b.high > hi) hi = b.high; }
+  if (!isFinite(lo) || !isFinite(hi) || hi <= lo) return { rows: [], sessions, pocRow: -1, vaLowRow: -1, vaHighRow: -1, rowsPerSession };
+  const span = hi - lo;
+  const step = span / rowsPerSession;
+  const rows: TpoRow[] = Array.from({ length: rowsPerSession }, (_, r) => ({
+    priceLow: lo + r * step,
+    priceHigh: lo + (r + 1) * step,
+    priceMid: lo + (r + 0.5) * step,
+    cells: [],
+  }));
+
+  // Letter codes per session (A..Z, then AA, AB...). Every bar prints its
+  // letter into every price row its [low, high] range passes through — that's
+  // the "time spent at price" count in Market-Profile terms.
+  let timeIdx: number[] = new Array(sessions.length).fill(0);
+  const codeFor = (s: number): string => {
+    let n = timeIdx[s]++;
+    let out = "";
+    do { out = String.fromCharCode(65 + (n % 26)) + out; n = Math.floor(n / 26) - 1; } while (n >= 0);
+    return out;
+  };
+
+  for (let i = 0; i < values.length; i++) {
+    const b = values[i];
+    const s = sessionOf[i];
+    const letter = codeFor(s);
+    const startRow = Math.max(0, Math.floor((b.low - lo) / step));
+    const endRow = Math.min(rowsPerSession - 1, Math.floor((b.high - lo) / step));
+    for (let r = startRow; r <= endRow; r++) {
+      const f = rows[r].cells.find((c) => c.session === s);
+      if (f) f.letters += letter;
+      else rows[r].cells.push({ session: s, letters: letter });
+    }
+  }
+
+  // Row "time" = number of letters printed into it across all sessions.
+  const timeCount = rows.map((r) => r.cells.reduce((acc, c) => acc + c.letters.length, 0));
+  let pocRow = 0;
+  for (let i = 1; i < rows.length; i++) if (timeCount[i] > timeCount[pocRow]) pocRow = i;
+
+  // 70% Value Area expanding from POC.
+  const total = timeCount.reduce((a, b) => a + b, 0) || 1;
+  let acc = timeCount[pocRow], loIdx = pocRow, hiIdx = pocRow;
+  while (acc < total * 0.7 && (loIdx > 0 || hiIdx < rows.length - 1)) {
+    const below = loIdx > 0 ? timeCount[loIdx - 1] : -1;
+    const above = hiIdx < rows.length - 1 ? timeCount[hiIdx + 1] : -1;
+    if (above >= below && above >= -0) { hiIdx += 1; acc += timeCount[hiIdx]; }
+    else if (below >= -0) { loIdx -= 1; acc += timeCount[loIdx]; }
+    else break;
+  }
+
+  return { rows, sessions, pocRow, vaLowRow: loIdx, vaHighRow: hiIdx, rowsPerSession };
+}
+
 /* ── Series builder ────────────────────────────────────────────── */
 
 function toPoints(bars: OHLCVBar[], arr: (number | null)[]): Point[] {
@@ -147,6 +276,48 @@ export function computeIndicator(cfg: IndicatorConfig, bars: OHLCVBar[]): Indica
   });
 
   switch (cfg.id) {
+    case "delta": {
+      const d = deltaSeries(bars);
+      const cum = cumulativeDelta(bars);
+      return [
+        {
+          id: "delta-hist", name: "Δ", color: "", pane: 1, kind: "histogram",
+          points: toPoints(bars, d), height: 74,
+        },
+        {
+          id: "delta-cum", name: "Cum Δ", color: "#22d3ee", pane: 1, kind: "line",
+          points: toPoints(bars, cum), height: 74, shareScale: "ind-delta-hist",
+        },
+      ];
+    }
+
+    case "bigtrades": {
+      return [
+        {
+          id: "bigtrades", name: "Big Trades", color: cfg.color, pane: 0, kind: "markers",
+          points: [], markers: bigTrades(bars),
+        },
+      ];
+    }
+
+    case "tpo": {
+      return [
+        {
+          id: "tpo", name: "TPO", color: cfg.color, pane: 0, kind: "tpo",
+          points: [], tpo: computeTpo(bars),
+        },
+      ];
+    }
+
+    case "gex": {
+      return [
+        {
+          id: "gex", name: "GEX", color: cfg.color, pane: 0, kind: "gex",
+          points: [], gex: null,
+        },
+      ];
+    }
+
     case "sma20": return [line("", sma(closes, 20))];
     case "sma50": return [line("", sma(closes, 50))];
     case "sma100": return [line("", sma(closes, 100))];
@@ -215,6 +386,12 @@ export const INDICATOR_MENU: IndicatorConfig[] = [
   { id: "atr14",   name: "ATR (14)",  pane: 0, color: "#a78bfa" },
   { id: "rsi14",   name: "RSI (14)",  pane: 1, color: "#a78bfa" },
   { id: "macd",    name: "MACD",      pane: 1, color: "#2962ff" },
+
+  /* ── Order-flow set (backtest: OHLCV-derived estimates) ─────── */
+  { id: "delta",    name: "Delta (est)",       pane: 1, color: "#22d3ee" },
+  { id: "bigtrades",name: "Big Trades (proxy)", pane: 0, color: "#f472b6" },
+  { id: "tpo",      name: "TPO Profile",       pane: 0, color: "#38bdf8" },
+  { id: "gex",      name: "GEX Profile",       pane: 0, color: "#a3e635" },
 ];
 
 export function indicatorById(id: string): IndicatorConfig | undefined {

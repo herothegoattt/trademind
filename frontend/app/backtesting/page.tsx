@@ -17,6 +17,7 @@ import type { OHLCVBar, DrawingTool, Drawing, ChartStyle, ChartType } from "../.
 import { DEFAULT_CHART_STYLE } from "../../components/backtesting/ReplayChart";
 import AnalyticsPanel from "../../components/backtesting/AnalyticsPanel";
 import { INDICATOR_MENU, IndicatorConfig, indicatorById } from "../../components/backtesting/indicators";
+import type { GexData } from "../../lib/market-profile-primitive";
 import { EvaluationPanel, DEFAULT_EVAL_CFG, EvalConfig } from "../../components/backtesting/Evaluation";
 import type { Side, OpenPos, ClosedTrade } from "../../components/backtesting/Evaluation";
 
@@ -387,6 +388,7 @@ export default function BacktestPage() {
   const [marketState,     setMarketState]     = useState<string | null>(null);
   const [indOpen,         setIndOpen]         = useState(false);
   const [indicators,      setIndicators]      = useState<IndicatorConfig[]>([]);
+  const [gexData,         setGexData]         = useState<GexData | null>(null);
 
   const [orderSide, setOrderSide] = useState<Side>("buy");
   const [orderSize, setOrderSize] = useState(1);
@@ -936,6 +938,23 @@ const periodRef      = useRef<HTMLDivElement>(null);
       ? prev.filter((i) => i.id !== id)
       : [...prev, ...(INDICATOR_MENU.filter((i) => i.id === id) ?? [])]);
   };
+
+  /* GEX profile — live options chain from Yahoo when the indicator is active */
+  useEffect(() => {
+    if (!indicators.some((i) => i.id === "gex")) { setGexData(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/backtesting/gex?symbol=${encodeURIComponent(ticker)}&v=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) { setGexData(null); return; }
+        const j = await res.json();
+        if (!cancelled && Array.isArray(j.rows)) setGexData({ rows: j.rows, spot: j.spot, pocStrike: j.pocStrike, maxGex: j.maxGex });
+      } catch {
+        if (!cancelled) setGexData(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [indicators, ticker]);
 
   useEffect(() => {
     try {
@@ -1582,6 +1601,7 @@ const periodRef      = useRef<HTMLDivElement>(null);
                 indicators={indicators}
                 symbolLabel={tickerLabel}
                 intervalLabel={interval}
+                gexData={gexData}
               />
             )}
 

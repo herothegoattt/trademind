@@ -4,8 +4,11 @@ import {
   createChart, IChartApi, ISeriesApi, ColorType, CrosshairMode,
   CandlestickSeries, BarSeries, AreaSeries, HistogramSeries, LineSeries, LineStyle,
   createTextWatermark,
+  createSeriesMarkers,
+  type Logical,
 } from "lightweight-charts";
 import { computeIndicator, IndicatorConfig, IndicatorSource, lastValueAt } from "./indicators";
+import { TPOPrimitive, GexProfilePrimitive, type GexData } from "../../lib/market-profile-primitive";
 
 /* ── TradingView dark palette ──────────────────────────────────── */
 export const TV = {
@@ -93,23 +96,74 @@ interface Props {
   indicators?:       IndicatorConfig[];
   symbolLabel?:      string;
   intervalLabel?:    string;
+  gexData?:          GexData | null;   // live options-derived GEX profile
 }
 
 /* ── Coordinate helpers ───────────────────────────────────────────── */
+// Module-level mirror of the currently-visible bars, shared by the pixel/time
+// converters so they can extrapolate into the blank (future) area of the chart.
+const visibleDataRef: { current: OHLCVBar[] } = { current: [] };
+
+const asLogical = (n: number): Logical => n as unknown as Logical;
+
+/* Extrapolation anchor: the last actual data point of the series (includes the
+   live bar) plus the pixel-width of one bar. Used to map future timestamps to
+   x-coordinates and vice-versa in the blank area to the right of the data. */
+function anchorInfo(
+  chart: IChartApi, series: ISeriesApi<"Candlestick">
+): { lastTime: number; lastCoor: number; lastIdx: number; pxPerBar: number; spacingMs: number } | null {
+  const data = series.data();
+  const last = data[data.length - 1] as any;
+  const prev = data[data.length - 2] as any;
+  if (!last || last.time == null) return null;
+  const lastTime = last.time as number;
+  const prevTime = prev?.time != null ? (prev.time as number) : lastTime;
+  const spacingMs = lastTime - prevTime;
+  if (spacingMs <= 0) return null;
+  const ts = chart.timeScale();
+  const lastIdx = ts.timeToIndex(last.time) ?? 0;
+  const lastCoor = ts.logicalToCoordinate(asLogical(lastIdx));
+  const prevCoor = lastIdx > 0 ? ts.logicalToCoordinate(asLogical(lastIdx - 1)) : lastCoor;
+  if (lastCoor == null) return null;
+  const pxPerBar = lastCoor - (prevCoor ?? lastCoor);
+  if (pxPerBar <= 0) return null;
+  return { lastTime, lastCoor, lastIdx, pxPerBar, spacingMs };
+}
+
 function toPixel(
   chart: IChartApi, series: ISeriesApi<"Candlestick">, p: DrawPoint
 ): { x: number; y: number } | null {
-  const x = chart.timeScale().timeToCoordinate(p.time as any);
   const y = series.priceToCoordinate(p.price);
-  return x != null && y != null ? { x, y } : null;
+  if (y == null) return null;
+  const x = chart.timeScale().timeToCoordinate(p.time as any);
+  if (x != null) return { x, y };
+
+  // Drawing stored at a future timestamp (beyond the loaded data). The library
+  // can't map it to a coordinate, so extrapolate from the last actual bar.
+  const a = anchorInfo(chart, series);
+  if (!a) return null;
+  const futureIdx = a.lastIdx + (p.time - a.lastTime) / a.spacingMs;
+  const fx = chart.timeScale().logicalToCoordinate(asLogical(futureIdx));
+  return fx != null ? { x: fx, y } : null;
 }
 
 function fromPixel(
   chart: IChartApi, series: ISeriesApi<"Candlestick">, x: number, y: number
 ): DrawPoint | null {
-  const time  = chart.timeScale().coordinateToTime(x);
   const price = series.coordinateToPrice(y);
-  return time != null && price != null ? { time: time as number, price } : null;
+  if (price == null) return null;
+
+  // Coordinate is directly over a known bar → use its real time.
+  const time = chart.timeScale().coordinateToTime(x);
+  if (time != null) return { time: time as number, price };
+
+  // Drawing in the blank/future area to the right of the data. The library
+  // returns null here, so extrapolate the timestamp from the last actual bar
+  // using the bar spacing (last bar's index → coordinate, future time → index).
+  const a = anchorInfo(chart, series);
+  if (!a) return null;
+  const futureIdx = a.lastIdx + (x - a.lastCoor) / a.pxPerBar;
+  return { time: a.lastTime + Math.round(futureIdx - a.lastIdx) * a.spacingMs, price };
 }
 
 /* ── Canvas draw single shape ─────────────────────────────────────── */
@@ -383,6 +437,7 @@ export function ReplayChart({
   indicators = [],
   symbolLabel = "",
   intervalLabel = "",
+  gexData = null,
 }: Props) {
   const effStyle = { ...DEFAULT_CHART_STYLE, ...style };
   const containerRef = useRef<HTMLDivElement>(null);
@@ -398,6 +453,11 @@ export function ReplayChart({
   const [legend, setLegend] = useState<{ time: string; oh: [number, number, number, number]; vol: string; inds: { name: string; color: string; value: string }[] } | null>(null);
   const indSourcesRef = useRef<IndicatorSource[]>([]);
   const wmRef = useRef<{ applyOptions: (o: any) => void; detach: () => void } | null>(null);
+  // order-flow primitives (TPO letters / GEX profile) + big-trade markers
+  const tpoPrimRef   = useRef<TPOPrimitive | null>(null);
+  const gexPrimRef   = useRef<GexProfilePrimitive | null>(null);
+  const markerApiRef = useRef<any | null>(null);
+  const gexDataRef   = useRef<GexData | null>(gexData);
 
   // refs so event-handler closures always see the latest values
   const toolRef      = useRef(tool);
@@ -413,8 +473,6 @@ export function ReplayChart({
   const lineStart    = useRef<DrawPoint | null>(null);
   const mouseCSS     = useRef<{ x: number; y: number } | null>(null);
   const rafId        = useRef(0);
-  // full OHLC window for legend lookups (works for line/area charts too)
-  const visibleDataRef = useRef<OHLCVBar[]>([]);
 
   useEffect(() => { toolRef.current     = tool;           }, [tool]);
   useEffect(() => { colorRef.current    = drawColor;      }, [drawColor]);
@@ -423,6 +481,7 @@ export function ReplayChart({
   useEffect(() => { structRef.current = structureLabel; }, [structureLabel]);
   useEffect(() => { zoneLabelRef.current = zoneLabel; }, [zoneLabel]);
   useEffect(() => { indicatorsRef.current = indicators; }, [indicators]);
+  useEffect(() => { gexDataRef.current = gexData; }, [gexData]);
   useEffect(() => { drawingsRef.current = drawings; scheduleRender(); }, [drawings]); // eslint-disable-line
 
   /* ── Apply chart style live (TV-style colors / grid / chart type) ── */
@@ -645,7 +704,7 @@ export function ReplayChart({
       },
       timeScale: {
         borderColor: TV.line,
-        timeVisible: true, secondsVisible: false, rightOffset: 8,
+        timeVisible: true, secondsVisible: false, rightOffset: 40,
         lockVisibleTimeRangeOnResize: true,
         tickMarkFormatter: (t: any) => {
           const d = new Date((t as number) * 1000);
@@ -721,6 +780,7 @@ export function ReplayChart({
       try { wm.detach(); } catch { /* ignore */ }
       wmRef.current = null;
       indRef.current.clear(); // eslint-disable-line react-hooks/exhaustive-deps
+      tpoPrimRef.current = null; gexPrimRef.current = null; markerApiRef.current = null;
       chart.remove();
       chartRef.current = null; candleRef.current = null; volRef.current = null;
     };
@@ -773,11 +833,12 @@ export function ReplayChart({
 
       if (isNewDataset) {
         // new dataset loaded: show last ~80 bars right-aligned, leave room on right
+        // (wide blank future area so drawings can be placed/extended into the future)
         const WINDOW = 80;
         const t = setTimeout(() => {
           chartRef.current?.timeScale().setVisibleLogicalRange({
             from: Math.max(-2, cd.length - WINDOW),
-            to:   cd.length - 1 + 10,
+            to:   cd.length - 1 + 40,
           });
         }, 30);
         return () => clearTimeout(t);
@@ -805,13 +866,70 @@ export function ReplayChart({
       if (!wanted.has(id) && s) { try { chart.removeSeries(s); } catch { /* ignore */ } indRef.current.delete(id); }
     });
 
+    /* ── Order-flow overlays (primitives + markers) ───────────────── */
+    const tpoSrc = srcs.find((s) => s.kind === "tpo");
+    const gexSrc = srcs.find((s) => s.kind === "gex");
+    const btSrc  = srcs.find((s) => s.kind === "markers");
+
+    const candle = candleRef.current;
+    if (candle) {
+      // TPO letters
+      if (tpoSrc && tpoSrc.tpo) {
+        if (!tpoPrimRef.current) {
+          tpoPrimRef.current = new TPOPrimitive();
+          try { candle.attachPrimitive(tpoPrimRef.current as any); } catch { /* ignore */ }
+        }
+        try { tpoPrimRef.current.setData(tpoSrc.tpo); } catch { /* ignore */ }
+      } else if (tpoPrimRef.current) {
+        try { candle.detachPrimitive(tpoPrimRef.current as any); } catch { /* ignore */ }
+        tpoPrimRef.current = null;
+      }
+
+      // GEX profile (needs live options data)
+      const gexData = gexDataRef.current;
+      if (gexSrc && gexData && gexData.rows.length) {
+        if (!gexPrimRef.current) {
+          gexPrimRef.current = new GexProfilePrimitive();
+          try { candle.attachPrimitive(gexPrimRef.current as any); } catch { /* ignore */ }
+        }
+        try { gexPrimRef.current.setData(gexData); } catch { /* ignore */ }
+      } else if (gexPrimRef.current) {
+        try { candle.detachPrimitive(gexPrimRef.current as any); } catch { /* ignore */ }
+        gexPrimRef.current = null;
+      }
+
+      // Big-trades markers on the candle series
+      const btMarkers = btSrc?.markers?.map((m) => ({
+        time: m.time as any,
+        position: (m.side === "buy" ? "belowBar" : "aboveBar") as any,
+        color: m.side === "buy" ? "rgba(38,166,154,0.9)" : "rgba(239,83,80,0.9)",
+        shape: (m.side === "buy" ? "arrowUp" : "arrowDown") as any,
+        size: 1,
+      })) ?? [];
+      if (btSrc) {
+        if (!markerApiRef.current) {
+          try {
+            markerApiRef.current = createSeriesMarkers(candle, []);
+            (candle as any).attachPrimitive(markerApiRef.current);
+          } catch { /* ignore */ }
+        }
+        try { markerApiRef.current?.setMarkers(btMarkers); } catch { /* ignore */ }
+      } else {
+        try {
+          markerApiRef.current?.setMarkers([]);
+          if (markerApiRef.current) { (candle as any).detachPrimitive(markerApiRef.current); markerApiRef.current = null; }
+        } catch { /* ignore */ }
+      }
+    }
+
     for (const s of srcs) {
+      if (s.kind === "markers" || s.kind === "tpo" || s.kind === "gex") continue;
       let series = indRef.current.get(s.id);
       if (!series) {
         try {
           if (s.kind === "histogram") {
             series = chart.addSeries(HistogramSeries, {
-              priceFormat: { type: "volume" }, priceScaleId: `ind-${s.id}`,
+              priceFormat: { type: "volume" }, priceScaleId: s.shareScale ?? `ind-${s.id}`,
               priceLineVisible: false, lastValueVisible: false,
             }, s.pane);
           } else {
@@ -819,6 +937,7 @@ export function ReplayChart({
               color: s.color, lineWidth: 1, lineStyle: LineStyle.Solid,
               priceLineVisible: false, lastValueVisible: true,
               crosshairMarkerVisible: false,
+              ...(s.shareScale ? { priceScaleId: s.shareScale } : {}),
             }, s.pane);
           }
           if (series) indRef.current.set(s.id, series);
@@ -827,9 +946,12 @@ export function ReplayChart({
       if (series) {
         try {
           if (s.kind === "histogram") {
+            const isDelta = s.id === "delta-hist";
             (series as ISeriesApi<"Histogram">).setData(s.points.map((p) => ({
               time: p.time as any, value: p.value,
-              color: p.value >= 0 ? "rgba(41,98,255,0.45)" : "rgba(239,83,80,0.45)",
+              color: isDelta
+                ? (p.value >= 0 ? "rgba(34,211,238,0.5)" : "rgba(239,83,80,0.5)")
+                : (p.value >= 0 ? "rgba(41,98,255,0.45)" : "rgba(239,83,80,0.45)"),
             })));
           } else {
             (series as ISeriesApi<"Line">).setData(s.points.map((p) => ({ time: p.time as any, value: p.value })));
@@ -838,16 +960,16 @@ export function ReplayChart({
       }
     }
 
-    // bottom pane height for RSI/MACD
-    const hasPane1 = srcs.some((s) => s.pane === 1);
+    // bottom pane height for RSI/MACD/Delta
+    const pane1Src = srcs.find((s) => s.pane === 1);
     try {
       const panes = chart.panes();
-      if (hasPane1 && panes.length >= 2) {
-        panes[1].setHeight(96);
-        chart.priceScale(`ind-${srcs.find((s) => s.pane === 1)?.id ?? "rsi14"}`, 1).applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } });
+      if (pane1Src && panes.length >= 2) {
+        panes[1].setHeight(pane1Src.height ?? 96);
+        chart.priceScale(`ind-${pane1Src.id ?? "rsi14"}`, 1).applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } });
       }
     } catch { /* ignore */ }
-  }, [candles, visibleCount, indicators, style?.chartType]);
+  }, [candles, visibleCount, indicators, style?.chartType, gexData]);
 
   /* ── Mouse helpers ──────────────────────────────────────────────── */
   const cssXY = (e: React.MouseEvent<HTMLCanvasElement>) => {
