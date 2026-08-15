@@ -3,6 +3,7 @@ import { proxyToBackend } from "@/lib/backend-proxy";
 
 // Reads the Authorization header — must be dynamic, never statically collected.
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   try {

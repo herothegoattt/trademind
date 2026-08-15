@@ -12,6 +12,7 @@ import {
  * to OHLCV-only VWAP/Profile from /api/backtesting/ohlcv).
  */
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const BINANCE = "https://api.binance.com/api/v3";
 const BINANCE_FUTURES = "https://fapi.binance.com/fapi/v1";

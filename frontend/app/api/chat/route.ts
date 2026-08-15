@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 60;
+
 const TRADING_SYSTEM_PROMPT = `You are TradeMind AI - an expert trading mentor with 15+ years of experience.
 
 YOUR EXPERTISE:

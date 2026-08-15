@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 60;
+
 const SUPPORT_SYSTEM = `You are TradeMind's support assistant. You help users with questions about the TradeMind platform.
 
 PLATFORM OVERVIEW:

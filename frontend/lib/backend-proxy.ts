@@ -29,7 +29,7 @@ export async function getUserFromBackendToken(
     const res = await fetchWithTimeout(
       `${getBackendUrl()}/api/v1/auth/me`,
       { headers: { Authorization: authHeader } },
-      12000,
+      55000,
     );
     if (!res.ok) return null;
     return await res.json();
@@ -39,7 +39,9 @@ export async function getUserFromBackendToken(
 }
 
 /** Forward a request to the FastAPI backend and return the response.
- *  Retries once on ECONNREFUSED (Azure cold-start) after a short delay. */
+ *  Render free web services sleep after ~15 min idle and take up to ~50 s to
+ *  wake, so we wait out the whole cold start in a single attempt (Vercel Hobby
+ *  caps function time at 60 s). */
 export async function proxyToBackend(
   path: string,
   method: string,
@@ -57,32 +59,20 @@ export async function proxyToBackend(
 
   const url = `${getBackendUrl()}${path}`;
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      return await fetchWithTimeout(url, options, 20000);
-    } catch (err: any) {
-      const isConnRefused = err?.cause?.code === "ECONNREFUSED";
-      const isTimeout     = err?.name === "AbortError";
+  try {
+    return await fetchWithTimeout(url, options, 55000);
+  } catch (err: any) {
+    const isConnRefused = err?.cause?.code === "ECONNREFUSED";
+    const isTimeout     = err?.name === "AbortError";
 
-      if (attempt === 1 && isConnRefused) {
-        // Cold-start: give the backend 3 s to wake up, then retry
-        console.warn(`[backend-proxy] ECONNREFUSED on attempt 1 — BACKEND_INTERNAL_URL=${process.env.BACKEND_INTERNAL_URL ?? "(unset)"}. Retrying in 3 s…`);
-        await new Promise<void>(r => setTimeout(r, 3000));
-        continue;
-      }
-
-      if (isConnRefused) {
-        console.error(`[backend-proxy] ECONNREFUSED after retry — ${url}`);
-        throw new Error("Service temporarily unavailable. Please try again later.");
-      }
-      if (isTimeout) {
-        console.error(`[backend-proxy] Timeout after ${attempt} attempt(s) — ${url}`);
-        throw new Error("The server is taking too long to respond. Please try again.");
-      }
-      throw err;
+    if (isConnRefused) {
+      console.error(`[backend-proxy] ECONNREFUSED — ${url}`);
+      throw new Error("Service temporarily unavailable. Please try again later.");
     }
+    if (isTimeout) {
+      console.error(`[backend-proxy] Timeout — ${url}`);
+      throw new Error("The server is taking too long to respond. Please try again.");
+    }
+    throw err;
   }
-
-  // TypeScript: unreachable but required
-  throw new Error("Unexpected exit from retry loop");
 }

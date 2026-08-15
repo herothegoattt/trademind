@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromBackendToken } from "@/lib/backend-proxy";
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const user = await getUserFromBackendToken(req.headers.get("authorization"));
