@@ -29,7 +29,7 @@ export async function getUserFromBackendToken(
     const res = await fetchWithTimeout(
       `${getBackendUrl()}/api/v1/auth/me`,
       { headers: { Authorization: authHeader } },
-      55000,
+      57000,
     );
     if (!res.ok) return null;
     return await res.json();
@@ -60,7 +60,7 @@ export async function proxyToBackend(
   const url = `${getBackendUrl()}${path}`;
 
   try {
-    return await fetchWithTimeout(url, options, 55000);
+    return await fetchWithTimeout(url, options, 57000);
   } catch (err: any) {
     const isConnRefused = err?.cause?.code === "ECONNREFUSED";
     const isTimeout     = err?.name === "AbortError";
