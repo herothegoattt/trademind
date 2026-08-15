@@ -3,8 +3,8 @@
 /* ── Indicator engine for the TV-style Backtest chart ───────────────── */
 
 import type { OHLCVBar } from "./ReplayChart";
-import { estimateDeltaFromOHLCV } from "../../lib/orderflow";
-import type { TpoRow, TpoData, GexData } from "../../lib/market-profile-primitive";
+import { estimateDeltaFromOHLCV, computeVWAP, computeVolumeProfile, type VolumeProfile } from "../../lib/orderflow";
+import type { TpoRow, TpoData, GexData, BandRow } from "../../lib/market-profile-primitive";
 
 export interface IndicatorConfig {
   id: string;
@@ -21,21 +21,38 @@ export interface BigTradeMarker {
   time: number;
   price: number;
   side: "buy" | "sell";
+  size?: number;  // 0..1 marker size, scaled by how extreme the spike is
 }
 
 /* One concrete visual series on the chart (an indicator may emit several). */
+export interface FloorLine {
+  price: number;                        // reference level (RSI 30/70, zero lines…)
+  color?: string;
+  dashed?: boolean;
+  label?: string;                       // chip text on the price axis
+}
+
 export interface IndicatorSource {
   id: string;         // unique chart key, e.g. "bb20-upper"
   name: string;       // legend label
   color: string;
   pane: 0 | 1;
-  kind: "line" | "area" | "histogram" | "baseline" | "markers" | "tpo" | "gex";
+  kind: "line" | "area" | "histogram" | "baseline" | "markers" | "tpo" | "gex" | "band" | "profile";
   points: Point[];
   markers?: BigTradeMarker[];   // kind === "markers"
   tpo?: TpoData | null;         // kind === "tpo"
   gex?: GexData | null;         // kind === "gex"
+  profile?: VolumeProfile | null;  // kind === "profile" (TradingView market/volume profile)
+  band?: { rows: BandRow[]; color: string } | null;  // kind === "band"
+  baseline?: number;            // kind === "baseline": center reference (e.g. RSI 50)
+  baselineTopColor?: string;    // color of the line / fill above the baseline
+  baselineBottomColor?: string; // color of the line / fill below the baseline
+  floors?: FloorLine[];         // horizontal reference lines w/ axis chips
+  areaFill?: { top: string; bottom: string } | null;   // kind === "area" gradient
   height?: number;              // preferred bottom-pane height (px) for delta
   shareScale?: string;          // join an existing price scale instead of a new axis
+  priceFormat?: any;            // axis formatting, e.g. { type: "volume" }
+  lineWidth?: number;           // stroke width (1|2|3)
 }
 
 /* ── Simple stats ──────────────────────────────────────────────── */
@@ -176,7 +193,12 @@ export function bigTrades(values: OHLCVBar[], window = 20, mult = 2.5): BigTrade
     const v = vols[i];
     const avg = rolling[i] || 1;
     if (v > 0 && v >= mult * avg) {
-      out.push({ time: values[i].time, price: values[i].close >= values[i].open ? values[i].high : values[i].low, side: values[i].close >= values[i].open ? "buy" : "sell" });
+      const ratio = v / avg;
+      out.push({
+        time: values[i].time, price: values[i].close >= values[i].open ? values[i].high : values[i].low,
+        side: values[i].close >= values[i].open ? "buy" : "sell",
+        size: Math.min(1, 0.55 + ratio / 24),
+      });
     }
   }
   return out;
@@ -268,6 +290,18 @@ function toPoints(bars: OHLCVBar[], arr: (number | null)[]): Point[] {
   return out;
 }
 
+/** Parallel top/bottom arrays → per-bar band fill rows (envelope strips). */
+function bandRows(bars: OHLCVBar[], top: (number | null)[], bottom: (number | null)[]): BandRow[] {
+  const out: BandRow[] = [];
+  for (let i = 0; i < bars.length; i++) {
+    const t = top[i], b = bottom[i];
+    if (t != null && b != null && isFinite(t) && isFinite(b) && t > b) {
+      out.push({ time: bars[i].time, top: t, bottom: b });
+    }
+  }
+  return out;
+}
+
 export function computeIndicator(cfg: IndicatorConfig, bars: OHLCVBar[]): IndicatorSource[] {
   const closes = bars.map((b) => b.close);
   const line = (name: string, arr: (number | null)[], color = cfg.color): IndicatorSource => ({
@@ -281,12 +315,15 @@ export function computeIndicator(cfg: IndicatorConfig, bars: OHLCVBar[]): Indica
       const cum = cumulativeDelta(bars);
       return [
         {
-          id: "delta-hist", name: "Δ", color: "", pane: 1, kind: "histogram",
-          points: toPoints(bars, d), height: 74,
+          id: "delta-hist", name: "Delta", color: "#22d3ee", pane: 1, kind: "histogram",
+          points: toPoints(bars, d), height: 120, shareScale: "ind-delta",
+          priceFormat: { type: "volume" },
+          floors: [{ price: 0, color: "rgba(148,163,184,0.3)", dashed: true, label: "0" }],
         },
         {
-          id: "delta-cum", name: "Cum Δ", color: "#22d3ee", pane: 1, kind: "line",
-          points: toPoints(bars, cum), height: 74, shareScale: "ind-delta-hist",
+          id: "delta-cum", name: "Cum Δ", color: "#22d3ee", pane: 1, kind: "area",
+          points: toPoints(bars, cum), areaFill: { top: "rgba(34,211,238,0.30)", bottom: "rgba(34,211,238,0.01)" },
+          shareScale: "ind-delta",
         },
       ];
     }
@@ -325,44 +362,66 @@ export function computeIndicator(cfg: IndicatorConfig, bars: OHLCVBar[]): Indica
     case "ema9":   return [line("", ema(closes, 9))];
     case "ema21":  return [line("", ema(closes, 21))];
     case "ema50":  return [line("", ema(closes, 50))];
-    case "vwap":   return [line("", vwap(bars))];
+    case "vwap": {
+      const v = vwap(bars);
+      const bands = computeVWAP(bars);
+      const u1 = bands.map((b) => b.upper1 as number | null), l1 = bands.map((b) => b.lower1 as number | null);
+      const u2 = bands.map((b) => b.upper2 as number | null), l2 = bands.map((b) => b.lower2 as number | null);
+      return [
+        {
+          id: "vwap", name: "VWAP", color: "#f8fafc", pane: 0, kind: "line", lineWidth: 2,
+          points: toPoints(bars, v), priceFormat: { minMove: 0.000001 },
+        },
+        { id: "vwap-b1", name: "VWAP ±σ", color: "", pane: 0, kind: "band", points: [],
+          band: { rows: bandRows(bars, u1, l1), color: "rgba(248,250,252,0.10)" } },
+        { id: "vwap-b2", name: "VWAP ±2σ", color: "", pane: 0, kind: "band", points: [],
+          band: { rows: bandRows(bars, u2, l2), color: "rgba(248,250,252,0.05)" } },
+      ];
+    }
     case "atr14":  return [line("", atr(bars, 14))];
 
     case "bb20": {
       const { upper, mid, lower } = bollinger(closes, 20, 2);
       return [
-        { id: "bb20-upper", name: "Upper", color: cfg.color, pane: 0, kind: "line", points: toPoints(bars, upper) },
-        { id: "bb20-mid",   name: "Mid",   color: "#93c5fd", pane: 0, kind: "line", points: toPoints(bars, mid) },
-        { id: "bb20-lower", name: "Lower", color: cfg.color, pane: 0, kind: "line", points: toPoints(bars, lower) },
+        {
+          id: "bb20-band", name: "BB band", color: "", pane: 0, kind: "band", points: [],
+          band: { rows: bandRows(bars, upper, lower), color: "rgba(96,165,250,0.12)" },
+        },
+        { id: "bb20-upper", name: "Upper", color: "#60a5fa", pane: 0, kind: "line", points: toPoints(bars, upper) },
+        { id: "bb20-mid",   name: "Mid",   color: "rgba(147,197,253,0.85)", pane: 0, kind: "line", points: toPoints(bars, mid) },
+        { id: "bb20-lower", name: "Lower", color: "#60a5fa", pane: 0, kind: "line", points: toPoints(bars, lower) },
       ];
     }
 
     case "rsi14": {
       const r = rsi(closes, 14);
       return [{
-        id: "rsi14", name: "RSI (14)", color: cfg.color, pane: 1, kind: "line",
-        points: toPoints(bars, r),
+        id: "rsi14", name: "RSI (14)", color: "#a78bfa", pane: 1, kind: "baseline",
+        baseline: 50, baselineTopColor: "#34d399", baselineBottomColor: "#f87171",
+        points: toPoints(bars, r), height: 110,
+        floors: [
+          { price: 70, color: "rgba(239,68,68,0.4)", dashed: true, label: "70" },
+          { price: 30, color: "rgba(34,197,94,0.4)", dashed: true, label: "30" },
+          { price: 50, color: "rgba(148,163,184,0.25)", dashed: true },
+        ],
       }];
     }
 
     case "macd": {
       const { macd: m, signal: sg, hist } = macd(closes, 12, 26, 9);
-      const src: IndicatorSource[] = [
+      return [
         {
           id: "macd", name: "MACD", color: "#2962ff", pane: 1, kind: "line",
-          points: toPoints(bars, m),
+          points: toPoints(bars, m), shareScale: "ind-macd",
         },
         {
           id: "macd-signal", name: "Signal", color: "#f5923e", pane: 1, kind: "line",
-          points: toPoints(bars, sg),
+          points: toPoints(bars, sg), shareScale: "ind-macd",
         },
-      ];
-      const hp = toPoints(bars, hist);
-      return [
-        ...src,
         {
           id: "macd-hist", name: "Hist", color: "", pane: 1, kind: "histogram",
-          points: hp,
+          points: toPoints(bars, hist), shareScale: "ind-macd", height: 150,
+          floors: [{ price: 0, color: "rgba(148,163,184,0.3)", dashed: true, label: "0" }],
         },
       ];
     }

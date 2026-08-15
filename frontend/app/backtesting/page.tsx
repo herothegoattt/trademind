@@ -366,6 +366,27 @@ export default function BacktestPage() {
   const [drawColor,       setDrawColor]       = useState("#3b82f6");
   const [drawWidth,       setDrawWidth]       = useState(2);
   const [drawings,        setDrawings]        = useState<Drawing[]>([]);
+  // Undo stack for drawing actions (Ctrl/Cmd+Z). Every tool commit pushes the
+  // pre-change snapshot; rapid deletions (one eraser drag) collapse into a single step.
+  const drawingsRef       = useRef<Drawing[]>([]);
+  const drawingsHistoryRef = useRef<Drawing[][]>([]);
+  const lastDrawCommitRef  = useRef(0);
+  useEffect(() => { drawingsRef.current = drawings; }, [drawings]);
+  const commitDrawings = useCallback((next: Drawing[]) => {
+    const prev = drawingsRef.current;
+    const stack = drawingsHistoryRef.current;
+    const now = performance.now();
+    const erasing = next.length < prev.length;
+    const eraserOngoing = erasing && stack.length > 0 && now - lastDrawCommitRef.current < 400;
+    if (eraserOngoing) {
+      stack[stack.length - 1] = prev; // collapse one eraser drag into one undo step
+    } else {
+      stack.push(prev);
+      if (stack.length > 80) stack.shift();
+    }
+    lastDrawCommitRef.current = now;
+    setDrawings(next);
+  }, []);
   const [chartStyle, setChartStyle] = useState<ChartStyle>(() => {
     if (typeof window === "undefined") return { ...DEFAULT_CHART_STYLE };
     try {
@@ -598,6 +619,12 @@ const periodRef      = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        const prev = drawingsHistoryRef.current.pop();
+        if (prev) setDrawings(prev);
+        return;
+      }
       if (e.key === "ArrowRight") setCurrentIdx((p) => Math.min(p + 1, allBars.length - 1));
       if (e.key === "ArrowLeft")  setCurrentIdx((p) => Math.max(p - 1, 0));
       if (e.key === " ")          { e.preventDefault(); setIsPlaying((p) => !p); }
@@ -1334,7 +1361,7 @@ const periodRef      = useRef<HTMLDivElement>(null);
               onColor={setDrawColor}
               width={drawWidth}
               onWidth={setDrawWidth}
-              onClear={() => setDrawings([])}
+              onClear={() => commitDrawings([])}
               drawingsCount={drawings.length}
               zoneLabel={zoneLabel}
               onZoneLabel={setZoneLabel}
@@ -1593,7 +1620,7 @@ const periodRef      = useRef<HTMLDivElement>(null);
                 drawColor={drawColor}
                 drawWidth={drawWidth}
                 drawings={drawings}
-                onDrawingsChange={setDrawings}
+                onDrawingsChange={commitDrawings}
                 style={chartStyle}
                 liveBarOverride={isAtEnd && liveBar ? liveBar : undefined}
                 structureLabel={structLabel}

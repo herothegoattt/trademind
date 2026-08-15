@@ -2,13 +2,16 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import {
   createChart, IChartApi, ISeriesApi, ColorType, CrosshairMode,
-  CandlestickSeries, BarSeries, AreaSeries, HistogramSeries, LineSeries, LineStyle,
+  CandlestickSeries, BarSeries, AreaSeries, HistogramSeries, LineSeries,
+  BaselineSeries, LineStyle,
   createTextWatermark,
   createSeriesMarkers,
   type Logical,
 } from "lightweight-charts";
 import { computeIndicator, IndicatorConfig, IndicatorSource, lastValueAt } from "./indicators";
-import { TPOPrimitive, GexProfilePrimitive, type GexData } from "../../lib/market-profile-primitive";
+import {
+  TPOPrimitive, GexProfilePrimitive, BandFillPrimitive, type GexData,
+} from "../../lib/market-profile-primitive";
 
 /* ── TradingView dark palette ──────────────────────────────────── */
 export const TV = {
@@ -457,6 +460,7 @@ export function ReplayChart({
   const tpoPrimRef   = useRef<TPOPrimitive | null>(null);
   const gexPrimRef   = useRef<GexProfilePrimitive | null>(null);
   const markerApiRef = useRef<any | null>(null);
+  const bandPrimRef  = useRef<Map<string, BandFillPrimitive>>(new Map());
   const gexDataRef   = useRef<GexData | null>(gexData);
 
   // refs so event-handler closures always see the latest values
@@ -669,6 +673,7 @@ export function ReplayChart({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    const bandPrims = bandPrimRef.current;
     const dpr  = window.devicePixelRatio || 1;
     dprRef.current = dpr;
 
@@ -750,7 +755,7 @@ export function ReplayChart({
       if (t == null) { setLegend(null); return; }
       const srcs = indSourcesRef.current;
       const inds: { name: string; color: string; value: string }[] = [];
-      for (const s of srcs) if (s.name && s.kind === "line") {
+      for (const s of srcs) if (s.name && (s.kind === "line" || s.kind === "baseline" || s.kind === "area")) {
         const v = lastValueAt(s, t as number);
         if (v) inds.push({ name: s.name, color: s.color, value: s.pane === 1 ? v.value.toFixed(2) : v.text });
       }
@@ -781,6 +786,8 @@ export function ReplayChart({
       wmRef.current = null;
       indRef.current.clear(); // eslint-disable-line react-hooks/exhaustive-deps
       tpoPrimRef.current = null; gexPrimRef.current = null; markerApiRef.current = null;
+      bandPrims.forEach((bp) => { try { bp.detached(); } catch { /* ignore */ } });
+      bandPrims.clear();
       chart.remove();
       chartRef.current = null; candleRef.current = null; volRef.current = null;
     };
@@ -824,7 +831,7 @@ export function ReplayChart({
       if (last) {
         const srcs = indSourcesRef.current;
         const inds: { name: string; color: string; value: string }[] = [];
-        for (const s of srcs) if (s.name && s.kind === "line") {
+        for (const s of srcs) if (s.name && (s.kind === "line" || s.kind === "baseline" || s.kind === "area")) {
           const v = lastValueAt(s, last.time);
           if (v) inds.push({ name: s.name, color: s.color, value: s.pane === 1 ? v.value.toFixed(2) : v.text });
         }
@@ -902,9 +909,9 @@ export function ReplayChart({
       const btMarkers = btSrc?.markers?.map((m) => ({
         time: m.time as any,
         position: (m.side === "buy" ? "belowBar" : "aboveBar") as any,
-        color: m.side === "buy" ? "rgba(38,166,154,0.9)" : "rgba(239,83,80,0.9)",
+        color: m.side === "buy" ? "rgba(52,211,153,0.95)" : "rgba(248,113,113,0.95)",
         shape: (m.side === "buy" ? "arrowUp" : "arrowDown") as any,
-        size: 1,
+        size: m.size ?? 1,
       })) ?? [];
       if (btSrc) {
         if (!markerApiRef.current) {
@@ -920,23 +927,67 @@ export function ReplayChart({
           if (markerApiRef.current) { (candle as any).detachPrimitive(markerApiRef.current); markerApiRef.current = null; }
         } catch { /* ignore */ }
       }
+
+      // Band fills (BB envelopes / VWAP σ zones) — painted behind the candles
+      const bandSrcs = srcs.filter((s) => s.kind === "band");
+      const activeBandIds = new Set(bandSrcs.map((s) => s.id));
+      for (const s of bandSrcs) {
+        let bp = bandPrimRef.current.get(s.id);
+        if (!bp) {
+          bp = new BandFillPrimitive(chart);
+          try { candle.attachPrimitive(bp as any); } catch { /* ignore */ }
+          bandPrimRef.current.set(s.id, bp);
+        }
+        try { bp.setData(s.band ?? null); } catch { /* ignore */ }
+      }
+      bandPrimRef.current.forEach((bp, id) => {
+        if (!activeBandIds.has(id)) {
+          try { candle.detachPrimitive(bp as any); } catch { /* ignore */ }
+          bandPrimRef.current.delete(id);
+        }
+      });
     }
 
     for (const s of srcs) {
-      if (s.kind === "markers" || s.kind === "tpo" || s.kind === "gex") continue;
+      if (s.kind === "markers" || s.kind === "tpo" || s.kind === "gex" || s.kind === "band") continue;
       let series = indRef.current.get(s.id);
       if (!series) {
         try {
           if (s.kind === "histogram") {
             series = chart.addSeries(HistogramSeries, {
-              priceFormat: { type: "volume" }, priceScaleId: s.shareScale ?? `ind-${s.id}`,
+              priceScaleId: s.shareScale ?? `ind-${s.id}`,
+              ...(s.priceFormat ? { priceFormat: s.priceFormat } : {}),
               priceLineVisible: false, lastValueVisible: false,
+            }, s.pane);
+          } else if (s.kind === "baseline") {
+            const base = s.baseline ?? 0;
+            const up = s.baselineTopColor ?? s.color;
+            const dn = s.baselineBottomColor ?? s.color;
+            series = chart.addSeries(BaselineSeries, {
+              baseValue: { type: "price", price: base } as any,
+              topLineColor: up, bottomLineColor: dn,
+              topFillColor1: hexA(up, 0.18), topFillColor2: hexA(up, 0.03),
+              bottomFillColor1: hexA(dn, 0.18), bottomFillColor2: hexA(dn, 0.03),
+              lineWidth: 2, priceLineVisible: false, lastValueVisible: true,
+              crosshairMarkerVisible: false,
+              ...(s.shareScale ? { priceScaleId: s.shareScale } : {}),
+            }, s.pane);
+          } else if (s.kind === "area") {
+            series = chart.addSeries(AreaSeries, {
+              lineColor: s.color, lineWidth: 2,
+              topColor: s.areaFill?.top ?? hexA(s.color, 0.3),
+              bottomColor: s.areaFill?.bottom ?? hexA(s.color, 0.01),
+              priceLineVisible: false, lastValueVisible: true,
+              crosshairMarkerVisible: false,
+              ...(s.priceFormat ? { priceFormat: s.priceFormat } : {}),
+              ...(s.shareScale ? { priceScaleId: s.shareScale } : {}),
             }, s.pane);
           } else {
             series = chart.addSeries(LineSeries, {
-              color: s.color, lineWidth: 1, lineStyle: LineStyle.Solid,
+              color: s.color, lineWidth: (s.lineWidth ?? 1) as any, lineStyle: LineStyle.Solid,
               priceLineVisible: false, lastValueVisible: true,
               crosshairMarkerVisible: false,
+              ...(s.priceFormat ? { priceFormat: s.priceFormat } : {}),
               ...(s.shareScale ? { priceScaleId: s.shareScale } : {}),
             }, s.pane);
           }
@@ -950,23 +1001,45 @@ export function ReplayChart({
             (series as ISeriesApi<"Histogram">).setData(s.points.map((p) => ({
               time: p.time as any, value: p.value,
               color: isDelta
-                ? (p.value >= 0 ? "rgba(34,211,238,0.5)" : "rgba(239,83,80,0.5)")
-                : (p.value >= 0 ? "rgba(41,98,255,0.45)" : "rgba(239,83,80,0.45)"),
+                ? (p.value >= 0 ? "rgba(34,211,238,0.55)" : "rgba(239,83,80,0.55)")
+                : (p.value >= 0 ? "rgba(41,98,255,0.6)" : "rgba(239,83,80,0.6)"),
             })));
+          } else if (s.kind === "baseline") {
+            (series as ISeriesApi<"Baseline">).setData(s.points.map((p) => ({ time: p.time as any, value: p.value })));
           } else {
             (series as ISeriesApi<"Line">).setData(s.points.map((p) => ({ time: p.time as any, value: p.value })));
           }
         } catch { /* ignore */ }
       }
+      // TV-style reference levels with axis chips (RSI 30/70, MACD/Delta zero...)
+      if (series && s.floors?.length) {
+        try {
+          const anyS: any = series;
+          anyS.priceLines().forEach((pl: any) => anyS.removePriceLine(pl));
+          for (const f of s.floors) {
+            anyS.createPriceLine({
+              price: f.price, title: f.label,
+              color: f.color ?? "rgba(148,163,184,0.3)",
+              lineWidth: 1, lineStyle: f.dashed ? LineStyle.Dashed : LineStyle.Solid,
+              axisLabelVisible: true,
+            });
+          }
+        } catch { /* ignore */ }
+      }
     }
 
-    // bottom pane height for RSI/MACD/Delta
+    // bottom pane: single TV-style axis + height per indicator
     const pane1Src = srcs.find((s) => s.pane === 1);
     try {
       const panes = chart.panes();
       if (pane1Src && panes.length >= 2) {
-        panes[1].setHeight(pane1Src.height ?? 96);
-        chart.priceScale(`ind-${pane1Src.id ?? "rsi14"}`, 1).applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } });
+        panes[1].setHeight(pane1Src.height ?? 110);
+        const scaleId = pane1Src.shareScale ?? "right";
+        const ps = chart.priceScale(scaleId, 1);
+        if (ps) ps.applyOptions({
+          scaleMargins: { top: 0.14, bottom: 0.14 },
+          borderVisible: true, borderColor: TV.line,
+        });
       }
     } catch { /* ignore */ }
   }, [candles, visibleCount, indicators, style?.chartType, gexData]);

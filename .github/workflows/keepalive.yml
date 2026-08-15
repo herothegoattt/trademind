@@ -1,0 +1,16 @@
+name: Keep Backend Awake
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping TradeMind backend health
+        run: |
+          curl -sS -o /dev/null -w "health=%{http_code} time=%{time_total}s\n" \
+            --max-time 90 \
+            https://trademind-backend-eae1.onrender.com/api/v1/health \
+            || true

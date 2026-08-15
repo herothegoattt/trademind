@@ -58,6 +58,7 @@ export interface ProfileBin {
   priceLow: number; priceHigh: number; priceMid: number;
   volume: number;   // volume traded inside this price band
   tpo: number;      // # of bars (time periods) that touched this band
+  net?: number;     // signed volume delta inside the band (if deltas provided)
 }
 export interface VolumeProfile {
   bins: ProfileBin[];          // ascending by price
@@ -65,16 +66,25 @@ export interface VolumeProfile {
   poc: number;                 // POC mid price
   vah: number;                 // Value Area High
   val: number;                 // Value Area Low
+  vaLowRow: number;            // bin row index of Value Area Low
+  vaHighRow: number;           // bin row index of Value Area High
   total: number;               // total distributed volume
   singlePrints: number[];      // mid prices of bins touched by exactly one bar
+  maxVolume: number;           // largest bin volume (for proportional bars)
 }
 
 /**
  * Distributes each bar's volume uniformly across its [low, high] range into
  * `rows` price bins, then derives POC, the 70% Value Area, and Single Prints
- * (price levels printed by a single time period — the TPO definition).
+ * (price levels printed by a single time period — the TPO definition). When
+ * `deltas` (aligned to candles) is given, each bin also accumulates a signed
+ * `net` delta so the profile can be tinted buy/sell like TradingView.
  */
-export function computeVolumeProfile(candles: OHLCVBar[], rows = 24): VolumeProfile | null {
+export function computeVolumeProfile(
+  candles: OHLCVBar[],
+  rows = 24,
+  deltas?: (number | null)[],
+): VolumeProfile | null {
   if (!candles.length) return null;
   let lo = Infinity, hi = -Infinity;
   for (const c of candles) { lo = Math.min(lo, c.low); hi = Math.max(hi, c.high); }
@@ -88,21 +98,27 @@ export function computeVolumeProfile(candles: OHLCVBar[], rows = 24): VolumeProf
     priceMid: lo + (i + 0.5) * step,
     volume: 0,
     tpo: 0,
+    net: 0,
   }));
 
-  for (const c of candles) {
+  for (let i = 0; i < candles.length; i++) {
+    const c = candles[i];
     const range = c.high - c.low;
+    const d = deltas?.[i] ?? null;
     const startBin = Math.max(0, Math.floor((c.low - lo) / step));
     const endBin = Math.min(rows - 1, Math.floor((c.high - lo) / step));
     if (range <= 0) {
       bins[startBin].volume += c.volume;
+      if (d != null) bins[startBin].net = (bins[startBin].net ?? 0) + d;
       bins[startBin].tpo += 1;
       continue;
     }
     for (let b = startBin; b <= endBin; b++) {
       const overlap = Math.min(c.high, bins[b].priceHigh) - Math.max(c.low, bins[b].priceLow);
       if (overlap <= 0) continue;
-      bins[b].volume += c.volume * (overlap / range);
+      const frac = overlap / range;
+      bins[b].volume += c.volume * frac;
+      if (d != null) bins[b].net = (bins[b].net ?? 0) + d * frac;
       bins[b].tpo += 1;
     }
   }
@@ -123,6 +139,7 @@ export function computeVolumeProfile(candles: OHLCVBar[], rows = 24): VolumeProf
   }
 
   const singlePrints = bins.filter((b) => b.tpo === 1 && b.volume > 0).map((b) => b.priceMid);
+  const maxVolume = Math.max(1, ...bins.map((b) => b.volume));
 
   return {
     bins,
@@ -130,8 +147,11 @@ export function computeVolumeProfile(candles: OHLCVBar[], rows = 24): VolumeProf
     poc: bins[pocIndex].priceMid,
     vah: bins[hiIdx].priceHigh,
     val: bins[loIdx].priceLow,
+    vaLowRow: loIdx,
+    vaHighRow: hiIdx,
     total,
     singlePrints,
+    maxVolume,
   };
 }
 
